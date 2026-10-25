@@ -1,10 +1,12 @@
+import { wrapAngle } from "../core/math.js";
+import { randRange, randUnit } from "../core/rng.js";
 import { fromAngle } from "../core/vec2.js";
-import { nestRadius } from "./colony.js";
-import { ContactKind, type ChunkEvents } from "./events.js";
-import { emissionStrength, MarkerChannel } from "./marker_grid.js";
+import { nestRadius, type Colony } from "./colony.js";
+import { ContactKind, makeChunkEvents, type ChunkEvents } from "./events.js";
+import { degrade, deposit, emissionStrength, MarkerChannel } from "./marker_grid.js";
 import { directSightHeading, explorerPattern, followerPattern, senseMarkers } from "./sensing.js";
 import { turnToward, updateWander } from "./steering.js";
-import { AntRole, AntState } from "./types.js";
+import { AntRole, AntState, RandStream } from "./types.js";
 import type { World } from "./world.js";
 
 function senseChannel(state: number): MarkerChannel {
@@ -116,5 +118,140 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
         out.contacts.push({ antIndex: ant, kind: ContactKind.Nest, target: colony.id });
       }
     }
+  }
+}
+
+export function spawnAtNest(world: World, colony: Colony): number {
+  const params = world.params;
+  const uid = world.nextUid++;
+  const angle = randRange(world.seed, uid, world.tick, RandStream.SpawnHeading, -Math.PI, Math.PI);
+  const role =
+    randUnit(world.seed, uid, world.tick, RandStream.SpawnRole) < params.explorerRatio
+      ? AntRole.Explorer
+      : AntRole.Follower;
+  const speed =
+    params.antSpeed *
+    randRange(
+      world.seed,
+      uid,
+      world.tick,
+      RandStream.SpeedJitter,
+      1 - params.speedJitter,
+      1 + params.speedJitter,
+    );
+  const radius = nestRadius(colony, params);
+  const direction = fromAngle(angle);
+  const index = world.ants.spawn(
+    {
+      pos: {
+        x: colony.nest.x + direction.x * radius,
+        y: colony.nest.y + direction.y * radius,
+      },
+      heading: angle,
+      colony: colony.id,
+      role,
+    },
+    uid,
+    speed,
+    params,
+  );
+  colony.population += 1;
+  return index;
+}
+
+export function resetChunkEvents(world: World): void {
+  const needed = Math.ceil(world.ants.size() / world.params.chunkSize);
+  const lists = world.chunkEvents;
+  for (let i = 0; i < needed; i++) {
+    const events = lists[i];
+    if (events === undefined) {
+      lists.push(makeChunkEvents());
+    } else {
+      events.deposits.length = 0;
+      events.degrades.length = 0;
+      events.contacts.length = 0;
+    }
+  }
+  lists.length = needed;
+}
+
+export function applyEvents(world: World, events: readonly ChunkEvents[]): void {
+  const ants = world.ants;
+  const params = world.params;
+
+  for (const chunk of events) {
+    for (const event of chunk.deposits) {
+      deposit(world.markers, event.cell, event.colony, event.channel, event.strength, params);
+    }
+    for (const event of chunk.degrades) {
+      degrade(world.markers, event.cell, event.colony, event.channel, params.degradeFactor);
+    }
+    for (const contact of chunk.contacts) {
+      const ant = contact.antIndex;
+      if (contact.kind === ContactKind.Food) {
+        if (ants.state[ant] === AntState.ReturningFood) {
+          ants.energy[ant] = params.energyMax;
+        } else if (world.food.takeOne(contact.target)) {
+          ants.state[ant] = AntState.ReturningFood;
+          ants.mass[ant] = params.massCarrying;
+          ants.energy[ant] = params.energyMax;
+          ants.heading[ant] = wrapAngle(ants.heading[ant] + Math.PI);
+          ants.timeSinceAnchor[ant] = 0;
+          ants.dropX[ant] = ants.posX[ant];
+          ants.dropY[ant] = ants.posY[ant];
+          ants.timeSinceLastMarker[ant] = 0;
+        }
+      } else {
+        const colony = world.colonies[contact.target];
+        if (colony === undefined) continue;
+        const state = ants.state[ant];
+        if (state === AntState.ReturningFood) {
+          colony.foodPool += 1;
+          colony.deliveredTotal += 1;
+          colony.deliveredLastSample += 1;
+          ants.mass[ant] = params.mass;
+          ants.state[ant] = AntState.Foraging;
+        } else if (state === AntState.ReturningExhausted) {
+          ants.state[ant] = AntState.Foraging;
+        }
+        ants.energy[ant] = params.energyMax;
+        ants.timeSinceAnchor[ant] = 0;
+        if (state === AntState.ReturningFood || state === AntState.ReturningExhausted) {
+          ants.heading[ant] = wrapAngle(ants.heading[ant] + Math.PI);
+          ants.dropX[ant] = ants.posX[ant];
+          ants.dropY[ant] = ants.posY[ant];
+          ants.timeSinceLastMarker[ant] = 0;
+        }
+      }
+    }
+  }
+
+  world.food.removeEmpty();
+  for (const colony of world.colonies) {
+    while (colony.foodPool >= params.spawnCost && ants.size() < params.maxAntsTotal) {
+      colony.foodPool -= params.spawnCost;
+      spawnAtNest(world, colony);
+    }
+  }
+}
+
+export function removeDead(world: World): void {
+  const ants = world.ants;
+  for (let index = ants.size() - 1; index >= 0; index--) {
+    if (ants.energy[index] > 0) continue;
+    const colony = world.colonies[ants.colony[index]];
+    if (colony !== undefined) colony.population -= 1;
+    ants.removeSwap(index);
+  }
+}
+
+export function updateStats(world: World): void {
+  const sample = world.tick % world.params.simHz === 0;
+  for (const colony of world.colonies) {
+    if (sample) {
+      colony.deliveredPerSecond.push(colony.deliveredLastSample);
+      colony.deliveredLastSample = 0;
+    }
+    colony.extinct = colony.population === 0 && colony.foodPool < world.params.spawnCost;
   }
 }
