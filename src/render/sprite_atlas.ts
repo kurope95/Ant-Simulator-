@@ -303,64 +303,49 @@ function paintFood(
   ctx.restore();
 }
 
+// The mound radius leaves room in the 256 px frame for the soil scattered out to 1.55 r.
+const kAnthillRadius = 80;
+
 function paintNest(ctx: CanvasRenderingContext2D, frame: AtlasFrame, colony: number): void {
-  const cx = 128;
-  const cy = 128;
   ctx.save();
   ctx.translate(frame.x, frame.y);
-
-  const mound = ctx.createRadialGradient(cx, cy - 12, 8, cx, cy, 118);
-  mound.addColorStop(0, "#2a2119");
-  mound.addColorStop(1, "#18120d");
   ctx.beginPath();
-  ctx.arc(cx, cy, 118, 0, kTwoPi);
-  ctx.fillStyle = mound;
-  ctx.fill();
-
-  ctx.strokeStyle = "rgba(52,40,30,0.85)";
-  ctx.lineWidth = 8;
-  ctx.beginPath();
-  ctx.arc(cx, cy, 108, 0, kTwoPi);
-  ctx.stroke();
-
-  ctx.lineCap = "round";
-  for (let i = 0; i < 8; i++) {
-    const jitter = (mix32(colony * 16 + i) / kUnit - 0.5) * 0.3;
-    const angle = (i / 8) * kTwoPi + jitter;
-    const inner = 30 + (mix32(colony * 16 + i + 64) / kUnit) * 18;
-    const outer = 94 + (mix32(colony * 16 + i + 128) / kUnit) * 10;
-    ctx.strokeStyle = "rgba(11,8,6,0.55)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(cx + Math.cos(angle) * inner, cy + Math.sin(angle) * inner);
-    ctx.lineTo(cx + Math.cos(angle) * outer, cy + Math.sin(angle) * outer);
-    ctx.stroke();
-  }
-
-  for (let i = 0; i < 3; i++) {
-    const jitter = (mix32(colony * 16 + i + 256) / kUnit - 0.5) * 0.6;
-    const angle = 0.7 + i * 2.1 + jitter;
-    const radius = 62 + i * 14;
-    ctx.strokeStyle = "rgba(74,59,47,0.9)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(
-      cx + Math.cos(angle) * radius,
-      cy + Math.sin(angle) * radius,
-      4 + i,
-      0.2,
-      2.4,
-    );
-    ctx.stroke();
-  }
-
-  ctx.beginPath();
-  ctx.ellipse(cx, cy, 26, 20, 0, 0, kTwoPi);
-  ctx.fillStyle = "#070504";
-  ctx.fill();
-  ctx.strokeStyle = css(colonyHex(colony));
-  ctx.lineWidth = 3;
-  ctx.stroke();
-
+  ctx.rect(0, 0, frame.w, frame.h);
+  ctx.clip();
+  const seeded = (i: number): number => mix32(colony * 4096 + i) / kUnit;
+  paintAnthill(ctx, frame.w / 2, frame.h / 2, kAnthillRadius, css(colonyHex(colony)), seeded);
   ctx.restore();
+}
+
+// cx, cy, r in atlas pixels; colony is a CSS colour string; rnd(i) is deterministic in 0..1.
+function paintAnthill(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  r: number,
+  colony: string,
+  rnd: (i: number) => number,
+): void {
+  const TAU = Math.PI * 2;
+  for (let i = 0; i < 90; i++) {                               // 1. excavated soil scattered around
+    const a = rnd(i) * TAU, d = r * (0.95 + 0.6 * Math.sqrt(rnd(i + 500)));
+    ctx.fillStyle = `rgba(120, 92, 62, ${0.35 + 0.4 * rnd(i + 1300)})`;
+    ctx.beginPath(); ctx.arc(cx + Math.cos(a) * d, cy + Math.sin(a) * d, r * (0.015 + 0.03 * rnd(i + 900)), 0, TAU); ctx.fill();
+  }
+  let g = ctx.createRadialGradient(cx + r * 0.12, cy + r * 0.16, r * 0.2, cx + r * 0.12, cy + r * 0.16, r * 1.08);
+  g.addColorStop(0, "rgba(0,0,0,0.45)"); g.addColorStop(1, "rgba(0,0,0,0)");   // 2. shadow, bottom-right
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx + r * 0.12, cy + r * 0.16, r * 1.08, 0, TAU); ctx.fill();
+  g = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.35, r * 0.1, cx, cy, r);  // 3. mound lit from top-left
+  g.addColorStop(0, "#a07c52"); g.addColorStop(0.55, "#7a5a3a"); g.addColorStop(1, "#4a3523");
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.fill();
+  for (let i = 0; i < 160; i++) {                              // 4. grain on the mound
+    const a = rnd(i + 2000) * TAU, d = r * 0.92 * Math.sqrt(rnd(i + 2500));
+    ctx.fillStyle = rnd(i + 3000) < 0.5 ? "rgba(40,28,18,0.35)" : "rgba(190,160,120,0.25)";
+    ctx.fillRect(cx + Math.cos(a) * d, cy + Math.sin(a) * d, r * 0.018, r * 0.018);
+  }
+  ctx.globalAlpha = 0.7; ctx.strokeStyle = colony; ctx.lineWidth = r * 0.07;   // 5. colony ring at the foot
+  ctx.beginPath(); ctx.arc(cx, cy, r * 0.97, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1;
+  g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 0.22);                    // 6. entrance hole
+  g.addColorStop(0, "#0b0705"); g.addColorStop(0.7, "#1d130c"); g.addColorStop(1, "rgba(29,19,12,0)");
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(cx, cy, r * 0.22, r * 0.16, 0, 0, TAU); ctx.fill();
 }

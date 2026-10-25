@@ -6,7 +6,7 @@ import type { AtlasFrames } from "./atlas.js";
 import type { Camera } from "./camera.js";
 import type { SpriteBatch } from "./sprite_batch.js";
 
-const kSizeFactor = 3.2;
+const kSizeFactor = 2.6;
 const kCullMargin = 64;
 const kWhite = rgba(255, 255, 255, 255);
 const kExtinct = rgba(150, 145, 140, 255);
