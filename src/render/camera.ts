@@ -5,10 +5,14 @@ import type { Vec2 } from "../core/vec2.js";
 export class Camera {
   static readonly kMinScale = 0.05;
   static readonly kMaxScale = 16;
+  // After a fit, zooming out stops at this share of the fit scale.
+  static readonly kMinScaleOfFit = 0.6;
 
   private centerVec: Vec2 = { x: 0, y: 0 };
   private viewportSize: Vec2 = { x: 0, y: 0 };
   private camScale = 1;
+  private minScale: number = Camera.kMinScale;
+  private maxScale: number = Camera.kMaxScale;
 
   setViewport(size: Vec2): void {
     this.viewportSize = { x: size.x, y: size.y };
@@ -30,7 +34,22 @@ export class Camera {
     const sx = this.viewportSize.x / worldSize.x;
     const sy = this.viewportSize.y / worldSize.y;
     this.camScale = clamp(Math.min(sx, sy), Camera.kMinScale, Camera.kMaxScale);
+    this.setScaleLimits(this.camScale * Camera.kMinScaleOfFit, Camera.kMaxScale);
     this.centerVec = { x: worldSize.x / 2, y: worldSize.y / 2 };
+  }
+
+  setScaleLimits(min: number, max: number): void {
+    this.minScale = min;
+    this.maxScale = max;
+    this.camScale = clamp(this.camScale, min, max);
+  }
+
+  // Keeps the centre on the world, so a pan can't carry the whole view off it.
+  clampCenter(worldSize: Vec2): void {
+    this.centerVec = {
+      x: clamp(this.centerVec.x, 0, worldSize.x),
+      y: clamp(this.centerVec.y, 0, worldSize.y),
+    };
   }
 
   worldToScreen(world: Vec2): Vec2 {
@@ -49,7 +68,7 @@ export class Camera {
 
   zoomAt(screenPoint: Vec2, factor: number): void {
     const anchor = this.screenToWorld(screenPoint);
-    this.camScale = clamp(this.camScale * factor, Camera.kMinScale, Camera.kMaxScale);
+    this.camScale = clamp(this.camScale * factor, this.minScale, this.maxScale);
     this.centerVec = {
       x: anchor.x - (screenPoint.x - this.viewportSize.x / 2) / this.camScale,
       y: anchor.y - (screenPoint.y - this.viewportSize.y / 2) / this.camScale,

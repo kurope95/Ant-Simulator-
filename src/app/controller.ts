@@ -29,6 +29,7 @@ import { RunHud, type HudState, type RunHudHooks } from "../ui/run_hud.js";
 import { SettingsDrawer, type SettingsHooks } from "../ui/settings_drawer.js";
 import { formatClock, type SpeedSetting } from "../ui/view_models.js";
 import { makeAttractWorld, seedFromNow } from "./attract.js";
+import { CameraInput, kZoomKeyStep, type PressMode } from "./camera_input.js";
 import { effectiveTicks, type AppOptions } from "./options.js";
 import {
   Screen,
@@ -44,8 +45,8 @@ import {
 } from "./session.js";
 
 const kMaxFrameSeconds = 0.25;
-const kZoomStep = 1.15;
 const kSelectionRadiusPx = 24;
+const kPanKeys = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "KeyW", "KeyA", "KeyS", "KeyD"]);
 
 function isBrushTool(tool: BuilderTool): boolean {
   return (
@@ -72,6 +73,8 @@ export class AppController {
   private readonly log: (line: string) => void;
   private readonly params: SimParams = defaultParams();
   private readonly camera = new Camera();
+  private readonly cameraInput = new CameraInput(this.camera);
+  private readonly heldKeys = new Set<string>();
   private readonly clock = new FixedStepClock(1 / defaultParams().simHz, 16);
   private readonly view: ViewSettings = defaultViewSettings();
 
@@ -112,7 +115,7 @@ export class AppController {
   private viewportH = 0;
   private pointerCss: Vec2 | null = null;
   private pointerInside = false;
-  private panning = false;
+  private spaceHeld = false;
   private painting = false;
   private movingSelection = false;
   private lastPaintWorld: Vec2 | null = null;
@@ -618,6 +621,8 @@ export class AppController {
     this.canvas.addEventListener("pointerleave", this.onPointerLeave);
     this.canvas.addEventListener("contextmenu", this.onContextMenu);
     window.addEventListener("keydown", this.onKeyDown);
+    window.addEventListener("keyup", this.onKeyUp);
+    window.addEventListener("blur", this.onBlur);
     window.addEventListener("pagehide", this.onPageHide);
   }
 
@@ -630,6 +635,8 @@ export class AppController {
     this.canvas.removeEventListener("pointerleave", this.onPointerLeave);
     this.canvas.removeEventListener("contextmenu", this.onContextMenu);
     window.removeEventListener("keydown", this.onKeyDown);
+    window.removeEventListener("keyup", this.onKeyUp);
+    window.removeEventListener("blur", this.onBlur);
     window.removeEventListener("pagehide", this.onPageHide);
   }
 
@@ -675,6 +682,7 @@ export class AppController {
     const world = this.activeWorld;
     const cache = this.cache;
     if (world === null || cache === null) return;
+    this.updateCamera(world, frameSeconds);
 
     let alpha = 1;
     if (this.session.screen === Screen.Run && this.runWorld !== null) {
@@ -781,10 +789,16 @@ export class AppController {
 
   private updateCursor(): void {
     let cursor = "";
-    if (this.panning && this.session.screen !== Screen.Home) {
+    if (this.cameraInput.dragging()) {
       cursor = "grabbing";
+    } else if (this.session.screen === Screen.Run) {
+      cursor = "grab";
     } else if (this.session.screen === Screen.Builder && this.builderModel !== null) {
-      cursor = this.builderModel.tool === BuilderTool.Select ? "default" : "crosshair";
+      if (this.spaceHeld) {
+        cursor = "grab";
+      } else {
+        cursor = this.builderModel.tool === BuilderTool.Select ? "default" : "crosshair";
+      }
     }
     if (cursor === this.lastCursor) return;
     this.lastCursor = cursor;
@@ -792,56 +806,76 @@ export class AppController {
   }
 
   private readonly onWheel = (event: WheelEvent): void => {
-    if (this.session.screen === Screen.Home) return;
     event.preventDefault();
-    this.camera.zoomAt(
-      this.screenPoint(event),
-      Math.pow(kZoomStep, -event.deltaY / 100),
-    );
+    if (this.session.screen === Screen.Home) return;
+    this.cameraInput.wheel(event, this.screenPoint(event));
   };
 
   private readonly onPointerDown = (event: PointerEvent): void => {
-    if (event.button === 0 && this.session.screen === Screen.Builder) {
-      this.pointerCss = { x: event.clientX, y: event.clientY };
-      this.pointerInside = true;
-      this.builderDown(event);
+    if (this.session.screen === Screen.Home) return;
+    if (event.button !== 0 && event.button !== 1 && event.button !== 2) return;
+    event.preventDefault();
+    this.pointerCss = { x: event.clientX, y: event.clientY };
+    this.pointerInside = true;
+    const point = this.screenPoint(event);
+    const joining = this.cameraInput.pointerCount() > 0;
+    const mode = joining ? "pan" : this.pressMode(event, point);
+    this.canvas.setPointerCapture(event.pointerId);
+    this.cameraInput.pointerDown(event.pointerId, point, mode);
+    if (this.cameraInput.pinching()) {
+      // A second finger turns whatever the first one started into a pinch.
+      this.cancelTool();
       return;
     }
-    if (event.button !== 1 && event.button !== 2) return;
-    if (this.session.screen === Screen.Home) return;
-    event.preventDefault();
-    this.panning = true;
-    this.activePointer = event.pointerId;
-    this.canvas.setPointerCapture(event.pointerId);
+    if (event.button === 0 && event.detail === 2 && this.session.screen === Screen.Run) {
+      this.cameraInput.zoomAt(point, 2);
+    }
+    if (mode === "tool") this.builderDown(event, point);
   };
 
-  private builderDown(event: PointerEvent): void {
+  // Decides what a press does: pan now, pan once it moves, or give it to the builder tool.
+  private pressMode(event: PointerEvent, point: Vec2): PressMode {
+    if (event.button !== 0) return "pan";
+    const model = this.builderModel;
+    if (this.session.screen !== Screen.Builder || model === null) return "pan-after-slop";
+    if (this.spaceHeld) return "pan";
+    if (model.tool !== BuilderTool.Select) return "tool";
+    const hit = model.selectAt(this.camera.screenToWorld(point), this.selectionRadiusWorld());
+    this.builderScreen?.update();
+    return hit === null ? "pan-after-slop" : "tool";
+  }
+
+  private builderDown(event: PointerEvent, point: Vec2): void {
     const model = this.builderModel;
     if (model === null) return;
-    const point = this.worldPoint(event);
-    event.preventDefault();
+    const world = this.camera.screenToWorld(point);
     this.activePointer = event.pointerId;
-    this.canvas.setPointerCapture(event.pointerId);
 
     if (model.tool === BuilderTool.Select) {
-      const hit = this.selectionRadiusWorld();
-      this.movingSelection = model.selectAt(point, hit) !== null;
-      this.builderScreen?.update();
+      this.movingSelection = true;
       return;
     }
     if (model.tool === BuilderTool.Colony || model.tool === BuilderTool.Food) {
-      if (model.applyAt(point)) {
+      if (model.applyAt(world)) {
         this.builderScreen?.update();
         this.rebuildPreview(false);
       }
       return;
     }
     this.painting = true;
-    this.lastPaintWorld = point;
-    if (model.paintAt(point)) {
+    this.lastPaintWorld = world;
+    if (model.paintAt(world)) {
       this.builderScreen?.update();
       this.syncPreviewTerrain();
     }
+  }
+
+  private cancelTool(): void {
+    this.activePointer = -1;
+    this.painting = false;
+    this.movingSelection = false;
+    this.lastPaintWorld = null;
+    if (this.session.screen === Screen.Builder) this.builderScreen?.update();
   }
 
   private selectionRadiusWorld(): number {
@@ -852,20 +886,15 @@ export class AppController {
   private readonly onPointerMove = (event: PointerEvent): void => {
     this.pointerCss = { x: event.clientX, y: event.clientY };
     this.pointerInside = true;
+    this.cameraInput.pointerMove(event.pointerId, this.screenPoint(event));
 
-    if (this.panning) {
-      this.camera.panByScreen({
-        x: event.movementX * this.dpr(),
-        y: event.movementY * this.dpr(),
-      });
-      return;
-    }
-    if (this.session.screen !== Screen.Builder) return;
+    if (event.pointerId !== this.activePointer || this.cameraInput.pinching()) return;
     const model = this.builderModel;
-    if (model === null) return;
+    if (this.session.screen !== Screen.Builder || model === null) return;
+    if ((event.buttons & 1) === 0) return;
+    const point = this.worldPoint(event);
 
-    if (this.painting && (event.buttons & 1) !== 0) {
-      const point = this.worldPoint(event);
+    if (this.painting) {
       if (this.lastPaintWorld !== null && !paintStepReached(this.lastPaintWorld, point, model.brushRadius)) {
         return;
       }
@@ -876,25 +905,18 @@ export class AppController {
       }
       return;
     }
-    if (this.movingSelection && (event.buttons & 1) !== 0) {
-      if (model.moveSelection(this.worldPoint(event))) {
-        this.builderScreen?.update();
-        this.rebuildPreview(false);
-      }
+    if (this.movingSelection && model.moveSelection(point)) {
+      this.builderScreen?.update();
+      this.rebuildPreview(false);
     }
   };
 
   private readonly onPointerUp = (event: PointerEvent): void => {
-    if (event.pointerId !== this.activePointer) return;
-    this.activePointer = -1;
-    this.panning = false;
-    this.painting = false;
-    this.movingSelection = false;
-    this.lastPaintWorld = null;
+    this.cameraInput.pointerUp(event.pointerId);
     if (this.canvas.hasPointerCapture(event.pointerId)) {
       this.canvas.releasePointerCapture(event.pointerId);
     }
-    if (this.session.screen === Screen.Builder) this.builderScreen?.update();
+    if (event.pointerId === this.activePointer) this.cancelTool();
   };
 
   private readonly onPointerLeave = (): void => {
@@ -918,6 +940,11 @@ export class AppController {
       return;
     }
     const screen = this.session.screen;
+    if (event.code === "Space") this.spaceHeld = true;
+    if (kPanKeys.has(event.code) && screen !== Screen.Home) {
+      this.heldKeys.add(event.code);
+      event.preventDefault();
+    }
 
     if (
       screen === Screen.Run &&
@@ -941,6 +968,10 @@ export class AppController {
       return;
     }
 
+    if (screen !== Screen.Home && this.cameraKey(event.code)) {
+      event.preventDefault();
+      return;
+    }
     if (screen === Screen.Builder) {
       if (this.builderKey(event)) event.preventDefault();
       return;
@@ -1012,6 +1043,10 @@ export class AppController {
       }
       return true;
     }
+    if (event.code === "Home") {
+      this.requestFit();
+      return true;
+    }
     if (event.code === "Escape") {
       if (model.pendingPreset() !== null) {
         model.cancelPreset();
@@ -1019,6 +1054,48 @@ export class AppController {
         model.clearSelection();
       }
       this.builderScreen?.update();
+      return true;
+    }
+    return false;
+  }
+
+  private readonly onKeyUp = (event: KeyboardEvent): void => {
+    this.heldKeys.delete(event.code);
+    if (event.code === "Space") this.spaceHeld = false;
+  };
+
+  private readonly onBlur = (): void => {
+    this.heldKeys.clear();
+    this.spaceHeld = false;
+  };
+
+  private updateCamera(world: World, seconds: number): void {
+    const pan = this.panKeyDirection();
+    this.cameraInput.setPixelRatio(this.dpr());
+    this.cameraInput.setKeyPan(pan.x, pan.y);
+    this.cameraInput.update(seconds);
+    this.camera.clampCenter(world.size);
+  }
+
+  // Arrow keys and WASD pan the view. A is the ant toggle on Run (spec §9), so it pans only in the Builder.
+  private panKeyDirection(): Vec2 {
+    if (this.session.screen === Screen.Home) return { x: 0, y: 0 };
+    const aPans = this.session.screen === Screen.Builder;
+    const left = this.heldKeys.has("ArrowLeft") || (aPans && this.heldKeys.has("KeyA"));
+    const right = this.heldKeys.has("ArrowRight") || this.heldKeys.has("KeyD");
+    const up = this.heldKeys.has("ArrowUp") || this.heldKeys.has("KeyW");
+    const down = this.heldKeys.has("ArrowDown") || this.heldKeys.has("KeyS");
+    return { x: Number(right) - Number(left), y: Number(down) - Number(up) };
+  }
+
+  // The + and - keys zoom the view about its centre.
+  private cameraKey(code: string): boolean {
+    if (code === "Equal" || code === "NumpadAdd") {
+      this.cameraInput.zoomCentre(kZoomKeyStep);
+      return true;
+    }
+    if (code === "Minus" || code === "NumpadSubtract") {
+      this.cameraInput.zoomCentre(1 / kZoomKeyStep);
       return true;
     }
     return false;

@@ -68,7 +68,7 @@ test("camera: zoom is clamped", () => {
   for (let i = 0; i < 100; i++) cam.zoomAt({ x: 500, y: 250 }, 10);
   assert.equal(cam.scale(), Camera.kMaxScale);
   for (let i = 0; i < 100; i++) cam.zoomAt({ x: 500, y: 250 }, 0.01);
-  assert.equal(cam.scale(), Camera.kMinScale);
+  near(cam.scale(), 0.6 * 0.5); // the floor is 0.6 of the fit scale (0.5), not an absolute 0.05
 });
 
 test("camera: a zero-size viewport never produces NaN", () => {
@@ -90,4 +90,29 @@ test("camera: resizing the viewport keeps centre and scale", () => {
   near(cam.scale(), 0.5);
   near(cam.center().x, 1000);
   near(cam.center().y, 500);
+});
+
+test("camera: setScaleLimits sets the zoom range", () => {
+  const cam = new Camera();
+  cam.setViewport({ x: 1000, y: 500 });
+  cam.fit({ x: 2000, y: 1000 });
+  cam.setScaleLimits(0.25, 4);
+  for (let i = 0; i < 100; i++) cam.zoomAt({ x: 500, y: 250 }, 10);
+  assert.equal(cam.scale(), 4);
+  for (let i = 0; i < 100; i++) cam.zoomAt({ x: 500, y: 250 }, 0.01);
+  assert.equal(cam.scale(), 0.25);
+});
+
+test("camera: clampCenter keeps the centre inside the world", () => {
+  const cam = new Camera();
+  cam.setViewport({ x: 1000, y: 500 });
+  cam.fit({ x: 2000, y: 1000 });
+  cam.centerOn({ x: -300, y: 1400 });
+  cam.clampCenter({ x: 2000, y: 1000 });
+  near(cam.center().x, 0);
+  near(cam.center().y, 1000);
+  cam.centerOn({ x: 1500, y: 250 });
+  cam.clampCenter({ x: 2000, y: 1000 });
+  near(cam.center().x, 1500);
+  near(cam.center().y, 250);
 });
