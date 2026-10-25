@@ -4,6 +4,7 @@ out/
 
 # IDE / tool state
 .vs/
+imgui.ini
 .vscode/
 *.user
 CMakeUserPresets.json
