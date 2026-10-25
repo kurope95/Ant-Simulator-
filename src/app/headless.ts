@@ -19,6 +19,7 @@ export function runHeadless(
   }
   const renderer = created.renderer;
   renderer.setBackingSize(options.width, options.height);
+  document.body.classList.add("headless");
 
   const world = makeWorld(defaultParams(), options.seed);
   const camera = new Camera();

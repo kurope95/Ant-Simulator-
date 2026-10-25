@@ -42,12 +42,9 @@ export function buildTestPattern(
   batch.addLine(toScreen(worldSize), toScreen({ x: 0, y: worldSize.y }), 2, theme.border);
   batch.addLine(toScreen({ x: 0, y: worldSize.y }), toScreen({ x: 0, y: 0 }), 2, theme.border);
 
-  batch.addCircle(
-    toScreen({ x: worldSize.x / 2, y: worldSize.y / 2 }),
-    kCenterRingRadius * scale,
-    theme.border,
-    48,
-  );
+  const center = toScreen({ x: worldSize.x / 2, y: worldSize.y / 2 });
+  batch.addCircle(center, kCenterRingRadius * scale, theme.border, 48);
+  batch.addCircle(center, kCenterRingRadius * 0.7 * scale, theme.ground, 48);
 
   const s = kCornerSquare;
   const inset = kCornerInset;

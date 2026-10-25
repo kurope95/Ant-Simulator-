@@ -9,3 +9,4 @@ body { font-family: "Segoe UI", system-ui, sans-serif; }
 .panel h2 { margin: 0 0 6px; font-size: 14px; font-weight: 600; color: #f2c12e; }
 .panel .row { font: 13px/1.5 Consolas, monospace; }
 .panel .hint { margin-top: 6px; color: #b9a98a; }
+body.headless #ui, body.headless #log { display: none; }
