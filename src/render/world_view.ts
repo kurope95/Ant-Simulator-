@@ -229,6 +229,13 @@ function buildUnder(
   }
 }
 
+// Each colony's palette index, by colony id. Trail colours come from these, never from the id.
+function paletteByColony(world: World): number[] {
+  const palette: number[] = [];
+  for (const colony of world.colonies) palette[colony.id] = colony.color;
+  return palette;
+}
+
 export function drawWorld(
   renderer: GlRenderer,
   cache: WorldRenderCache,
@@ -249,7 +256,7 @@ export function drawWorld(
   }
 
   if (settings.heatmap !== HeatmapMode.Off && cache.heatmapTexture !== null) {
-    fillHeatmapRgba(world.markers, settings.heatmap, theme, cache.heatmapPixels);
+    fillHeatmapRgba(world.markers, settings.heatmap, theme, paletteByColony(world), cache.heatmapPixels);
     renderer.updateTexture(
       cache.heatmapTexture,
       world.markers.width,

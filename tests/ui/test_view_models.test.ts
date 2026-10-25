@@ -22,7 +22,7 @@ test("format: integers group, clocks are mm:ss, labels are human", () => {
   assert.equal(speedLabel(4), "4×");
   assert.equal(speedLabel("max"), "Max");
   assert.equal(trailModeLabel(HeatmapMode.Off), "Off");
-  assert.equal(trailModeLabel(HeatmapMode.DualChannel), "Trails");
+  assert.equal(trailModeLabel(HeatmapMode.DualChannel), "Trail type");
   assert.equal(trailModeLabel(HeatmapMode.ColonyColor), "Colonies");
 });
 

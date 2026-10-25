@@ -447,17 +447,18 @@ interface Theme { name: string; outside: Rgba8; ground: Rgba8; grid: Rgba8; bord
                   speckle: Rgba8 }   // terrain colours per preset (M1.6); rock and water are two tones each
 meadowTheme(): Theme; dunesTheme(): Theme; creekTheme(): Theme; boulderTheme(): Theme; blankTheme(): Theme
 themeForPreset(presetId): Theme        // unknown ids fall back to Meadow
+trailHex(paletteIndex): number         // luminous trail colour for a palette entry (M1.7); the index wraps at 8
 // heatHome #4FC3B0, heatFood #F0B45E, heatAlpha 0.62 for every theme.
 
 // render/view_settings.ts
 enum HeatmapMode { Off, DualChannel, ColonyColor }
 interface ViewSettings { heatmap: HeatmapMode; showAnts: boolean; showGrid: boolean;
                          showHash: boolean; showColliders: boolean }
-defaultViewSettings(): ViewSettings    // DualChannel, ants on, grid off
-cycleHeatmap(mode): HeatmapMode        // Off -> DualChannel -> ColonyColor -> Off
+defaultViewSettings(): ViewSettings    // ColonyColor, ants on, grid off (M1.7)
+cycleHeatmap(mode): HeatmapMode        // ColonyColor -> DualChannel -> Off -> ColonyColor (M1.7)
 
 // render/heatmap.ts
-fillHeatmapRgba(grid: MarkerGrid, mode, theme, rgbaOut: Uint8Array): void   // pure, testable
+fillHeatmapRgba(grid: MarkerGrid, mode, theme, colorByColony: readonly number[], rgbaOut: Uint8Array): void   // pure, testable; colorByColony[id] = palette index (M1.7)
 
 // render/food_layout.ts
 const kFoodPerPiece = 100, kMaxFoodPieces = 48
@@ -526,7 +527,7 @@ interface ColonyRow { id: number; name: string; colorIndex: number; hex: number;
 formatInteger(value): string
 formatClock(ticks, simHz): string        // mm:ss
 speedLabel(speed): string                // "1×", "Max"
-trailModeLabel(mode): string             // "Off", "Trails", "Colonies"
+trailModeLabel(mode): string             // "Off", "Trail type", "Colonies"
 colonyRows(world): ColonyRow[]
 
 // ui/param_specs.ts

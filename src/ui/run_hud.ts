@@ -1,5 +1,6 @@
 import { HeatmapMode } from "../render/view_settings.js";
 import type { SimParams } from "../sim/params.js";
+import { colonyHex, colonyName } from "../sim/palette.js";
 import type { World } from "../sim/world.js";
 import { button, el, icon } from "./dom.js";
 import {
@@ -60,6 +61,16 @@ function makeLegendItem(kind: "home" | "food", label: string): HTMLElement {
   return item;
 }
 
+function makeColonyLegendItem(name: string, hex: number): HTMLElement {
+  const item = el("span", "legend");
+  const css = `#${hex.toString(16).padStart(6, "0")}`;
+  const dot = el("span", "legend__dot");
+  dot.style.background = css;
+  dot.style.boxShadow = `0 0 10px ${css}8c`;
+  item.append(dot, el("span", undefined, name));
+  return item;
+}
+
 function makeDivider(): HTMLElement {
   return el("span", "hud__divider");
 }
@@ -87,6 +98,9 @@ export class RunHud {
   private readonly settingsButton: HTMLButtonElement;
   private readonly breachButton: HTMLButtonElement;
   private readonly legend: HTMLElement;
+  private readonly trailLegend: HTMLElement;
+  private readonly colonyLegend: HTMLElement;
+  private colonyLegendKey = "";
 
   constructor(root: HTMLElement, params: SimParams, hooks: RunHudHooks) {
     this.simHz = params.simHz;
@@ -193,7 +207,10 @@ export class RunHud {
     this.breachButton.hidden = true;
 
     this.legend = el("div", "hud__legend");
-    this.legend.append(makeLegendItem("home", "Home"), makeLegendItem("food", "Food"));
+    this.trailLegend = el("span", "hud__legend-group");
+    this.trailLegend.append(makeLegendItem("home", "Home"), makeLegendItem("food", "Food"));
+    this.colonyLegend = el("span", "hud__legend-group");
+    this.legend.append(this.trailLegend, this.colonyLegend);
 
     const dock = el("div", "hud__dock glass");
     dock.append(
@@ -242,9 +259,24 @@ export class RunHud {
     this.coloniesButton.setAttribute("aria-pressed", String(state.coloniesOpen));
     this.settingsButton.setAttribute("aria-pressed", String(state.settingsOpen));
     this.breachButton.hidden = !state.breachAvailable;
-    this.legend.hidden = state.heatmap !== HeatmapMode.DualChannel;
+    this.legend.hidden = state.heatmap === HeatmapMode.Off;
+    this.trailLegend.hidden = state.heatmap !== HeatmapMode.DualChannel;
+    this.colonyLegend.hidden = state.heatmap !== HeatmapMode.ColonyColor;
+    if (state.heatmap === HeatmapMode.ColonyColor) this.setColonyLegend(world);
 
     this.setZen(state.zen);
+  }
+
+  // Lists every colony, extinct ones too, so a faded trail still has a name.
+  private setColonyLegend(world: World): void {
+    const key = world.colonies.map((colony) => colony.color).join(",");
+    if (key === this.colonyLegendKey) return;
+    this.colonyLegendKey = key;
+    const items = world.colonies.map((colony) =>
+      makeColonyLegendItem(colonyName(colony.color), colonyHex(colony.color)),
+    );
+    const note = el("span", "hud__legend-note", "bright = way to food · dim = way home");
+    this.colonyLegend.replaceChildren(...items, note);
   }
 
   setZen(on: boolean): void {

@@ -538,6 +538,16 @@ textarea {
   box-shadow: 0 0 10px rgba(79, 195, 176, 0.55);
 }
 
+.hud__legend-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.hud__legend-note {
+  opacity: 0.8;
+}
+
 .legend__dot--food {
   background: #f0b45e;
   box-shadow: 0 0 10px rgba(240, 180, 94, 0.55);
