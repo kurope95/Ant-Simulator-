@@ -110,12 +110,12 @@ Each cell stores three fields, as three separate arrays:
 Each cell has one owner, so colonies compete for cells.
 
 **Decay (every tick).** Multiply both channels by `f = 2^(−dt / MARKER_HALF_LIFE)`. Values below `MARKER_EPS` become 0, and when both channels are 0 the owner resets to −1.
-- The default half-life is 7.7 s. That matches the original "×0.9985 per tick" at 60 Hz, but stays the same at any frame rate. *(Fix: the original per-tick factor made trails fade twice as fast at 120 FPS.)*
+- The default half-life is 20 s, raised from 7.7 s in the M2 retune so a carrier's trail survives a long trip. 7.7 s matched the original "×0.9985 per tick" at 60 Hz, but stays the same at any frame rate. *(Fix: the original per-tick factor made trails fade twice as fast at 120 FPS.)*
 
 **Emission strength.** A deposit has strength `e = exp(−time_since_anchor × EMISSION_DECAY)`.
 - The anchor is the place the ant last touched: its nest when laying `to_home`, the food source when laying `to_food`.
 - Deposits are strong near the source and weak far from it, so the trail has a gradient that points toward the source.
-- For that gradient to survive the marker decay, `EMISSION_DECAY` must exceed the decay rate `ln 2 / MARKER_HALF_LIFE ≈ 0.09/s`; at 0.05 a returning ant's single trail inverted at read time (seed 1: delivered 0, ants walked away from the nest). `0.11` keeps the gradient pointing at the source while leaving roughly a minute of a full trip's deposits above `MARKER_DETECT_MIN`. *(M1 tuning ruling; see the plan ledger.)*
+- For that gradient to survive the marker decay, `EMISSION_DECAY` must exceed the decay rate `ln 2 / MARKER_HALF_LIFE`, which is 0.09/s at 7.7 s and 0.035/s at 20 s. At a decay below that rate a returning ant's trail inverts at read time (at 0.05 with a 7.7 s half-life, seed 1 delivered 0 and ants walked away from the nest); the M2 retune reproduced that failure at 0.03–0.04 with a 15–20 s half-life. `0.11` keeps the gradient pointing at the source while leaving roughly a minute of a full trip's deposits above `MARKER_DETECT_MIN`. *(M1 tuning ruling, rechecked in M2.)*
 - No deposit is made when `e < MARKER_EPS`.
 
 **Who deposits what:**
@@ -277,7 +277,7 @@ An ant is stuck when `time_since_last_marker > STUCK_TIMEOUT` (2.5 s), meaning i
 *(Fix: a traffic jam at the nest isn't a dead end. Without this check, crowds would erase the busiest trails.)*
 
 ### 5.6 Energy and life cycle
-- Energy starts at `ENERGY_MAX` (100) and burns at `ENERGY_BURN` (1 per second), which gives about 100 s of autonomy.
+- Energy starts at `ENERGY_MAX` (100) and burns at `ENERGY_BURN` (0.5 per second), which gives about 200 s of autonomy.
 - It refills to 100 when the ant touches its own nest or any food source.
 - At 0 the ant dies (removed in phase 5).
 - Scenarios may override the burn rate. The maze, for example, lowers it so the long route is survivable.
@@ -457,14 +457,14 @@ Rules:
 | `WANDER_INTERVAL` (F / E) | 0.4 / 0.25 | s | |
 | `WANDER_ANGLE` (F / E) | 0.3 / 1.0 | rad | |
 | `MARKER_DROP_DIST` | 8 | u | |
-| `EMISSION_DECAY` | 0.11 | 1/s | |
-| `MARKER_HALF_LIFE` | 7.7 | s | slider |
+| `EMISSION_DECAY` | 0.11 | 1/s | slider "Trail fade with distance", range 0.005–0.2 |
+| `MARKER_HALF_LIFE` | 20 | s | slider |
 | `MARKER_EPS` / `MARKER_DETECT_MIN` | 1e-4 / 1e-3 | | |
 | `TERRITORY_RULE` / `FOREIGN_ERASURE_FACTOR` | on / 0.5 | | |
 | `STUCK_TIMEOUT` / `DEGRADE_TIME` / `DEGRADE_FACTOR` | 2.5 / 3.0 / 0.5 | s / s / – | |
 | `CROWD_LIMIT` | 4 | ants | within 3 × `ANT_RADIUS` |
 | `STUCK_TURN_JITTER` / `CROWD_RADIUS_FACTOR` / `ZONE_MARGIN` | 0.6 / 3 / 16 | rad / × `ANT_RADIUS` / u | the ±0.6 turn, the "3 ×" crowd radius and the nest/food zone margin from §5.5 |
-| `ENERGY_MAX` / `ENERGY_BURN` / `EXHAUSTED_AT` | 100 / 1.0 / 30 | – / per s / – | |
+| `ENERGY_MAX` / `ENERGY_BURN` / `EXHAUSTED_AT` | 100 / 0.5 / 60 | – / per s / – | |
 | `PUSH_ON_SIGNAL` | 0.4 | | |
 | `MASS` / carrying | 1 / 3 | | |
 | `SPAWN_COST` | 5 | food | |

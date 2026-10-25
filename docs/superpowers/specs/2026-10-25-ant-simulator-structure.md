@@ -499,11 +499,12 @@ colonyRows(world): ColonyRow[]
 
 // ui/param_specs.ts
 type ParamKey = "antSpeed" | "turnRate" | "sensorRadius" | "sensorHalfFovDeg" | "explorerRatio"
-              | "markerHalfLife" | "markerDropDist" | "degradeTime" | "energyBurn" | "spawnCost"
+              | "markerHalfLife" | "markerDropDist" | "emissionDecay" | "degradeTime"
+              | "energyBurn" | "spawnCost"
 type ParamGroup = "movement" | "trails" | "colony"
 interface ParamSpec { key: ParamKey; label: string; unit: string; min: number; max: number;
-                      step: number; scale: number; group: ParamGroup }
-paramSpecs(): readonly ParamSpec[]      // nine live rows; degradeTime typed but not shown until M2
+                      step: number; scale: number; group: ParamGroup; digits?: number }
+paramSpecs(): readonly ParamSpec[]      // ten live rows; degradeTime typed but not shown until M5
 specValue(spec, params): number
 applySpecValue(spec, params, displayValue): number
 formatSpecValue(spec, displayValue): string

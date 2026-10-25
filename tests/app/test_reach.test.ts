@@ -2,6 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { formatReachReport, type ReachReport } from "../../src/app/reach.js";
+import { defaultParams } from "../../src/sim/params.js";
+import { addColony, addFood, FoodKind, makeSetup } from "../../src/sim/setup.js";
+import { worldFromSetup } from "../../src/sim/setup_apply.js";
+import { stepWorld } from "../../src/sim/world.js";
 
 function splitLines(text: string): string[] {
   return text.split("\n").slice(0, -1);
@@ -55,4 +59,16 @@ test("reach: report format is stable", () => {
   assert.equal(lines[2], "500           12.4      41      63      72     198       -       -       -");
   assert.equal(lines[3], "1000             -       0       0       0     200       -       -       -");
   assert.equal(lines[4], "contest       18.2      22      35      47     190       3       8      12");
+});
+
+test("reach: 1000 u delivers", { timeout: 120_000 }, () => {
+  // Measured with the tuned defaults (emissionDecay 0.11, markerHalfLife 20,
+  // energyBurn 0.5, exhaustedAt 60): 116 deliveries in 120 s from 150 ants.
+  const setup = makeSetup({ x: 2600, y: 1000 }, 7, "reach-test");
+  addColony(setup, { x: 200, y: 500 }, 0, 150);
+  addFood(setup, { x: 1200, y: 500 }, 20000, FoodKind.Seeds);
+  const world = worldFromSetup(setup, defaultParams());
+  for (let tick = 1; tick <= 7200; tick++) stepWorld(world);
+  const delivered = world.colonies[0].deliveredTotal;
+  assert.ok(delivered >= 81, `delivered ${delivered}, expected at least 81`);
 });

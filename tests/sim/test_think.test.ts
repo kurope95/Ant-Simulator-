@@ -29,10 +29,10 @@ function thinkOnce(world: World, out: ChunkEvents = makeChunkEvents()): ChunkEve
 }
 
 test("think: timers advance and energy burns", () => {
-  const { world, index } = makeThinkWorld({ x: 100, y: 100 });
+  const { world, index, params } = makeThinkWorld({ x: 100, y: 100 });
   world.ants.degradeTimer[index] = 3;
   thinkOnce(world);
-  assert.ok(Math.abs(world.ants.energy[index] - (100 - 1 / 60)) < 1e-4);
+  assert.ok(Math.abs(world.ants.energy[index] - (params.energyMax - params.energyBurn / 60)) < 1e-4);
   assert.ok(Math.abs(world.ants.timeSinceAnchor[index] - 1 / 60) < 1e-5);
   assert.ok(Math.abs(world.ants.timeSinceLastMarker[index] - 1 / 60) < 1e-5);
   assert.ok(Math.abs(world.ants.degradeTimer[index] - (3 - 1 / 60)) < 1e-5);

@@ -109,10 +109,13 @@ test("territory: with the rule off a foreign deposit changes nothing", () => {
   assert.ok(Math.abs(grid.toHome[cell] - 0.4) < 1e-6);
 });
 
-test("markers: the decay factor matches 0.9985 per tick and is frame-rate independent", () => {
+test("markers: the decay factor halves per half-life and is frame-rate independent", () => {
   const params = defaultParams();
   const f60 = markerDecayFactor(params, 1 / 60);
-  assert.ok(Math.abs(f60 - 0.9985) <= 2e-5, `factor ${f60}`);
+  assert.ok(Math.abs(f60 - Math.pow(2, -1 / 60 / params.markerHalfLife)) < 1e-12, `factor ${f60}`);
+  // The M1 default of a 7.7 s half-life was the original 0.9985 per tick.
+  const legacy = { ...params, markerHalfLife: 7.7 };
+  assert.ok(Math.abs(markerDecayFactor(legacy, 1 / 60) - 0.9985) <= 2e-5);
   const f120 = markerDecayFactor(params, 1 / 120);
   assert.ok(Math.abs(f120 * f120 - f60) < 1e-12);
 });
