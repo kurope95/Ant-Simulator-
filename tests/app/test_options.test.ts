@@ -16,7 +16,21 @@ test("options: defaults", () => {
   assert.equal(r.options.threads, 0);
   assert.equal(r.options.vsync, true);
   assert.equal(r.options.zoom, 1);
+  assert.equal(r.options.screen, "home");
   assert.equal(effectiveTicks(r.options), 0);
+});
+
+test("options: --screen picks the start screen", () => {
+  assert.equal(parse().options.screen, "home");
+  assert.equal(parse("--screen", "builder").options.screen, "builder");
+  assert.equal(parse("--screen", "run").options.screen, "run");
+  assert.equal(parseOptions([]).options.screen, "home");
+  assert.equal(
+    parse("--screen", "nowhere").error,
+    "invalid value for --screen: nowhere (expected home, builder, run)",
+  );
+  assert.equal(optionsFromUrl("?screen=builder").options.screen, "builder");
+  assert.ok(usageText().includes("--screen"));
 });
 
 test("options: --zoom selects the run close-up", () => {

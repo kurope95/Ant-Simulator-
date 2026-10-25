@@ -860,6 +860,193 @@ textarea {
   white-space: nowrap;
 }
 
+/* Home ------------------------------------------------------------------ */
+
+.home {
+  justify-content: flex-start;
+}
+
+.home__scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(6, 9, 7, 0.96) 0%,
+      rgba(6, 9, 7, 0.86) 30%,
+      rgba(6, 9, 7, 0.38) 62%,
+      rgba(6, 9, 7, 0.05) 100%
+    ),
+    linear-gradient(180deg, rgba(6, 9, 7, 0.55) 0%, transparent 26%, rgba(6, 9, 7, 0.72) 100%);
+}
+
+.home__bar {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 26px 34px;
+}
+
+.home__score {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.home__tag {
+  padding: 3px 7px;
+  border: 1px solid var(--stroke-strong);
+  border-radius: 6px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.home__edition {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.home__main {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 56px;
+  padding: 0 6vw 7vh;
+}
+
+.home__hero {
+  max-width: 660px;
+}
+
+.home__eyebrow {
+  margin-bottom: 18px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.home__headline {
+  font-family: var(--font-display);
+  font-size: clamp(48px, 6.4vw, 96px);
+  font-weight: 400;
+  line-height: 0.98;
+  letter-spacing: -0.025em;
+  color: var(--text);
+}
+
+.home__headline--accent {
+  color: var(--accent);
+  font-style: italic;
+}
+
+.home__lede {
+  max-width: 46ch;
+  margin-top: 22px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.home__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 30px;
+}
+
+.home__actions .button {
+  height: 46px;
+  padding: 0 20px;
+  border-radius: 13px;
+  font-size: 14px;
+}
+
+.home__hint {
+  margin-top: 20px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: rgba(154, 167, 155, 0.75);
+}
+
+.home__last {
+  align-self: flex-end;
+  flex: none;
+  width: 300px;
+  margin-bottom: 6px;
+  padding: 16px 18px 18px;
+}
+
+.home__last-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.home__last-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.home__last-preset {
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.home__last-seed {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.home__rows {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 7px 16px;
+  margin: 0;
+}
+
+.home__row-label {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.home__row-value {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Brush ring ------------------------------------------------------------ */
+
+.brush-ring {
+  position: absolute;
+  z-index: 6;
+  border: 1px solid rgba(244, 203, 140, 0.85);
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 0 18px rgba(231, 179, 106, 0.22);
+  pointer-events: none;
+}
+
 /* Log ------------------------------------------------------------------- */
 
 #log {
@@ -904,6 +1091,15 @@ body.headless #log {
   .builder__status {
     display: none;
   }
+
+  .home__main {
+    gap: 32px;
+    padding: 0 4vw 6vh;
+  }
+
+  .home__last {
+    width: 270px;
+  }
 }
 
 @media (max-width: 1024px) {
@@ -928,6 +1124,19 @@ body.headless #log {
 @media (max-width: 940px) {
   .hud__legend {
     display: none;
+  }
+
+  .home__last {
+    display: none;
+  }
+
+  .home__main {
+    align-items: flex-end;
+    padding: 0 28px 54px;
+  }
+
+  .home__lede {
+    font-size: 14px;
   }
 }
 
@@ -999,6 +1208,26 @@ body.headless #log {
 
 @media (max-width: 560px) {
   .hud__chips {
+    display: none;
+  }
+
+  .home__bar {
+    padding: 18px;
+  }
+
+  .home__edition {
+    display: none;
+  }
+
+  .home__eyebrow {
+    margin-bottom: 12px;
+  }
+
+  .home__actions .button {
+    flex: 1;
+  }
+
+  .home__hint {
     display: none;
   }
 }

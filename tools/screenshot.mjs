@@ -14,11 +14,12 @@ const kMaxTicks = 10_000_000;
 const kMinZoom = 0.1;
 const kMaxZoom = 16;
 const kPresets = ["meadow", "dunes", "creek", "boulder", "blank"];
+const kScreens = ["home", "builder", "run"];
 
 class UsageError extends Error {}
 
 function parseArgs(argv) {
-  const args = { ticks: 30, out: "", size: kDefaultSize, seed: 1, preset: "meadow", zoom: 1, interactive: false };
+  const args = { ticks: 30, out: "", size: kDefaultSize, seed: 1, preset: "meadow", screen: "home", zoom: 1, interactive: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--ticks") args.ticks = Number(argv[++i]);
@@ -26,6 +27,7 @@ function parseArgs(argv) {
     else if (arg === "--size") args.size = argv[++i] ?? "";
     else if (arg === "--seed") args.seed = Number(argv[++i]);
     else if (arg === "--preset") args.preset = argv[++i] ?? "";
+    else if (arg === "--screen") args.screen = argv[++i] ?? "";
     else if (arg === "--zoom") args.zoom = Number(argv[++i]);
     else if (arg === "--interactive") args.interactive = true;
     else throw new UsageError(`unknown option: ${arg}`);
@@ -33,6 +35,9 @@ function parseArgs(argv) {
   if (args.out === "") throw new UsageError("--out is required");
   if (!kPresets.includes(args.preset)) {
     throw new UsageError(`unknown preset: ${args.preset} (expected ${kPresets.join(", ")})`);
+  }
+  if (!kScreens.includes(args.screen)) {
+    throw new UsageError(`unknown screen: ${args.screen} (expected ${kScreens.join(", ")})`);
   }
   const sizeMatch = /^(\d+)x(\d+)$/.exec(args.size);
   if (sizeMatch === null) throw new UsageError(`invalid --size: ${args.size}`);
@@ -95,6 +100,7 @@ async function main() {
     query.set("size", args.size);
     query.set("seed", String(args.seed));
     query.set("preset", args.preset);
+    if (args.interactive) query.set("screen", args.screen);
     if (args.zoom !== 1) query.set("zoom", String(args.zoom));
     const url = `${server.url}/?${query.toString()}`;
 
@@ -134,7 +140,7 @@ async function main() {
 main().catch((error) => {
   console.error(`error: ${error.message}`);
   if (error instanceof UsageError) {
-    console.error("usage: node tools/screenshot.mjs --out <file.png> [--preset <id>] [--zoom <n>] [--ticks N] [--size WxH] [--seed N] [--interactive]");
+    console.error("usage: node tools/screenshot.mjs --out <file.png> [--preset <id>] [--screen home|builder|run] [--zoom <n>] [--ticks N] [--size WxH] [--seed N] [--interactive]");
     process.exitCode = 2;
   } else {
     process.exitCode = 1;

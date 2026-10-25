@@ -8,9 +8,12 @@ export enum Mode {
   Version,
 }
 
+export type StartScreen = "home" | "builder" | "run";
+
 export interface AppOptions {
   mode: Mode;
   preset: string;
+  screen: StartScreen;
   seed: number;
   ticks: number;
   screenshot: string;
@@ -31,12 +34,14 @@ const kSizeMin = 16;
 const kSizeMax = 8192;
 const kZoomMin = 0.1;
 const kZoomMax = 16;
+const kStartScreens: readonly StartScreen[] = ["home", "builder", "run"];
 const kFlagsInUrl = new Set(["headless", "no-vsync"]);
 
 function defaults(): AppOptions {
   return {
     mode: Mode.Interactive,
     preset: "meadow",
+    screen: "home",
     seed: 1,
     ticks: -1,
     screenshot: "",
@@ -101,6 +106,17 @@ export function parseOptions(tokens: readonly string[]): ParseResult {
           break;
         }
         options.preset = preset;
+        i = taken.next;
+        break;
+      }
+      case "--screen": {
+        const taken = take(i, "--screen");
+        if (taken === null) break;
+        if (!(kStartScreens as readonly string[]).includes(taken.value)) {
+          error = `invalid value for --screen: ${taken.value} (expected ${kStartScreens.join(", ")})`;
+          break;
+        }
+        options.screen = taken.value as StartScreen;
         i = taken.next;
         break;
       }
@@ -221,12 +237,13 @@ export function usageText(): string {
     "Usage: AntSim [options]",
     "",
     "  --preset <id>         map preset: meadow, dunes, creek, boulder, blank (default meadow)",
+    "  --screen <id>         start screen: home, builder, run (default home)",
     "  --seed <n>            random seed, 0..4294967295 (default 1)",
     "  --ticks <n>           ticks to run (default 1200 for the bench, 0 otherwise)",
     "  --headless            render once at an exact pixel size, no loop",
     "  --screenshot <file>   output PNG for tools/screenshot.mjs",
     "  --size <WxH>          pixel size for headless mode (default 1920x1080)",
-    "  --bench <preset>      timing table (Node CLI)",
+    "  --bench <preset>      timing table (Node CLI); --scenario sandbox is deprecated",
     "  --threads <n>         worker threads, 1-64 (default: all cores)",
     "  --zoom <n>            camera zoom on run, 0.1-16 (default 1)",
     "  --no-vsync            uncapped frame rate (debug timing)",

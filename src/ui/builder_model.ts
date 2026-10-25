@@ -147,6 +147,10 @@ export class BuilderModel {
     this.currentTool = tool;
   }
 
+  clearSelection(): void {
+    this.currentSelection = null;
+  }
+
   setBrushRadius(radius: number): void {
     this.currentBrush = clampInt(radius, kMinBrushRadius, kMaxBrushRadius);
   }
