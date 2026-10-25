@@ -2,6 +2,7 @@ import type { Rgba8 } from "../core/color.js";
 import type { Rect } from "../core/rect.js";
 import type { Vec2 } from "../core/vec2.js";
 import type { GeometryBatch } from "./batch.js";
+import type { SpriteBatch } from "./sprite_batch.js";
 
 const kVertexShader = `#version 300 es
 in vec2 a_pos;
@@ -45,6 +46,30 @@ void main() {
 
 const kFloatsPerVertex = 6;
 
+const kSpriteVertexShader = `#version 300 es
+in vec2 a_pos;
+in vec2 a_uv;
+in vec4 a_color;
+uniform vec2 u_resolution;
+out vec2 v_uv;
+out vec4 v_color;
+void main() {
+  vec2 clip = vec2(a_pos.x / u_resolution.x * 2.0 - 1.0, 1.0 - a_pos.y / u_resolution.y * 2.0);
+  gl_Position = vec4(clip, 0.0, 1.0);
+  v_uv = a_uv;
+  v_color = a_color;
+}`;
+
+const kSpriteFragmentShader = `#version 300 es
+precision mediump float;
+in vec2 v_uv;
+in vec4 v_color;
+uniform sampler2D u_texture;
+out vec4 out_color;
+void main() {
+  out_color = texture(u_texture, v_uv) * v_color;
+}`;
+
 export type GlRendererResult = { renderer: GlRenderer } | { error: string };
 
 export class GlRenderer {
@@ -60,6 +85,11 @@ export class GlRenderer {
   private readonly quadVao: WebGLVertexArrayObject;
   private readonly textureResolution: WebGLUniformLocation;
   private readonly textureRect: WebGLUniformLocation;
+  private readonly spriteProgram: WebGLProgram;
+  private readonly spriteVertexBuffer: WebGLBuffer;
+  private readonly spriteIndexBuffer: WebGLBuffer;
+  private readonly spriteVao: WebGLVertexArrayObject;
+  private readonly spriteResolution: WebGLUniformLocation;
 
   private constructor(init: {
     canvas: HTMLCanvasElement;
@@ -74,6 +104,11 @@ export class GlRenderer {
     quadVao: WebGLVertexArrayObject;
     textureResolution: WebGLUniformLocation;
     textureRect: WebGLUniformLocation;
+    spriteProgram: WebGLProgram;
+    spriteVertexBuffer: WebGLBuffer;
+    spriteIndexBuffer: WebGLBuffer;
+    spriteVao: WebGLVertexArrayObject;
+    spriteResolution: WebGLUniformLocation;
   }) {
     this.canvas = init.canvas;
     this.gl = init.gl;
@@ -87,6 +122,11 @@ export class GlRenderer {
     this.quadVao = init.quadVao;
     this.textureResolution = init.textureResolution;
     this.textureRect = init.textureRect;
+    this.spriteProgram = init.spriteProgram;
+    this.spriteVertexBuffer = init.spriteVertexBuffer;
+    this.spriteIndexBuffer = init.spriteIndexBuffer;
+    this.spriteVao = init.spriteVao;
+    this.spriteResolution = init.spriteResolution;
   }
 
   static create(canvas: HTMLCanvasElement): GlRendererResult {
@@ -143,6 +183,34 @@ export class GlRenderer {
       gl.useProgram(textureProgram);
       gl.uniform1i(gl.getUniformLocation(textureProgram, "u_texture"), 0);
 
+      const spriteProgram = linkProgram(gl, kSpriteVertexShader, kSpriteFragmentShader);
+      const spriteVertexBuffer = gl.createBuffer();
+      const spriteIndexBuffer = gl.createBuffer();
+      const spriteVao = gl.createVertexArray();
+      if (spriteVertexBuffer === null || spriteIndexBuffer === null || spriteVao === null) {
+        return { error: "could not create the sprite buffers" };
+      }
+      const spriteResolution = gl.getUniformLocation(spriteProgram, "u_resolution");
+      if (spriteResolution === null) return { error: "sprite shader is missing u_resolution" };
+
+      gl.bindVertexArray(spriteVao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, spriteVertexBuffer);
+      const spritePosLocation = gl.getAttribLocation(spriteProgram, "a_pos");
+      const spriteUvLocation = gl.getAttribLocation(spriteProgram, "a_uv");
+      const spriteColorLocation = gl.getAttribLocation(spriteProgram, "a_color");
+      const spriteStride = 8 * 4;
+      gl.enableVertexAttribArray(spritePosLocation);
+      gl.vertexAttribPointer(spritePosLocation, 2, gl.FLOAT, false, spriteStride, 0);
+      gl.enableVertexAttribArray(spriteUvLocation);
+      gl.vertexAttribPointer(spriteUvLocation, 2, gl.FLOAT, false, spriteStride, 8);
+      gl.enableVertexAttribArray(spriteColorLocation);
+      gl.vertexAttribPointer(spriteColorLocation, 4, gl.FLOAT, false, spriteStride, 16);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, spriteIndexBuffer);
+      gl.bindVertexArray(null);
+
+      gl.useProgram(spriteProgram);
+      gl.uniform1i(gl.getUniformLocation(spriteProgram, "u_texture"), 0);
+
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
@@ -160,6 +228,11 @@ export class GlRenderer {
           quadVao,
           textureResolution,
           textureRect,
+          spriteProgram,
+          spriteVertexBuffer,
+          spriteIndexBuffer,
+          spriteVao,
+          spriteResolution,
         }),
       };
     } catch (error) {
@@ -202,6 +275,23 @@ export class GlRenderer {
     gl.bufferData(gl.ARRAY_BUFFER, batch.vertexData(), gl.DYNAMIC_DRAW);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, batch.indices(), gl.DYNAMIC_DRAW);
+    gl.drawElements(gl.TRIANGLES, indexCount, gl.UNSIGNED_INT, 0);
+    gl.bindVertexArray(null);
+  }
+
+  drawSprites(texture: WebGLTexture, batch: SpriteBatch): void {
+    const indexCount = batch.indexCount();
+    if (indexCount === 0) return;
+    const gl = this.gl;
+    gl.bindVertexArray(this.spriteVao);
+    gl.useProgram(this.spriteProgram);
+    gl.uniform2f(this.spriteResolution, this.canvas.width, this.canvas.height);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.spriteVertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, batch.vertexData(), gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.spriteIndexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, batch.indices(), gl.DYNAMIC_DRAW);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.drawElements(gl.TRIANGLES, indexCount, gl.UNSIGNED_INT, 0);
     gl.bindVertexArray(null);
   }
