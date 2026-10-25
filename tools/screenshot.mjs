@@ -7,6 +7,12 @@ import { dirname, join, resolve } from "node:path";
 import { startServer } from "./serve.mjs";
 
 const kDefaultSize = "1920x1080";
+const kMinSize = 16;
+const kMaxSize = 8192;
+const kMaxSeed = 0xffffffff;
+const kMaxTicks = 10_000_000;
+
+class UsageError extends Error {}
 
 function parseArgs(argv) {
   const args = { ticks: 30, out: "", size: kDefaultSize, seed: 1, interactive: false };
@@ -17,12 +23,22 @@ function parseArgs(argv) {
     else if (arg === "--size") args.size = argv[++i] ?? "";
     else if (arg === "--seed") args.seed = Number(argv[++i]);
     else if (arg === "--interactive") args.interactive = true;
-    else throw new Error(`unknown option: ${arg}`);
+    else throw new UsageError(`unknown option: ${arg}`);
   }
-  if (args.out === "") throw new Error("--out is required");
-  if (!/^\d+x\d+$/.test(args.size)) throw new Error(`invalid --size: ${args.size}`);
-  if (!Number.isInteger(args.ticks) || args.ticks < 0) throw new Error(`invalid --ticks: ${args.ticks}`);
-  if (!Number.isInteger(args.seed) || args.seed < 0) throw new Error(`invalid --seed: ${args.seed}`);
+  if (args.out === "") throw new UsageError("--out is required");
+  const sizeMatch = /^(\d+)x(\d+)$/.exec(args.size);
+  if (sizeMatch === null) throw new UsageError(`invalid --size: ${args.size}`);
+  const width = Number(sizeMatch[1]);
+  const height = Number(sizeMatch[2]);
+  if (width < kMinSize || height < kMinSize || width > kMaxSize || height > kMaxSize) {
+    throw new UsageError(`--size must be ${kMinSize}..${kMaxSize} px per side, got ${args.size}`);
+  }
+  if (!Number.isInteger(args.ticks) || args.ticks < 0 || args.ticks > kMaxTicks) {
+    throw new UsageError(`invalid --ticks: ${args.ticks} (0..${kMaxTicks})`);
+  }
+  if (!Number.isInteger(args.seed) || args.seed < 0 || args.seed > kMaxSeed) {
+    throw new UsageError(`invalid --seed: ${args.seed} (0..${kMaxSeed})`);
+  }
   return args;
 }
 
@@ -68,6 +84,13 @@ async function main() {
   const server = await startServer({ port: 0 });
   const profile = await mkdtemp(join(tmpdir(), "antsim-chrome-"));
   try {
+    const page = await fetch(`${server.url}/`);
+    if (!page.ok) throw new Error(`page returned ${page.status}; nothing to screenshot`);
+    const script = await fetch(`${server.url}/dist/src/app/main.js`);
+    if (!script.ok) {
+      throw new Error(`dist/src/app/main.js returned ${script.status}; run npm run build`);
+    }
+
     const query = new URLSearchParams();
     if (!args.interactive) query.set("headless", "");
     query.set("ticks", String(args.ticks));
@@ -96,7 +119,12 @@ async function main() {
     if (bytes.length < 24 || bytes.readUInt32BE(0) !== 0x89504e47 || bytes.readUInt32BE(4) !== 0x0d0a1a0a) {
       throw new Error(`not a PNG: ${outPath}`);
     }
-    console.log(`screenshot: ${args.out} (${bytes.readUInt32BE(16)}x${bytes.readUInt32BE(20)})`);
+    const pngWidth = bytes.readUInt32BE(16);
+    const pngHeight = bytes.readUInt32BE(20);
+    if (pngWidth !== width || pngHeight !== height) {
+      throw new Error(`screenshot is ${pngWidth}x${pngHeight}, expected ${width}x${height}`);
+    }
+    console.log(`screenshot: ${args.out} (${pngWidth}x${pngHeight})`);
   } finally {
     await server.close();
     await rm(profile, { recursive: true, force: true });
@@ -105,5 +133,10 @@ async function main() {
 
 main().catch((error) => {
   console.error(`error: ${error.message}`);
-  process.exitCode = 1;
+  if (error instanceof UsageError) {
+    console.error("usage: node tools/screenshot.mjs --out <file.png> [--ticks N] [--size WxH] [--seed N] [--interactive]");
+    process.exitCode = 2;
+  } else {
+    process.exitCode = 1;
+  }
 });
