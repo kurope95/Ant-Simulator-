@@ -1,6 +1,7 @@
 import { angleDiff } from "../core/math.js";
 import { angleOf, fromAngle } from "../core/vec2.js";
 import { MarkerChannel } from "./marker_grid.js";
+import { isSolidAt, lineOfSight } from "./obstacles.js";
 import type { SimParams } from "./params.js";
 import { AntState } from "./types.js";
 import type { World } from "./world.js";
@@ -95,6 +96,7 @@ export function senseMarkers(
     const direction = fromAngle(heading + sample.angleOffset);
     const x = posX + direction.x * sample.distance;
     const y = posY + direction.y * sample.distance;
+    if (isSolidAt(world.obstacles, { x, y })) continue;
     const cell = world.markers.cellIndex({ x, y });
     if (cell < 0 || world.markers.owner[cell] !== colony) continue;
     const home = world.markers.toHome[cell];
@@ -138,6 +140,7 @@ export function directSightHeading(world: World, ant: number): number | null {
       const dy = item.pos.y - posY;
       const distSq = dx * dx + dy * dy;
       if (distSq <= rangeSq && distSq < bestDistSq) {
+        if (!lineOfSight(world.obstacles, { x: posX, y: posY }, item.pos)) continue;
         bestDistSq = distSq;
         targetX = item.pos.x;
         targetY = item.pos.y;
@@ -146,7 +149,10 @@ export function directSightHeading(world: World, ant: number): number | null {
     }
   } else {
     const colony = world.colonies[ants.colony[ant]];
-    if (colony !== undefined) {
+    if (
+      colony !== undefined &&
+      lineOfSight(world.obstacles, { x: posX, y: posY }, colony.nest)
+    ) {
       targetX = colony.nest.x;
       targetY = colony.nest.y;
       hasTarget = true;

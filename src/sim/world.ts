@@ -1,6 +1,7 @@
 import type { Vec2 } from "../core/vec2.js";
 import { stopwatch } from "../core/stopwatch.js";
 import { Ants } from "./ants.js";
+import { resolveObstacles } from "./collide.js";
 import type { Colony } from "./colony.js";
 import type { ChunkEvents } from "./events.js";
 import { makeFoodSources, type FoodSources } from "./food.js";
@@ -74,7 +75,11 @@ export function stepWorld(world: World): void {
     }
   });
   timed(Phase.Events, () => applyEvents(world, world.chunkEvents));
-  timed(Phase.Collisions, () => clampToWorld(world));
+  timed(Phase.Collisions, () => {
+    clampToWorld(world);
+    resolveObstacles(world);
+    clampToWorld(world);
+  });
   timed(Phase.Removals, () => removeDead(world));
   timed(Phase.Decay, () =>
     decayMarkers(

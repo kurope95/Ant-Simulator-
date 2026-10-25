@@ -4,6 +4,7 @@ import { fromAngle } from "../core/vec2.js";
 import { nestRadius, type Colony } from "./colony.js";
 import { ContactKind, makeChunkEvents, type ChunkEvents } from "./events.js";
 import { degrade, deposit, emissionStrength, MarkerChannel } from "./marker_grid.js";
+import { speedFactorAt } from "./obstacles.js";
 import { directSightHeading, explorerPattern, followerPattern, senseMarkers } from "./sensing.js";
 import { turnToward, updateWander } from "./steering.js";
 import { AntRole, AntState, RandStream } from "./types.js";
@@ -68,8 +69,9 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
     ants.velY[ant] = ants.speed[ant] * direction.y;
     ants.prevX[ant] = ants.posX[ant];
     ants.prevY[ant] = ants.posY[ant];
-    ants.posX[ant] += ants.velX[ant] * dt;
-    ants.posY[ant] += ants.velY[ant] * dt;
+    const terrain = speedFactorAt(world.obstacles, { x: ants.posX[ant], y: ants.posY[ant] });
+    ants.posX[ant] += ants.velX[ant] * dt * terrain;
+    ants.posY[ant] += ants.velY[ant] * dt * terrain;
 
     const dropDx = ants.posX[ant] - ants.dropX[ant];
     const dropDy = ants.posY[ant] - ants.dropY[ant];

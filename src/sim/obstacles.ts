@@ -108,10 +108,10 @@ export function lineOfSight(grid: ObstacleGrid, a: Vec2, b: Vec2): boolean {
   const tDeltaY = stepY === 0 ? Infinity : grid.cell / Math.abs(dy);
   let tMaxX = stepX === 0
     ? Infinity
-    : ((stepX > 0 ? (col + 1) * grid.cell : a.x - col * grid.cell) / Math.abs(dx));
+    : ((stepX > 0 ? (col + 1) * grid.cell - a.x : a.x - col * grid.cell) / Math.abs(dx));
   let tMaxY = stepY === 0
     ? Infinity
-    : ((stepY > 0 ? (row + 1) * grid.cell : a.y - row * grid.cell) / Math.abs(dy));
+    : ((stepY > 0 ? (row + 1) * grid.cell - a.y : a.y - row * grid.cell) / Math.abs(dy));
 
   while (true) {
     let t: number;
@@ -124,7 +124,7 @@ export function lineOfSight(grid: ObstacleGrid, a: Vec2, b: Vec2): boolean {
       t = tMaxY;
       tMaxY += tDeltaY;
     }
-    if (t > 1) return true;
+    if (t >= 1) return true;
     if (isSolidCell(grid, col, row)) return false;
   }
 }
