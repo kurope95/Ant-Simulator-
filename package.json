@@ -9,6 +9,7 @@
     "test": "node --test \"dist/tests/**/*.test.js\"",
     "serve": "node tools/serve.mjs",
     "bench": "npm run build && node dist/src/app/bench_cli.js",
+    "reach": "npm run build && node dist/src/app/reach_cli.js",
     "screenshot": "npm run build && node tools/screenshot.mjs"
   },
   "devDependencies": {

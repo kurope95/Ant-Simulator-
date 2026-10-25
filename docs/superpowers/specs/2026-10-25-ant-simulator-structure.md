@@ -31,7 +31,7 @@ Ant Simulator/
 │   ├── sim/                    the simulation (no DOM, no WebGL)
 │   ├── render/                 camera, batches, WebGL2 renderer, atlas, terrain, layers
 │   ├── ui/                     DOM screens, HUD, panels and the builder model
-│   └── app/                    entries: controller, session, headless, bench, options
+│   └── app/                    entries: controller, session, headless, bench, reach, options
 ├── tests/                      node:test unit tests, mirroring src/ (plus tests/tools)
 ├── tools/
 │   ├── serve.mjs               dependency-free static server
@@ -51,15 +51,16 @@ Ant Simulator/
 |---|---|---|---|
 | `dist/src/app/main.js` | Chrome | `app/main.ts`, `interactive.ts`, `headless.ts`, `controller.ts` | everything |
 | `dist/src/app/bench_cli.js` | Node | `app/bench_cli.ts`, `bench.ts` | `core`, `sim`, `app/options`, `app/bench` |
+| `dist/src/app/reach_cli.js` | Node | `app/reach_cli.ts`, `reach.ts` | `core`, `sim`, `app/reach` |
 | `node --test "dist/tests/**/*.test.js"` | Node | `tests/**/*.test.ts` | `core`, `sim`, pure `render`/`ui`/`app` |
 | `tools/serve.mjs` | Node | — | Node built-ins only |
 | `tools/chrome.mjs` | Node | — | Node built-ins only |
 | `tools/launch.mjs` | Node, spawning Chrome | — | `tools/serve.mjs`, `tools/chrome.mjs`, Node built-ins |
 | `tools/screenshot.mjs` | Node, spawning Chrome | — | `tools/serve.mjs`, `tools/chrome.mjs`, Node built-ins |
 
-- **Scripts:** `npm run build` = `tsc -p tsconfig.json`, emitting `dist/src/...` and `dist/tests/...`; `npm test` builds then runs `node --test "dist/tests/**/*.test.js"`; `npm run serve` = `node tools/serve.mjs`; `npm run bench` = build then `node dist/src/app/bench_cli.js`; `npm run screenshot` = build then `node tools/screenshot.mjs`.
+- **Scripts:** `npm run build` = `tsc -p tsconfig.json`, emitting `dist/src/...` and `dist/tests/...`; `npm test` builds then runs `node --test "dist/tests/**/*.test.js"`; `npm run serve` = `node tools/serve.mjs`; `npm run bench` = build then `node dist/src/app/bench_cli.js`; `npm run reach` = build then `node dist/src/app/reach_cli.js`; `npm run screenshot` = build then `node tools/screenshot.mjs`.
 - **Launcher.** `Play Ant Simulator.bat` (and the Desktop shortcut pointing at it) installs dependencies if `node_modules` is missing, runs `npm run build`, then `node tools/launch.mjs`. The launcher serves the repo on `127.0.0.1:8080`, opens it as a Chrome `--app` window with a dedicated profile (`%LOCALAPPDATA%\AntSimulator\ChromeProfile`), and stops the server when that window closes. A second launch reuses the running server and opens one more window. `--check` runs the same server and Chrome path headless and validates the rendered PNG.
-- **Layering is enforced by imports, not the type system.** `core` imports nothing. `sim` imports `core`. `render` imports `core`, `sim`, the DOM and WebGL. `ui` imports `core`/`sim`, the DOM and `render/view_settings`. `app/options.ts`, `app/bench.ts` and the bench CLI import `core`/`sim` only. Only `src/app/main.ts`, `interactive.ts`, `headless.ts` and `controller.ts` bring `render` and `ui` together.
+- **Layering is enforced by imports, not the type system.** `core` imports nothing. `sim` imports `core`. `render` imports `core`, `sim`, the DOM and WebGL. `ui` imports `core`/`sim`, the DOM and `render/view_settings`. `app/options.ts`, `app/bench.ts`, `app/reach.ts` and their CLIs import `core`/`sim` only. Only `src/app/main.ts`, `interactive.ts`, `headless.ts` and `controller.ts` bring `render` and `ui` together.
 - **`src/core` and `src/sim` never reference `document`, `window`, `canvas`, `WebGLRenderingContext` or `chrome`.** They must stay runnable by `node --test` and the bench CLI. Node executing them in tests is the practical guard.
 - **No runtime npm dependencies.** Dev dependencies are pinned exactly: `typescript` 5.9.3 and `@types/node` 24.10.0.
 - **Bundlers are banned.** Vite, esbuild, Rollup with native binaries and TypeScript 7's Go compiler are unsigned native programs that Smart App Control may block. `tsc` 5.9.3 is JavaScript and runs under Node.
@@ -649,7 +650,17 @@ interface BenchReport { preset: string; ticks: number; threads: number; ants: nu
 formatBenchReport(report): string
 runBench(options): number              // prints the report; returns the exit code
 
+// app/reach.ts
+const kReachDistances = [500, 1000, 1500, 2000]
+interface ReachRow { label: string; firstSeconds: number | null; minute1: number;
+                     minute2: number; minute3: number; alive: number;
+                     bMinute1: number | null; bMinute2: number | null; bMinute3: number | null }
+interface ReachReport { seed: number; ants: number; seconds: number; rows: ReachRow[]; contest: ReachRow }
+formatReachReport(report): string
+runReach(): number                     // prints the foraging-range table; returns the exit code
+
 // app/bench_cli.ts                  Node entry: argv -> runBench
+// app/reach_cli.ts                  Node entry: -> runReach
 // app/main.ts                       Chrome entry: URL -> mode; wires canvas, ui root and log
 ```
 
@@ -735,7 +746,8 @@ tests/render/ test_ant_layer.test.ts   [M1.5]  test_atlas.test.ts        [M1.5]
 tests/ui/     test_builder_model.test.ts [M1.5] test_param_specs.test.ts
               test_view_models.test.ts   [M1.5]
 tests/app/    test_attract.test.ts [M1.5] test_bench.test.ts [M1.5]
-              test_options.test.ts        test_session.test.ts [M1.5]
+              test_options.test.ts        test_reach.test.ts   [M2]
+              test_session.test.ts [M1.5]
 tests/tools/  test_screenshot.test.ts [M1.5]   // spawns Chrome for the interactive builder check
 ```
 
