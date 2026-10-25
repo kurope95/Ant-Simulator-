@@ -1,14 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { angleDiff } from "../../src/core/math.js";
 import { makeColony } from "../../src/sim/colony.js";
 import {
+  chooseFallback,
   directSightHeading,
   explorerPattern,
+  fallbackHeading,
   followerPattern,
   senseMarkers,
 } from "../../src/sim/sensing.js";
 import { MarkerChannel } from "../../src/sim/marker_grid.js";
+import { freeDistance } from "../../src/sim/obstacles.js";
 import { defaultParams } from "../../src/sim/params.js";
 import { FoodKind, ObstacleKind } from "../../src/sim/setup.js";
 import { AntState } from "../../src/sim/types.js";
@@ -32,9 +36,10 @@ test("sensing: follower and explorer patterns have pinned shapes at default para
   assert.deepEqual(follower[0], { angleOffset: -Math.PI / 3, distance: 6.4 });
   assert.deepEqual(follower[24], { angleOffset: Math.PI / 3, distance: 32 });
   const explorer = explorerPattern(defaultParams());
-  assert.equal(explorer.length, 4);
+  assert.equal(explorer.length, 6);
   assert.deepEqual(explorer[0], { angleOffset: -Math.PI / 3, distance: 16 });
-  assert.deepEqual(explorer[3], { angleOffset: Math.PI / 3, distance: 32 });
+  assert.deepEqual(explorer[1], { angleOffset: 0, distance: 16 });
+  assert.deepEqual(explorer[5], { angleOffset: Math.PI / 3, distance: 32 });
 });
 
 test("sensing: the patterns follow the sensor params", () => {
@@ -50,8 +55,8 @@ test("sensing: the patterns follow the sensor params", () => {
   }
   assert.ok(Math.abs(follower[24].distance - 10) < 1e-9);
   const explorer = explorerPattern(params);
-  assert.equal(explorer.length, 4);
-  assert.ok(Math.abs(explorer[3].distance - 10) < 1e-9);
+  assert.equal(explorer.length, 6);
+  assert.ok(Math.abs(explorer[5].distance - 10) < 1e-9);
 });
 
 test("sensing: a narrowed cone stops sensing a far marker", () => {
@@ -160,4 +165,45 @@ test("sensing: direct sight needs range, facing and the right target", () => {
   const far = makeSenseWorld();
   far.world.food.items.push({ uid: 1, pos: { x: 300, y: 100 }, amount: 500, infinite: false, kind: FoodKind.Seeds });
   assert.equal(directSightHeading(far.world, far.index), null);
+});
+
+test("sensing: fallback picks the open gap", () => {
+  const { world, index } = makeSenseWorld();
+  const grid = world.obstacles;
+  for (let row = 25; row <= 39; row++) {
+    for (let col = 35; col <= 39; col++) grid.kind[row * grid.width + col] = ObstacleKind.Rock;
+  }
+  world.ants.wanderHeading[index] = -Math.PI / 6;
+  const chosen = fallbackHeading(world, index);
+  assert.ok(
+    Math.abs(angleDiff(chosen, -Math.PI / 6)) <= (10 * Math.PI) / 180,
+    `chosen ${chosen}`,
+  );
+  assert.equal(
+    freeDistance(grid, { x: 100, y: 100 }, chosen, world.params.fallbackRange),
+    world.params.fallbackRange,
+  );
+  assert.ok(freeDistance(grid, { x: 100, y: 100 }, 0, world.params.fallbackRange) < world.params.fallbackRange);
+});
+
+test("sensing: fallback's clearAhead matches the chosen heading's look-ahead", () => {
+  const { world, index } = makeSenseWorld();
+  world.ants.wanderHeading[index] = 0;
+  let choice = chooseFallback(world, index);
+  assert.equal(
+    choice.clearAhead,
+    freeDistance(world.obstacles, { x: 100, y: 100 }, choice.heading, world.params.lookAhead) >=
+      world.params.lookAhead,
+  );
+
+  const grid = world.obstacles;
+  for (let row = 22; row <= 28; row++) {
+    for (let col = 22; col <= 28; col++) {
+      if (row === 22 || row === 28 || col === 22 || col === 28) {
+        grid.kind[row * grid.width + col] = ObstacleKind.Rock;
+      }
+    }
+  }
+  choice = chooseFallback(world, index);
+  assert.equal(choice.clearAhead, false, "boxed in by the rock ring");
 });

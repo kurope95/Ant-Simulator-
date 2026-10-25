@@ -233,12 +233,15 @@ makeChunkEvents(): ChunkEvents
 // sim/sensing.ts, sim/steering.ts
 interface SensorSample { angleOffset: number; distance: number }
 followerPattern(params): readonly SensorSample[] // 25 = 5 angles x 5 distances, scaled by the sensor params
-explorerPattern(params): readonly SensorSample[] // 4, scaled the same way; cached per params pair
+explorerPattern(params): readonly SensorSample[] // 6 = 3 angles x 2 distances, scaled the same way; cached per params pair
 interface SenseResult { found: boolean; targetHeading: number; bestSignal: number; bestFoodSignal: number }
 senseMarkers(world, ant, channel, pattern): SenseResult
+interface FallbackChoice { heading: number; clearAhead: boolean }
+chooseFallback(world, ant): FallbackChoice   // wander heading if its look-ahead is free, else the longest free ray
+fallbackHeading(world, ant): number          // chooseFallback(...).heading
 directSightHeading(world, ant): number | null
 turnToward(heading, target, maxTurn): number
-updateWander(world, ant, dt): boolean        // true on the tick a new offset is drawn
+updateWander(world, ant, dt): boolean        // true on the tick a new offset and wander heading are drawn
 
 // sim/tick.ts
 thinkChunk(world, begin, end, out: ChunkEvents): void
@@ -265,6 +268,8 @@ isSolidCell(grid, col, row): boolean
 isSolidAt(grid, p): boolean
 speedFactorAt(grid, p): number             // 1, 0.6 (sand) or 0.45 (mud)
 lineOfSight(grid, a, b): boolean           // Amanatides-Woo DDA through solid cells
+freeDistance(grid, origin, angle, maxDist): number // DDA: distance to the first solid cell
+freeDistanceDir(grid, origin, unitX, unitY, maxDist): number // the same walk for a unit direction already in hand
 
 // sim/collide.ts
 resolveObstacles(world): void              // pushes ants out of Rock/Water, both axes

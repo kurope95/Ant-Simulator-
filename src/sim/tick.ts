@@ -5,8 +5,14 @@ import { slideHeadingAlongNormal } from "./collide.js";
 import { nestRadius, type Colony } from "./colony.js";
 import { ContactKind, makeChunkEvents, type ChunkEvents } from "./events.js";
 import { degrade, deposit, emissionStrength, MarkerChannel } from "./marker_grid.js";
-import { speedFactorAt } from "./obstacles.js";
-import { directSightHeading, explorerPattern, followerPattern, senseMarkers } from "./sensing.js";
+import { speedFactorAt, freeDistance } from "./obstacles.js";
+import {
+  chooseFallback,
+  directSightHeading,
+  explorerPattern,
+  followerPattern,
+  senseMarkers,
+} from "./sensing.js";
 import { turnToward, updateWander } from "./steering.js";
 import { AntRole, AntState, RandStream } from "./types.js";
 import type { World } from "./world.js";
@@ -52,6 +58,24 @@ function chooseHeading(world: World, ant: number): ChosenHeading {
   };
 }
 
+// Returns a heading that has `lookAhead` units of free space, as close as possible to `desired`.
+function steerAroundWalls(world: World, ant: number, desired: number): number {
+  const p = { x: world.ants.posX[ant], y: world.ants.posY[ant] };
+  const look = world.params.lookAhead;
+  if (freeDistance(world.obstacles, p, desired, look) >= look) return desired;
+  const side = world.ants.wanderOffset[ant] >= 0 ? 1 : -1;
+  for (let k = 1; k <= 6; k++) {
+    const off = (k * Math.PI) / 12;
+    if (freeDistance(world.obstacles, p, desired + side * off, look) >= look) {
+      return desired + side * off;
+    }
+    if (freeDistance(world.obstacles, p, desired - side * off, look) >= look) {
+      return desired - side * off;
+    }
+  }
+  return desired + Math.PI;
+}
+
 export function thinkChunk(world: World, begin: number, end: number, out: ChunkEvents): void {
   const ants = world.ants;
   const params = world.params;
@@ -77,14 +101,20 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
     }
 
     const pickedWander = updateWander(world, ant, dt);
+    let clearAhead = false;
     if (!chosen.fromSight) {
       if (chosen.fromMarkers) {
         // A redraw nudges a marker-following ant; between redraws the marker wins.
         if (pickedWander) desired += ants.wanderOffset[ant];
       } else {
-        desired = ants.wanderHeading[ant];
+        const fallback = chooseFallback(world, ant);
+        desired = fallback.heading;
+        // The fallback already proved the look-ahead is free, which is exactly
+        // what steerAroundWalls would check, so it can skip the probe.
+        clearAhead = fallback.clearAhead;
       }
     }
+    if (!clearAhead) desired = steerAroundWalls(world, ant, desired);
 
     ants.heading[ant] = turnToward(ants.heading[ant], desired, params.turnRate * dt);
     const direction = fromAngle(ants.heading[ant]);

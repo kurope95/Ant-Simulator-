@@ -108,6 +108,62 @@ export function speedFactorAt(grid: ObstacleGrid, p: Vec2): number {
   return 1;
 }
 
+export function freeDistance(
+  grid: ObstacleGrid,
+  origin: Vec2,
+  angle: number,
+  maxDist: number,
+): number {
+  return freeDistanceDir(grid, origin, Math.cos(angle), Math.sin(angle), maxDist);
+}
+
+// Same walk for callers that already hold the unit direction, so ray fans
+// compute their trigonometry once instead of once per probe.
+export function freeDistanceDir(
+  grid: ObstacleGrid,
+  origin: Vec2,
+  unitX: number,
+  unitY: number,
+  maxDist: number,
+): number {
+  if (!(maxDist > 0)) return 0;
+  const col0 = Math.floor(origin.x / grid.cell);
+  const row0 = Math.floor(origin.y / grid.cell);
+  if (isSolidCell(grid, col0, row0)) return 0;
+
+  const dirX = unitX * maxDist;
+  const dirY = unitY * maxDist;
+  let col = col0;
+  let row = row0;
+  const stepX = dirX > 0 ? 1 : dirX < 0 ? -1 : 0;
+  const stepY = dirY > 0 ? 1 : dirY < 0 ? -1 : 0;
+  const tDeltaX = stepX === 0 ? Infinity : grid.cell / Math.abs(dirX);
+  const tDeltaY = stepY === 0 ? Infinity : grid.cell / Math.abs(dirY);
+  let tMaxX = stepX === 0
+    ? Infinity
+    : ((stepX > 0 ? (col + 1) * grid.cell - origin.x : origin.x - col * grid.cell) /
+        Math.abs(dirX));
+  let tMaxY = stepY === 0
+    ? Infinity
+    : ((stepY > 0 ? (row + 1) * grid.cell - origin.y : origin.y - row * grid.cell) /
+        Math.abs(dirY));
+
+  while (true) {
+    let t: number;
+    if (tMaxX < tMaxY) {
+      col += stepX;
+      t = tMaxX;
+      tMaxX += tDeltaX;
+    } else {
+      row += stepY;
+      t = tMaxY;
+      tMaxY += tDeltaY;
+    }
+    if (t >= 1) return maxDist;
+    if (isSolidCell(grid, col, row)) return t * maxDist;
+  }
+}
+
 export function lineOfSight(grid: ObstacleGrid, a: Vec2, b: Vec2): boolean {
   const dx = b.x - a.x;
   const dy = b.y - a.y;

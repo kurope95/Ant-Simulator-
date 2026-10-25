@@ -17,6 +17,7 @@ export interface SimParams {
   explorerSamples: number;
   fallbackRays: number;
   fallbackRange: number;
+  lookAhead: number;
   explorerRatio: number;
   wanderIntervalFollower: number;
   wanderIntervalExplorer: number;
@@ -80,9 +81,10 @@ export function defaultParams(): SimParams {
     sensorRadius: 32,
     sensorHalfFovDeg: 60,
     followerSamples: 25,
-    explorerSamples: 4,
+    explorerSamples: 6,
     fallbackRays: 12,
     fallbackRange: 48,
+    lookAhead: 20,
     explorerRatio: 0.10,
     wanderIntervalFollower: 0.4,
     wanderIntervalExplorer: 0.25,

@@ -7,6 +7,7 @@ import {
   rebuildBorder,
 } from "../../src/sim/obstacles.js";
 import { defaultParams, type SimParams } from "../../src/sim/params.js";
+import { loadPreset } from "../../src/sim/presets.js";
 import { addColony, FoodKind, addFood, makeSetup, ObstacleKind, paintCells } from "../../src/sim/setup.js";
 import { worldFromSetup } from "../../src/sim/setup_apply.js";
 import { stepWorld, type World } from "../../src/sim/world.js";
@@ -99,4 +100,92 @@ test("collide: nearSolid flags match a brute-force check", () => {
       );
     }
   }
+});
+
+test("steer: an ant heading at a rock goes around it", () => {
+  const { world } = wallWorld((setup) => paintCells(setup, ObstacleKind.Rock, { x: 140, y: 100 }, 15));
+  const index = spawn(world, 100, 100);
+  const xs: number[] = [];
+  const ys: number[] = [];
+  let farthest = 0;
+  for (let tick = 0; tick < 300; tick++) {
+    stepWorld(world);
+    xs.push(world.ants.posX[index]);
+    ys.push(world.ants.posY[index]);
+    farthest = Math.max(
+      farthest,
+      Math.hypot(world.ants.posX[index] - 100, world.ants.posY[index] - 100),
+    );
+  }
+  for (let start = 0; start + 60 < xs.length; start++) {
+    const moved = Math.hypot(xs[start + 60] - xs[start], ys[start + 60] - ys[start]);
+    assert.ok(moved >= 3, `ant moved only ${moved.toFixed(2)} u in 60 ticks from tick ${start}`);
+  }
+  assert.ok(farthest > 150, `farthest ${farthest.toFixed(1)} u`);
+});
+
+test("steer: ants pass a 12 u gap", () => {
+  const { world } = wallWorld((setup) => {
+    const grid = setup.obstacles;
+    const paint = (col0: number, col1: number, row0: number, row1: number): void => {
+      for (let row = row0; row <= row1; row++) {
+        for (let col = col0; col <= col1; col++) grid.kind[row * grid.width + col] = ObstacleKind.Rock;
+      }
+    };
+    paint(35, 39, 15, 23);
+    paint(35, 39, 27, 40);
+  });
+  const index = spawn(world, 100, 100);
+  let passed = false;
+  for (let tick = 0; tick < 200; tick++) {
+    stepWorld(world);
+    if (world.ants.posX[index] > 170) {
+      passed = true;
+      break;
+    }
+  }
+  assert.equal(passed, true, `ant stuck at x=${world.ants.posX[index]}`);
+});
+
+function fractionTouchingSolid(world: World): number {
+  const grid = world.obstacles;
+  const ants = world.ants;
+  const reach = world.params.antRadius + 1;
+  let touching = 0;
+  for (let index = 0; index < ants.size(); index++) {
+    const col0 = Math.floor(ants.posX[index] / grid.cell);
+    const row0 = Math.floor(ants.posY[index] / grid.cell);
+    let hit = false;
+    for (let row = row0 - 1; row <= row0 + 1 && !hit; row++) {
+      for (let col = col0 - 1; col <= col0 + 1 && !hit; col++) {
+        if (col < 0 || row < 0 || col >= grid.width || row >= grid.height) continue;
+        const kind = grid.kind[row * grid.width + col];
+        if (kind !== ObstacleKind.Rock && kind !== ObstacleKind.Water) continue;
+        const nearestX = Math.max(col * grid.cell, Math.min(ants.posX[index], (col + 1) * grid.cell));
+        const nearestY = Math.max(row * grid.cell, Math.min(ants.posY[index], (row + 1) * grid.cell));
+        const dx = ants.posX[index] - nearestX;
+        const dy = ants.posY[index] - nearestY;
+        if (dx * dx + dy * dy <= reach * reach) hit = true;
+      }
+    }
+    if (hit) touching += 1;
+  }
+  return ants.size() === 0 ? 0 : touching / ants.size();
+}
+
+test("steer: few ants touch solid ground on the boulder preset", { timeout: 120_000 }, () => {
+  const setup = loadPreset("boulder", 1);
+  assert.notEqual(setup, null);
+  const world = worldFromSetup(setup!, defaultParams());
+  let sum = 0;
+  let samples = 0;
+  for (let tick = 1; tick <= 7200; tick++) {
+    stepWorld(world);
+    if (tick % 600 === 0) {
+      sum += fractionTouchingSolid(world);
+      samples += 1;
+    }
+  }
+  const average = sum / samples;
+  assert.ok(average < 0.05, `fractionTouchingSolid averaged ${average.toFixed(4)}`);
 });

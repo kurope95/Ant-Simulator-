@@ -237,20 +237,23 @@ The field of view is ±60°, out to `SENSOR_RADIUS` (32 u).
   - A point's score is the followed channel, counted only in cells owned by the ant's colony.
   - The followed channel is `to_food` when FORAGING, and `to_home` when RETURNING_FOOD or RETURNING_EXHAUSTED.
   - The ant steers toward the best point if its score is at least `MARKER_DETECT_MIN`.
-- **Explorers** work the same way, but with only 4 sample points and stronger wander (§5.4), so they drift off highways and find new routes.
+- **Explorers** work the same way, but with only 6 sample points and stronger wander (§5.4), so they drift off highways and find new routes.
   - An exhausted Explorer uses the Follower pattern, because it just wants to get home.
-- **No marker found: fall back to open space.** Cast `FALLBACK_RAYS` (12) rays across the field of view, each up to `FALLBACK_RANGE` (48 u), through the obstacle grid.
+- **No marker found: fall back to open space.** If the wander heading has `LOOK_AHEAD` (20 u) of free space, steer straight along it. Otherwise cast `FALLBACK_RAYS` (12) rays across the field of view, each up to `FALLBACK_RANGE` (48 u), through the obstacle grid.
   - Steer along the ray with the longest free distance.
-  - Ties are common in open space; they go to the ray closest to the current wander heading — the heading the ant took on its last wander redraw (§5.4). *(Fix: the original rule had no tie-break, which would make ants in open space jitter.)*
+  - Ties are common in open space; they go to the ray closest to the wander heading — the heading the ant took on its last wander redraw (§5.4). *(Fix: the original rule had no tie-break, which would make ants in open space jitter.)*
+  - The choice also reports whether it has `LOOK_AHEAD` of free space, so the look-ahead steering pass below can skip its probe.
+- **Look-ahead steering.** A desired heading needs `LOOK_AHEAD` (20 u) of free space. If it doesn't have it, try up to ±90° in 15° steps, biased to the side the ant was already drifting; turn around if every direction is blocked.
 - **Speed** is `ANT_SPEED`, varied per ant by up to ±`SPEED_JITTER`.
 
 ### 5.4 Wander
 Each ant redraws a random wander offset every `WANDER_INTERVAL` (randomised by ±50%):
-- On the tick the offset is redrawn, it is added to the desired heading; the ant turns toward that heading under `TURN_RATE`, and the chosen heading then persists until the next redraw.
-- Between redraws, wander does not steer. A redraw nudges the path by at most ±`WANDER_ANGLE` over a few ticks.
-- The **wander heading** is the heading an ant is turning toward after its last redraw; §5.3's fallback tie-break compares against it.
+- On redraw it draws an offset, sets the **wander heading** to `current heading + offset` (wrapped), and steers toward that absolute heading under `TURN_RATE`. The heading persists until the next redraw.
+- Between redraws, wander steers only when there is no direct sight and no marker: the ant keeps converging on the wander heading (§5.3's fallback).
+- Picking up food or reaching the nest flips the heading by π and resets the wander heading to the new heading, so a carrier walks back the way it came.
+- §5.3's fallback tie-break compares against the wander heading.
 
-*(Fix, 2026-10-25: adding the persistent offset on every tick made `desired = heading + offset` a constant turn whenever the offset survived the turn limit, so ants circled at radius `v / ω ≈ 8` u and delivered nothing. Applying it only on the redraw tick keeps the wander and lets paths persist.)*
+*(Fix, 2026-10-25: the original rule applied the offset only on the redraw tick, so wander barely steered and a pinned ant turned away very slowly. Two other forms fail too: adding the offset to `desired` every tick makes `desired = heading + offset` a permanent turn, so ants circle at radius `v / ω ≈ 8` u; and taking the fallback ray nearest that relative target does the same, because the ray fan rotates with the heading and no ray sits exactly on the target. Hence one absolute wander heading per redraw, and a straight run along it whenever its look-ahead is free.)*
 
 Starting values are below. Tune them so Explorers leave an established highway roughly **10× more often** than Followers.
 
@@ -446,8 +449,9 @@ Rules:
 | `ANT_SPEED` / `SPEED_JITTER` | 50 / 10 | u/s / % | |
 | `TURN_RATE` | 6 | rad/s | |
 | `SENSOR_RADIUS` / half-FOV | 32 / 60 | u / ° | |
-| `FOLLOWER_SAMPLES` / `EXPLORER_SAMPLES` | 25 / 4 | | |
+| `FOLLOWER_SAMPLES` / `EXPLORER_SAMPLES` | 25 / 6 | | |
 | `FALLBACK_RAYS` / `FALLBACK_RANGE` | 12 / 48 | – / u | |
+| `LOOK_AHEAD` | 20 | u | free space required before wall steering turns an ant |
 | `EXPLORER_RATIO` | 10 | % | slider |
 | `WANDER_INTERVAL` (F / E) | 0.4 / 0.25 | s | |
 | `WANDER_ANGLE` (F / E) | 0.3 / 1.0 | rad | |
