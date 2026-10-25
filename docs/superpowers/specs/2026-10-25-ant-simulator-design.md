@@ -330,8 +330,8 @@ Each frame draws these layers in order, using a few batched WebGL2 draw calls in
 - **Smooth motion:** the renderer draws `lerp(prev, pos, alpha)`, where `alpha` is the leftover fraction of the fixed-step accumulator. Motion stays smooth at 120 Hz with a 60 Hz simulation.
 - **Speed controls:** pause, single step, and 1×, 2× and 4× speed run more ticks per frame. **Max** runs as many ticks as fit in the frame, capped so the app can never spiral into lag.
 - **Themes:**
-  - **Sand** (default): light terrain where shadows show *(Claude's call)*.
-  - **Night:** a dark background with glowing markers, like Pezzza's original. Shadows are subtle here.
+  - **Night (the app's default since M1, 2026-10-25):** a dark background with glowing markers, like Pezzza's original. Shadows are subtle here. The user asked for a high-end dark UI, so the interactive app ships Night.
+  - **Sand:** light terrain where shadows show *(Claude's call)*. It remains available in code and returns as a switch with the M5 theme work.
 - **Camera:** the mouse wheel zooms at the cursor, right- or middle-drag pans, and follow mode keeps the selected ant centred. The camera starts with the whole world fitted to the window.
 
 ---
@@ -355,7 +355,9 @@ Each frame draws these layers in order, using a few batched WebGL2 draw calls in
 
 The UI is a DOM overlay (HTML/CSS) above the WebGL canvas, so text stays crisp at any display scale. **H** toggles Zen mode, which hides all UI.
 
-**Bottom toolbar**
+**The M1 control drawer (shipped 2026-10-25).** A glass top bar holds the brand, four live chips (tick, ants, delivered, FPS), pause and step, the speed pills (1×, 2×, 4×, Max), the heatmap cycle and the drawer toggle. The drawer holds collapsible Movement, Trails and Colony sections with live sliders, Ants and Grid switches, a Fit-world button, the key legend and Reset parameters. The palette is dark with an amber accent and a blue secondary; every control is custom-styled, and layout and motion follow the CSS contract in the M1 plan (Task 11). Screenshots of both the trail and the UI are part of the M1 acceptance.
+
+**Bottom toolbar** *(full version arrives with the editing tools, M2)*
 - Tools: Select/Pan, Wall brush, Erase brush, Food, New colony.
 - Brush radius and food capacity sliders.
 - Pause, step and speed (1×, 2×, 4×, Max).
@@ -522,7 +524,7 @@ Each milestone ends with a running app and the checks listed.
 | # | Milestone | Done when |
 |---|---|---|
 | M0 | **Skeleton.** npm/TypeScript project and test harness, DPI-aware WebGL2 canvas at native resolution with a DOM debug panel, fixed-step loop with interpolation, camera, URL/CLI modes, RNG, headless screenshots, bench | The page opens crisp at devicePixelRatio 2; the log says `webgl2`; a headless screenshot works; tests run |
-| M1 | **Core foraging, one colony.** SoA ants in typed arrays, nest, food, marker grid, wander, energy and states, spawning, ants and dual-channel heatmap drawn, phase pipeline | In the sandbox, a trail forms between nest and food on its own; screenshot reviewed; tests cover deposit, decay and state changes |
+| M1 | **Core foraging, one colony.** SoA ants in typed arrays, nest, food, marker grid, wander, energy and states, spawning, ants and dual-channel heatmap drawn, phase pipeline, night view and the control drawer | In the sandbox, a trail forms between nest and food on its own; screenshot reviewed; tests cover deposit, decay and state changes. **Done 2026-10-25** |
 | M2 | **Walls and adaptation.** Obstacle grid and brushes, border flags, spatial hash (the stuck rule needs neighbour counts), wall collisions, fallback rays, stuck detection and degrading, maze scenario and breach button | Ants solve the maze; after the breach, most deliveries take the shortcut; before and after screenshots |
 | M3 | **Colonies.** Several colonies, ownership and the territory rule (toggle), New colony tool, four-colony scenario, colony-colour heatmap | Four colonies forage at once; territories are visible; erasure and flip are tested |
 | M4 | **Crowds and scale.** PBD collisions, PBMAD avoidance, worker pool, stress scenario, bench mode | No overlapping ants; opposing streams form lanes; 20k-ant bench numbers recorded; determinism test passes with 1 and 8 workers |
@@ -553,6 +555,9 @@ Each milestone ends with a running app and the checks listed.
 14. Up to 8 colonies, with Red, Yellow, Blue and Green first.
 15. Discrete food sources for v1; a food brush comes later.
 16. Wander values, sprite level of detail, and the uid-based female names.
+17. **Night is the interactive app's default theme** (2026-10-25). The user asked for a high-end dark UI ("dark background … no lazy shit"); Sand stays in code and returns as a theme switch with the M5 work. This supersedes item 12 for M1.
+18. **The control drawer ships in M1** (2026-10-25), not M5. It was part of the user's M1 UI request; the full toolbar, inspector, telemetry and parameter panel remain M5.
+19. **Ants are flat batched diamonds in M1** (2026-10-25). Sprites, shadows and legs arrive in M5; the M1 renderer keeps one draw call per layer.
 
 ## Glossary
 

@@ -119,7 +119,7 @@ class FixedStepClock {
 }
 
 // core/stopwatch.ts                                                 [M0]
-class Stopwatch { restart(): void; elapsedMs(): number; elapsedSeconds(): number }
+stopwatch(): { restart(): void; elapsedMs(): number; elapsedSeconds(): number }
 
 // core/stats.ts                                                     [M0]
 interface SampleSummary { avg: number; p95: number }
@@ -200,8 +200,9 @@ foodRadius(source, params): number
 interface FoodSources { items: FoodSource[]; findTouching(pos, radius, params): number;
                         takeOne(index): boolean; removeEmpty(): void }
 interface Colony { id: ColonyId; nest: Vec2; foodPool: number; population: number;
-                   deliveredTotal: number; deliveredPerSecond: RingBuffer<number>;
-                   extinct: boolean }
+                   deliveredTotal: number; deliveredLastSample: number;
+                   deliveredPerSecond: RingBuffer<number>; extinct: boolean }
+addFoodSource(sources, pos, amount, infinite?): number
 nestRadius(colony, params): number
 
 // sim/events.ts                                                     [M1]
@@ -224,13 +225,15 @@ updateWander(world, ant, dt): boolean        // true on the tick a new offset is
 
 // sim/tick.ts                                                       [M1] phase bodies used by stepWorld
 thinkChunk(world, begin, end, out: ChunkEvents): void
+spawnAtNest(world, colony): number
+resetChunkEvents(world): void
 applyEvents(world, events: ChunkEvents[]): void
 removeDead(world): void
 updateStats(world): void
 
 // sim/scenarios.ts                                                  [M1] sandbox, [M2] maze, [M3] war, [M4] stress
 scenarioNames(): readonly string[]
-loadScenario(world, name, seed): string | null     // null on success, else the error
+loadScenario(world, name): string | null     // null on success, else the error; seed comes from world.seed
 
 // sim/checksum.ts                                                   [M1]
 worldChecksum(world): number     // hashes ant state + marker grid; used by determinism tests
@@ -340,14 +343,13 @@ class GlRenderer {
 buildTestPattern(batch, camera, worldSize, theme, simSeconds): void
 testPatternDot(worldSize, simSeconds): Vec2
 
-// [M1] render/view_settings.ts, heatmap.ts, sprites.ts, ant_layer.ts, world_view.ts
+// [M1] render/view_settings.ts, heatmap.ts, ant_layer.ts, world_view.ts
 enum HeatmapMode { Off, DualChannel, ColonyColor }                     // ColonyColor [M3]
 interface ViewSettings { heatmap: HeatmapMode; showAnts: boolean; showGrid: boolean;
                          showHash: boolean; showColliders: boolean }
 defaultViewSettings(): ViewSettings
 cycleHeatmap(mode): HeatmapMode        // Off -> DualChannel -> ColonyColor -> Off
 fillHeatmapRgba(grid, mode, theme, rgbaOut: Uint8Array): void          // pure, testable
-createAntSprite(gl, lengthPx): WebGLTexture
 buildAnts(batch, world, camera, alpha, theme): void                    // culled diamond quads
 buildGround(batch, camera, worldSize, theme, settings): void           // ground, grid, border
 buildActors(batch, world, camera, alpha, settings, theme): void        // food, nests, ants
@@ -355,13 +357,14 @@ interface WorldRenderCache { heatmapTexture: WebGLTexture | null; heatmapPixels:
                              ground: GeometryBatch; actors: GeometryBatch }
 createWorldRenderCache(renderer, world): WorldRenderCache
 drawWorld(renderer, cache, world, camera, settings, theme, alpha): void // <= 3 draw calls
-// [M2] render/obstacle_layer.ts, render/overlays.ts;  [M5] shadows and legs in ant_layer
+// [M2] render/obstacle_layer.ts, render/overlays.ts;
+// [M5] render/sprites.ts (createAntSprite), shadows and legs in ant_layer
 ```
 
 ### 4.4 `ui`: DOM UI
 
 ```ts
-// ui/debug_panel.ts                                                 [M0]; replaced by telemetry_panel [M5]
+// ui/debug_panel.ts                                                 [M0]; kept, but the interactive mode uses ui/shell.ts since M1
 interface DebugInfo { fps: number; frameMs: number; renderer: string; displayScale: number;
                       widthPx: number; heightPx: number; tick: number; stepsThisFrame: number;
                       paused: boolean; cameraScale: number; cameraCenter: Vec2;
@@ -424,10 +427,12 @@ runBench(options): number              // prints the report; returns the exit co
 
 // app/bench_cli.ts                                                  [M0] Node entry: argv -> runBench
 // app/main.ts                                                       [M0] Chrome entry: URL -> mode
-// app/interactive.ts                                                [M0]
-runInteractive(options: AppOptions, canvas: HTMLCanvasElement, uiRoot: HTMLElement): void
+// app/interactive.ts                                                [M0]; world + shell [M1]
+runInteractive(options: AppOptions, canvas: HTMLCanvasElement, uiRoot: HTMLElement,
+               log?: (line: string) => void): void
 // app/headless.ts                                                   [M0]
-runHeadless(options: AppOptions, canvas: HTMLCanvasElement): void
+runHeadless(options: AppOptions, canvas: HTMLCanvasElement,
+            log?: (line: string) => void): number     // 0 ok, 1 on renderer/scenario error
 ```
 
 **Command line / URL**
@@ -466,11 +471,11 @@ Determinism follows from this table. If something has to write outside its own s
 | # | Creates or extends | Detailed plan |
 |---|---|---|
 | M0 Skeleton | npm/tsc project; `core/{vec2,rect,math,color,rng,fixed_step,stopwatch,stats,build_info}`; `sim/{types,params,phases,world}`; `render/{camera,batch,theme,test_pattern,gl_renderer}`; `ui/debug_panel`; `app/*`; `tools/{serve,screenshot}` | [plans/2026-10-25-m0-skeleton.md](../plans/2026-10-25-m0-skeleton.md) |
-| M1 Core foraging | `core/ring_buffer`; `sim/{ants,marker_grid,food,colony,events,sensing,steering,tick,scenarios,checksum}`; `render/{view_settings,heatmap,sprites,ant_layer,world_view}` | written when M0 is done |
+| M1 Core foraging **(done 2026-10-25)** | `core/ring_buffer`; `sim/{ants,marker_grid,food,colony,events,sensing,steering,tick,scenarios,checksum}`; `render/{view_settings,heatmap,ant_layer,world_view}`; `ui/{param_specs,shell}` | [plans/2026-10-25-m1-core-foraging.md](../plans/2026-10-25-m1-core-foraging.md) |
 | M2 Walls and adaptation | `sim/{obstacle_grid,spatial_hash,stuck,edits,collisions}` (walls); maze scenario; `render/{obstacle_layer,overlays}`; `ui/{ui_state,tools,toolbar}` | later |
 | M3 Colonies | territory rule in `marker_grid`; multi-colony `colony`/`world`; war scenario; colony-colour heatmap; `ui/colonies_panel` | later |
 | M4 Crowds and scale | `sim/avoidance`; ant-to-ant `collisions`; `core/worker_pool`; stress scenario; determinism test with 1 and 8 workers | later |
-| M5 Looks and UI | `sim/{legs,picking,names}`; shadows and legs in `ant_layer`; night theme; `ui/{inspector_panel,telemetry_panel,params_panel}`; full toolbar | later |
+| M5 Looks and UI | `sim/{legs,picking,names}`; `render/sprites.ts`; shadows and legs in `ant_layer`; `ui/{inspector_panel,telemetry_panel,params_panel}`; full toolbar | later |
 | M6 Tuning and hardening | parameter tuning, performance passes, edge cases, README | later |
 
 ### Task outlines for M1–M6
