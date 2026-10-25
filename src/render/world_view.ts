@@ -78,6 +78,7 @@ export interface WorldRenderCache {
   atlasFrames: AtlasFrames;
   under: GeometryBatch;
   back: SpriteBatch;
+  shadows: SpriteBatch;
   legs: GeometryBatch;
   actors: SpriteBatch;
   gait: GaitTracker;
@@ -96,6 +97,7 @@ export function createWorldRenderCache(renderer: GlRenderer, world: World): Worl
     atlasFrames: atlas.frames,
     under: new GeometryBatch(),
     back: new SpriteBatch(),
+    shadows: new SpriteBatch(),
     legs: new GeometryBatch(),
     actors: new SpriteBatch(),
     gait: new GaitTracker(),
@@ -261,18 +263,23 @@ export function drawWorld(
   buildUnder(cache.under, camera, world.size, theme, settings);
   renderer.drawBatch(cache.under);
 
+  // Ant and food shadows share one batch, drawn beneath the nests, food and ants.
+  cache.shadows.clear();
   cache.back.clear();
   buildNests(cache.back, world, camera, cache.atlasFrames);
-  buildFood(cache.back, world, camera, cache.atlasFrames);
-  if (cache.atlasTexture !== null) {
-    renderer.drawSprites(cache.atlasTexture, cache.back);
-  }
-
+  buildFood(cache.back, cache.shadows, world, camera, cache.atlasFrames);
   if (settings.showAnts) {
     cache.legs.clear();
     cache.actors.clear();
     cache.gait.update(world);
-    buildAnts(cache.actors, cache.legs, world, camera, alpha, cache.atlasFrames, cache.gait);
+    buildAnts(cache.actors, cache.legs, cache.shadows, world, camera, alpha, cache.atlasFrames, cache.gait);
+  }
+  if (cache.atlasTexture !== null) {
+    renderer.drawSprites(cache.atlasTexture, cache.shadows);
+    renderer.drawSprites(cache.atlasTexture, cache.back);
+  }
+
+  if (settings.showAnts) {
     renderer.drawBatch(cache.legs);
     if (cache.atlasTexture !== null) {
       renderer.drawSprites(cache.atlasTexture, cache.actors);

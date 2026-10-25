@@ -21,20 +21,24 @@ function layerWorld() {
   return { world, camera };
 }
 
-test("food: every piece gets a shadow and a piece sprite", () => {
+test("food: every piece gets a shadow in the shadow batch and a piece sprite", () => {
   const { world, camera } = layerWorld();
   addFoodSource(world.food, { x: 200, y: 150 }, 1000, false, FoodKind.Berries);
   const sprites = new SpriteBatch();
-  buildFood(sprites, world, camera, makeAtlasFrames());
-  assert.equal(sprites.quadCount(), 20); // 10 pieces x (shadow + piece)
+  const shadows = new SpriteBatch();
+  buildFood(sprites, shadows, world, camera, makeAtlasFrames());
+  assert.equal(sprites.quadCount(), 10); // one piece sprite per piece
+  assert.equal(shadows.quadCount(), 10); // one shadow per piece
 });
 
 test("food: an empty source draws nothing", () => {
   const { world, camera } = layerWorld();
   world.food.items.push({ uid: 1, pos: { x: 200, y: 150 }, amount: 0, infinite: false, kind: FoodKind.Seeds });
   const sprites = new SpriteBatch();
-  buildFood(sprites, world, camera, makeAtlasFrames());
+  const shadows = new SpriteBatch();
+  buildFood(sprites, shadows, world, camera, makeAtlasFrames());
   assert.equal(sprites.quadCount(), 0);
+  assert.equal(shadows.quadCount(), 0);
 });
 
 test("nests: one sprite per colony, larger with population, extinct tinted", () => {

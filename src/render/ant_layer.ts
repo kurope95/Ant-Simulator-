@@ -1,7 +1,6 @@
 import { rgba } from "../core/color.js";
 import { contains, expanded } from "../core/rect.js";
 import { fromAngle, lerpVec } from "../core/vec2.js";
-import { colonyHex } from "../sim/palette.js";
 import { FoodKind } from "../sim/setup.js";
 import type { World } from "../sim/world.js";
 import type { AtlasFrame, AtlasFrames } from "./atlas.js";
@@ -15,7 +14,7 @@ const kMinLengthPx = 1.5;
 const kCarriedFoodOffset = 0.55;
 const kCarriedFoodSize = 0.45;
 const kLegWidthPx = 1.5;
-const kShadowTint = rgba(0, 0, 0, 71);
+const kShadowTint = rgba(0, 0, 0, 89); // 35% black
 const kWhite = rgba(255, 255, 255, 255);
 const kLegColor = rgba(36, 27, 20, 255);
 
@@ -40,6 +39,7 @@ function bodyFrame(
 export function buildAnts(
   sprites: SpriteBatch,
   legs: GeometryBatch,
+  shadows: SpriteBatch,
   world: World,
   camera: Camera,
   alpha: number,
@@ -49,11 +49,13 @@ export function buildAnts(
   const view = expanded(camera.visibleWorldRect(), kCullMargin);
   const ants = world.ants;
   const params = world.params;
-  const lengthPx = Math.max(params.antLength * camera.scale(), kMinLengthPx);
+  const scale = camera.scale();
+  const lengthPx = Math.max(params.antLength * scale, kMinLengthPx);
   const widthPx = Math.max(1.25 * lengthPx, 1);
   const heightPx = Math.max(0.6 * lengthPx, 1);
   const animated = lengthPx >= params.legsMinPx;
 
+  // Shadows go to their own batch, drawn underneath: the world offset, times the zoom.
   for (let i = 0; i < ants.size(); i++) {
     const worldP = lerpVec(
       { x: ants.prevX[i], y: ants.prevY[i] },
@@ -63,10 +65,10 @@ export function buildAnts(
     if (!contains(view, worldP)) continue;
     const p = camera.worldToScreen(worldP);
     const frame = bodyFrame(frames, world, ants.colony[i], ants.uid[i] % 2, animated);
-    sprites.addFrame(
+    shadows.addFrame(
       frame,
-      p.x + params.shadowOffsetX,
-      p.y + params.shadowOffsetY,
+      p.x + params.shadowOffsetX * scale,
+      p.y + params.shadowOffsetY * scale,
       widthPx,
       heightPx,
       ants.heading[i],
