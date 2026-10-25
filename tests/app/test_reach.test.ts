@@ -51,14 +51,23 @@ test("reach: report format is stable", () => {
       bMinute2: 8,
       bMinute3: 12,
     },
+    maze: {
+      firstSeconds: 123.4,
+      before: 12,
+      after: 48,
+      ratio: 4,
+      alive: 180,
+    },
   };
   const lines = splitLines(formatReachReport(report));
-  assert.equal(lines.length, 5);
+  assert.equal(lines.length, 7);
   assert.equal(lines[0], "reach seed=7 ants=200 seconds=180");
   assert.equal(lines[1], "D          first_s      m1      m2      m3   alive    b_m1    b_m2    b_m3");
   assert.equal(lines[2], "500           12.4      41      63      72     198       -       -       -");
   assert.equal(lines[3], "1000             -       0       0       0     200       -       -       -");
   assert.equal(lines[4], "contest       18.2      22      35      47     190       3       8      12");
+  assert.equal(lines[5], "maze breach at 10:00, windows 7:00-10:00 and 12:00-15:00");
+  assert.equal(lines[6], "first_s=123.4 m7-9=12 m12-14=48 ratio=4.0 alive=180 target>=3 pass");
 });
 
 test("reach: 1000 u delivers", { timeout: 120_000 }, () => {

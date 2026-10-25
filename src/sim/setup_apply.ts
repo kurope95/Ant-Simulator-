@@ -22,7 +22,14 @@ export function worldFromSetup(
   params: SimParams,
   options: WorldFromSetupOptions = {},
 ): World {
-  const worldParams = { ...params, worldW: setup.size.x, worldH: setup.size.y };
+  // Preset overrides beat the live params, but the world size always comes
+  // from the setup itself.
+  const worldParams = {
+    ...params,
+    ...setup.paramOverrides,
+    worldW: setup.size.x,
+    worldH: setup.size.y,
+  };
   const world = makeWorld(worldParams, setup.seed, setup.size);
   world.obstacles = obstacleGridFromCells(setup.obstacles);
 

@@ -78,8 +78,18 @@ test("options: help, version, seed, preset and no-vsync", () => {
 
 test("options: --preset and the --scenario sandbox alias", () => {
   assert.equal(parseOptions(["--preset", "dunes"]).options.preset, "dunes");
+  assert.equal(parseOptions(["--preset", "maze"]).options.preset, "maze");
   assert.equal(parseOptions(["--scenario", "sandbox"]).options.preset, "meadow");
-  assert.match(parseOptions(["--preset", "maze"]).error, /meadow, dunes, creek, boulder, blank/);
+  assert.match(parseOptions(["--preset", "arena"]).error, /meadow, dunes, creek, boulder, maze, blank/);
+});
+
+test("options: --breach-tick and ?breach= schedule the maze breach", () => {
+  assert.equal(parse().options.breachTick, -1);
+  assert.equal(parse("--breach-tick", "36000").options.breachTick, 36000);
+  assert.equal(parse("--breach-tick", "abc").error, "invalid value for --breach-tick: abc");
+  assert.equal(parse("--breach-tick", "-1").error, "invalid value for --breach-tick: -1");
+  assert.equal(optionsFromUrl("?breach=600").options.breachTick, 600);
+  assert.ok(usageText().includes("--breach-tick"));
 });
 
 test("options: errors are specific", () => {

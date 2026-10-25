@@ -13,13 +13,13 @@ const kMaxSeed = 0xffffffff;
 const kMaxTicks = 10_000_000;
 const kMinZoom = 0.1;
 const kMaxZoom = 16;
-const kPresets = ["meadow", "dunes", "creek", "boulder", "blank"];
+const kPresets = ["meadow", "dunes", "creek", "boulder", "maze", "blank"];
 const kScreens = ["home", "builder", "run"];
 
 class UsageError extends Error {}
 
 function parseArgs(argv) {
-  const args = { ticks: 30, out: "", size: kDefaultSize, seed: 1, preset: "meadow", screen: "home", zoom: 1, interactive: false };
+  const args = { ticks: 30, out: "", size: kDefaultSize, seed: 1, preset: "meadow", screen: "home", zoom: 1, interactive: false, breachTick: -1 };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--ticks") args.ticks = Number(argv[++i]);
@@ -29,6 +29,7 @@ function parseArgs(argv) {
     else if (arg === "--preset") args.preset = argv[++i] ?? "";
     else if (arg === "--screen") args.screen = argv[++i] ?? "";
     else if (arg === "--zoom") args.zoom = Number(argv[++i]);
+    else if (arg === "--breach-tick") args.breachTick = Number(argv[++i]);
     else if (arg === "--interactive") args.interactive = true;
     else throw new UsageError(`unknown option: ${arg}`);
   }
@@ -102,6 +103,7 @@ async function main() {
     query.set("preset", args.preset);
     if (args.interactive) query.set("screen", args.screen);
     if (args.zoom !== 1) query.set("zoom", String(args.zoom));
+    if (args.breachTick >= 0) query.set("breach", String(args.breachTick));
     const url = `${server.url}/?${query.toString()}`;
 
     const chromeArgs = [
@@ -140,7 +142,7 @@ async function main() {
 main().catch((error) => {
   console.error(`error: ${error.message}`);
   if (error instanceof UsageError) {
-    console.error("usage: node tools/screenshot.mjs --out <file.png> [--preset <id>] [--screen home|builder|run] [--zoom <n>] [--ticks N] [--size WxH] [--seed N] [--interactive]");
+    console.error("usage: node tools/screenshot.mjs --out <file.png> [--preset <id>] [--screen home|builder|run] [--zoom <n>] [--ticks N] [--breach-tick N] [--size WxH] [--seed N] [--interactive]");
     process.exitCode = 2;
   } else {
     process.exitCode = 1;

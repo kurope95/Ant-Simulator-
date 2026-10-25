@@ -1,7 +1,8 @@
 import { defaultParams } from "../sim/params.js";
+import { loadPreset } from "../sim/presets.js";
 import { addColony, addFood, FoodKind, makeSetup, type WorldSetup } from "../sim/setup.js";
 import { worldFromSetup } from "../sim/setup_apply.js";
-import { stepWorld, type World } from "../sim/world.js";
+import { applyBreach, stepWorld, type World } from "../sim/world.js";
 
 // Foraging-range harness: one fixed colony forages from a fixed pile at an
 // increasing distance, so a tuning change can be compared against the same
@@ -19,6 +20,10 @@ const kFoodAmount = 20000;
 const kContestFoodX = 950;
 const kContestAX = 450;
 const kContestBX = 2450;
+// Maze: the breach opens after minute 10, and the windows either side of it
+// are the same length so the ratio compares like with like.
+const kMazeBreachMinute = 10;
+const kMazeEndMinute = 15;
 
 export interface ReachRow {
   label: string;
@@ -32,12 +37,21 @@ export interface ReachRow {
   bMinute3: number | null;
 }
 
+export interface MazeReachRow {
+  firstSeconds: number | null;
+  before: number;
+  after: number;
+  ratio: number;
+  alive: number;
+}
+
 export interface ReachReport {
   seed: number;
   ants: number;
   seconds: number;
   rows: ReachRow[];
   contest: ReachRow;
+  maze: MazeReachRow;
 }
 
 interface MeasuredColony {
@@ -70,7 +84,19 @@ export function formatReachReport(report: ReachReport): string {
   text += "D".padEnd(10) + headings.map((heading) => heading.padStart(8)).join("") + "\n";
   for (const row of report.rows) text += `${formatRow(row)}\n`;
   text += `${formatRow(report.contest)}\n`;
+  text += `maze breach at ${kMazeBreachMinute}:00, windows 7:00-10:00 and 12:00-15:00\n`;
+  text += `${formatMazeRow(report.maze)}\n`;
   return text;
+}
+
+function formatMazeRow(row: MazeReachRow): string {
+  const first = row.firstSeconds === null ? "-" : row.firstSeconds.toFixed(1);
+  const ratio = Number.isFinite(row.ratio) ? row.ratio.toFixed(1) : "inf";
+  const target = row.before > 0 && row.after >= 3 * row.before ? "pass" : "fail";
+  return (
+    `first_s=${first} m7-9=${row.before} m12-14=${row.after}` +
+    ` ratio=${ratio} alive=${row.alive} target>=3 ${target}`
+  );
 }
 
 function singleSetup(distance: number): WorldSetup {
@@ -146,7 +172,45 @@ export function runReach(): number {
     seconds: kSeconds,
     rows,
     contest: rowFrom("contest", contest[0], contest[1] ?? null),
+    maze: measureMaze(),
   };
   process.stdout.write(formatReachReport(report));
   return 0;
+}
+
+// The maze run: the breach opens after the step that reaches minute 10, the
+// same point in the tick as the scheduled breach on the run page.
+function measureMaze(): MazeReachRow {
+  const setup = loadPreset("maze", kSeed);
+  if (setup === null) throw new Error("the maze preset is missing");
+  const world = worldFromSetup(setup, defaultParams());
+  const hz = world.params.simHz;
+  const tickAt = (minute: number): number => minute * 60 * hz;
+  let firstTick: number | null = null;
+  let atSeven = 0;
+  let atTen = 0;
+  let atTwelve = 0;
+  const endTick = tickAt(kMazeEndMinute);
+
+  for (let tick = 1; tick <= endTick; tick++) {
+    stepWorld(world);
+    const delivered = world.colonies[0].deliveredTotal;
+    if (firstTick === null && delivered > 0) firstTick = tick;
+    if (tick === tickAt(7)) atSeven = delivered;
+    if (tick === tickAt(kMazeBreachMinute)) {
+      atTen = delivered;
+      applyBreach(world, setup.breach);
+    }
+    if (tick === tickAt(12)) atTwelve = delivered;
+  }
+
+  const before = atTen - atSeven;
+  const after = world.colonies[0].deliveredTotal - atTwelve;
+  return {
+    firstSeconds: firstTick === null ? null : firstTick / hz,
+    before,
+    after,
+    ratio: before === 0 ? (after > 0 ? Infinity : 0) : after / before,
+    alive: world.colonies[0].population,
+  };
 }

@@ -20,6 +20,7 @@ export interface HudState {
   zen: boolean;
   coloniesOpen: boolean;
   settingsOpen: boolean;
+  breachAvailable: boolean;
 }
 
 export interface RunHudHooks {
@@ -31,6 +32,7 @@ export interface RunHudHooks {
   onColonies(): void;
   onSettings(): void;
   onFit(): void;
+  onBreach(): void;
 }
 
 interface SpeedOption {
@@ -83,6 +85,7 @@ export class RunHud {
   private readonly speedButtons: SpeedOption[] = [];
   private readonly coloniesButton: HTMLButtonElement;
   private readonly settingsButton: HTMLButtonElement;
+  private readonly breachButton: HTMLButtonElement;
   private readonly legend: HTMLElement;
 
   constructor(root: HTMLElement, params: SimParams, hooks: RunHudHooks) {
@@ -181,6 +184,13 @@ export class RunHud {
       title: "Finish and return home",
       onClick: () => hooks.onFinish(),
     });
+    this.breachButton = button({
+      label: "Breach",
+      icon: "breach",
+      title: "Open the breach shortcut",
+      onClick: () => hooks.onBreach(),
+    });
+    this.breachButton.hidden = true;
 
     this.legend = el("div", "hud__legend");
     this.legend.append(makeLegendItem("home", "Home"), makeLegendItem("food", "Food"));
@@ -194,6 +204,7 @@ export class RunHud {
       makeDivider(),
       reset,
       edit,
+      this.breachButton,
       finish,
     );
 
@@ -230,6 +241,7 @@ export class RunHud {
 
     this.coloniesButton.setAttribute("aria-pressed", String(state.coloniesOpen));
     this.settingsButton.setAttribute("aria-pressed", String(state.settingsOpen));
+    this.breachButton.hidden = !state.breachAvailable;
     this.legend.hidden = state.heatmap !== HeatmapMode.DualChannel;
 
     this.setZen(state.zen);

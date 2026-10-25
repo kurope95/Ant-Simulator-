@@ -6,7 +6,7 @@ import { createWorldRenderCache, drawWorld } from "../render/world_view.js";
 import { defaultParams } from "../sim/params.js";
 import { loadPreset } from "../sim/presets.js";
 import { worldFromSetup } from "../sim/setup_apply.js";
-import { stepWorld } from "../sim/world.js";
+import { stepWorld, applyBreach } from "../sim/world.js";
 import { effectiveTicks, type AppOptions } from "./options.js";
 
 export function runHeadless(
@@ -39,7 +39,14 @@ export function runHeadless(
   }
 
   const ticks = effectiveTicks(options);
-  for (let i = 0; i < ticks; i++) stepWorld(world);
+  let breached = false;
+  for (let i = 0; i < ticks; i++) {
+    stepWorld(world);
+    if (!breached && options.breachTick >= 0 && world.tick >= options.breachTick) {
+      applyBreach(world, setup.breach);
+      breached = setup.breach.length > 0;
+    }
+  }
 
   const settings = defaultViewSettings();
   const theme = themeForPreset(setup.presetId);

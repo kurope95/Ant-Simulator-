@@ -20,7 +20,8 @@ export type IconName =
   | "water"
   | "sand"
   | "mud"
-  | "erase";
+  | "erase"
+  | "breach";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "icon";
 
@@ -90,6 +91,9 @@ const kIcons: Record<IconName, string> = {
   erase:
     '<path d="m4.5 14.5 7-8.5a2 2 0 0 1 3-.2l3.7 3a2 2 0 0 1 .2 3l-7 8.2H6.5l-2-2a2 2 0 0 1 0-3.5Z"/>' +
     '<path d="m10 9 5.5 4.5"/>',
+  breach:
+    '<path d="M3 7h6M15 7h6M3 17h6M15 17h6"/>' +
+    '<path d="M12 21V3"/><path d="m8.5 6.5 3.5-3.5 3.5 3.5"/>',
 };
 
 export function el<K extends keyof HTMLElementTagNameMap>(

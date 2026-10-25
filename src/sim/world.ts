@@ -6,9 +6,10 @@ import type { Colony } from "./colony.js";
 import type { ChunkEvents } from "./events.js";
 import { makeFoodSources, type FoodSources } from "./food.js";
 import { makeMarkerGrid, decayMarkers, type MarkerGrid } from "./marker_grid.js";
-import { makeObstacleGrid, type ObstacleGrid } from "./obstacles.js";
+import { makeObstacleGrid, rebuildBorder, type ObstacleGrid } from "./obstacles.js";
 import { emptyPhaseTimings, Phase, type PhaseTimings } from "./phases.js";
 import { markerDecayFactor, type SimParams } from "./params.js";
+import { ObstacleKind, rectCellBounds, type SetupRect } from "./setup.js";
 import { SpatialHash } from "./spatial_hash.js";
 import {
   applyEvents,
@@ -33,6 +34,26 @@ export interface World {
   spatialHash: SpatialHash;
   chunkEvents: ChunkEvents[];
   nextUid: number;
+}
+
+// Opens the breach segments in a running world: the cells become empty ground
+// and the collision border plus the near-solid map are rebuilt around them.
+// Called between ticks, so the next think phase sees the new geometry.
+export function applyBreach(world: World, rects: readonly SetupRect[]): void {
+  const grid = world.obstacles;
+  let changed = false;
+  for (const rect of rects) {
+    const { minCol, maxCol, minRow, maxRow } = rectCellBounds(grid, rect);
+    for (let row = minRow; row <= maxRow; row++) {
+      for (let col = minCol; col <= maxCol; col++) {
+        const index = row * grid.width + col;
+        if (grid.kind[index] === ObstacleKind.None) continue;
+        grid.kind[index] = ObstacleKind.None;
+        changed = true;
+      }
+    }
+  }
+  if (changed) rebuildBorder(grid);
 }
 
 export function makeWorld(params: SimParams, seed: number, size?: Vec2): World {

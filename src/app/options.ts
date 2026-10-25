@@ -22,6 +22,7 @@ export interface AppOptions {
   threads: number;
   vsync: boolean;
   zoom: number;
+  breachTick: number;
 }
 
 export interface ParseResult {
@@ -34,6 +35,7 @@ const kSizeMin = 16;
 const kSizeMax = 8192;
 const kZoomMin = 0.1;
 const kZoomMax = 16;
+const kMaxTicks = 10_000_000;
 const kStartScreens: readonly StartScreen[] = ["home", "builder", "run"];
 const kFlagsInUrl = new Set(["headless", "no-vsync"]);
 
@@ -50,6 +52,7 @@ function defaults(): AppOptions {
     threads: 0,
     vsync: true,
     zoom: 1,
+    breachTick: -1,
   };
 }
 
@@ -202,6 +205,17 @@ export function parseOptions(tokens: readonly string[]): ParseResult {
         i = taken.next;
         break;
       }
+      case "--breach-tick": {
+        const taken = take(i, "--breach-tick");
+        if (taken === null) break;
+        if (!isDigits(taken.value) || Number(taken.value) > kMaxTicks) {
+          error = `invalid value for --breach-tick: ${taken.value}`;
+          break;
+        }
+        options.breachTick = Number(taken.value);
+        i = taken.next;
+        break;
+      }
       default:
         error = `unknown option: ${token}`;
         break;
@@ -218,10 +232,12 @@ export function optionsFromUrl(search: string): ParseResult {
   const query = search.startsWith("?") ? search.slice(1) : search;
   const tokens: string[] = [];
   for (const [key, value] of new URLSearchParams(query)) {
-    if (kFlagsInUrl.has(key)) {
-      tokens.push(`--${key}`);
+    // The page's link-friendly name for the breach tick is ?breach=.
+    const flag = key === "breach" ? "breach-tick" : key;
+    if (kFlagsInUrl.has(flag)) {
+      tokens.push(`--${flag}`);
     } else if (value !== "") {
-      tokens.push(`--${key}`, value);
+      tokens.push(`--${flag}`, value);
     }
   }
   return parseOptions(tokens);
@@ -236,7 +252,7 @@ export function usageText(): string {
   return [
     "Usage: AntSim [options]",
     "",
-    "  --preset <id>         map preset: meadow, dunes, creek, boulder, blank (default meadow)",
+    "  --preset <id>         map preset: meadow, dunes, creek, boulder, maze, blank (default meadow)",
     "  --screen <id>         start screen: home, builder, run (default home)",
     "  --seed <n>            random seed, 0..4294967295 (default 1)",
     "  --ticks <n>           ticks to run (default 1200 for the bench, 0 otherwise)",
@@ -246,6 +262,7 @@ export function usageText(): string {
     "  --bench <preset>      timing table (Node CLI); --scenario sandbox is deprecated",
     "  --threads <n>         worker threads, 1-64 (default: all cores)",
     "  --zoom <n>            camera zoom on run, 0.1-16 (default 1)",
+    "  --breach-tick <n>     open the maze's breach shortcut at this tick (default: never)",
     "  --no-vsync            uncapped frame rate (debug timing)",
     "  --help, -h            show this text",
     "  --version             show the version",

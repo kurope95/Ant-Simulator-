@@ -80,6 +80,8 @@ export function themeForPreset(presetId: string): Theme {
       return creekTheme();
     case "boulder":
       return boulderTheme();
+    case "maze":
+      return boulderTheme();
     case "blank":
       return blankTheme();
     default:
