@@ -167,17 +167,31 @@ const kPhaseCount = 7
 phaseName(phase): string                          // "spatial_hash", "think", ...
 interface PhaseTimings { ms: number[]; totalMs: number }
 emptyPhaseTimings(): PhaseTimings
-// stepWorld fills six of the seven slots; SpatialHash is reserved for M2/M4.
+// stepWorld runs all seven; SpatialHash rebuilds the ant bucket grid every tick.
 
 // sim/world.ts
 interface World {
   params: SimParams; seed: number; tick: number; size: Vec2; timings: PhaseTimings
   ants: Ants; markers: MarkerGrid; obstacles: ObstacleGrid
-  colonies: Colony[]; food: FoodSources
+  colonies: Colony[]; food: FoodSources; spatialHash: SpatialHash
   chunkEvents: ChunkEvents[]; nextUid: number
 }
 makeWorld(params: SimParams, seed: number, size?: Vec2): World
-stepWorld(world: World): void          // Think -> Events -> Collisions -> Removals -> Decay -> Stats
+stepWorld(world: World): void
+// SpatialHash -> Think -> Events -> Collisions -> Removals -> Decay -> Stats
+
+// sim/spatial_hash.ts
+class SpatialHash {   // counting sort over occupied cells only; O(ants) per build
+  cell: number; cols: number; rows: number
+  cellStart: Uint32Array; cellEnd: Uint32Array; items: Uint32Array // ranges into items, per occupied cell
+  build(xs: Float32Array, ys: Float32Array, count, worldSize: Vec2, cell: number): void
+  countWithin(x, y, radius, xs, ys, exclude): number  // excludes one index (the asker itself)
+}
+
+// sim/stuck.ts
+interface StuckState { stuck: boolean; degrade: boolean }
+evaluateStuck(timeSinceLastMarker, inZone, nearby, params): StuckState
+inRestZone(world, ant): boolean   // inside its nest zone or any food zone (+ zoneMargin)
 
 // sim/ants.ts
 interface AntSpawn { pos: Vec2; heading?; colony?; role?; state? }
@@ -663,6 +677,7 @@ a phase may write only its own ants' slots, and anything cross-ant goes through 
 
 | Phase | Runs now | Reads | Writes |
 |---|---|---|---|
+| SpatialHash | serial | ant positions | the hash (occupied cells only) |
 | Think | serial, chunks of `chunkSize` | anything | only its own ants' fields and `chunkEvents[chunk]` |
 | Events | serial, in chunk order | `chunkEvents` | markers, food, colonies, contacted ants, new ants (appended) |
 | Collisions | serial | positions, obstacles | all ants' `pos` (pushed out of Rock/Water), then clamped to the world |
@@ -670,7 +685,7 @@ a phase may write only its own ants' slots, and anything cross-ant goes through 
 | Decay | serial by grid rows | markers | markers |
 | Stats | serial | colonies | colony stats |
 
-`Phase.SpatialHash` is reserved but not run until M2 needs neighbour counts or M4 adds the hash.
+`Phase.SpatialHash` now runs every tick for stuck detection's crowd counts; M4 reuses it for avoidance neighbours.
 `GaitTracker` runs per frame outside `stepWorld` and only reads ant positions.
 
 ---
@@ -685,7 +700,7 @@ a phase may write only its own ants' slots, and anything cross-ant goes through 
 | M1.6 Camera and looks | `app/camera_input`; `render/{terrain_mask,terrain_shader}`; map-style pan and zoom; glowing trails; procedural terrain; anthill mounds; ant and food shadows | [plans/2026-10-25-m1.6-camera-looks.md](../plans/2026-10-25-m1.6-camera-looks.md) |
 | M2 Navigation and foraging | `sim/{spatial_hash,stuck}`; `app/{reach,reach_cli}`; wander fix; wall sliding; look-ahead and fallback rays; stuck detection and degrading; spawn safety; retuned defaults; homing memory; per-colony trail layers; maze preset and breach | [plans/2026-10-25-m2-navigation-foraging.md](../plans/2026-10-25-m2-navigation-foraging.md) |
 | M3 Colonies | **closed** — multi-colony setup, palette, territory and the colony heatmap shipped in M1.5. Only the open hostilities topic (main spec §14) remains, unscheduled | — |
-| M4 Crowds and scale | `core/worker_pool`; ant-to-ant PBD in `collide`; `sim/avoidance`; stress preset; determinism test with 1 and N workers; the spatial-hash phase | later |
+| M4 Crowds and scale | `core/worker_pool`; ant-to-ant PBD in `collide`; `sim/avoidance`; stress preset; determinism test with 1 and N workers; worker-scale neighbour queries through the spatial hash | later |
 | M5 Inspector | `sim/{picking,names}`; ant inspector with follow; sensor drawing; telemetry sparklines; live `degradeTime` control | later |
 | M6 Tuning and hardening | parameter tuning, performance passes, edge cases, README | later |
 

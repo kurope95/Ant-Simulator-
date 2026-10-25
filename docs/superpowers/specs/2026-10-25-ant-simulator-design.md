@@ -271,7 +271,7 @@ An ant is stuck when `time_since_last_marker > STUCK_TIMEOUT` (2.5 s), meaning i
 2. It resets: `time_since_last_marker = 0`, `drop point = pos`.
 3. It sets `degrade_timer = DEGRADE_TIME` (3 s), but **only if** both hold:
    - it is outside every nest and food zone,
-   - fewer than `CROWD_LIMIT` ants are within `3 × ANT_RADIUS` of it.
+   - fewer than `CROWD_LIMIT` ants are within `3 × ANT_RADIUS` of it, counted through the spatial hash.
 
 *(Fix: a traffic jam at the nest isn't a dead end. Without this check, crowds would erase the busiest trails.)*
 

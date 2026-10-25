@@ -14,6 +14,7 @@ import {
   senseMarkers,
 } from "./sensing.js";
 import { turnToward, updateWander } from "./steering.js";
+import { evaluateStuck, inRestZone } from "./stuck.js";
 import { AntRole, AntState, RandStream } from "./types.js";
 import type { World } from "./world.js";
 
@@ -86,6 +87,44 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
     ants.timeSinceAnchor[ant] += dt;
     ants.timeSinceLastMarker[ant] += dt;
     ants.degradeTimer[ant] = Math.max(0, ants.degradeTimer[ant] - dt);
+
+    // The crowd count and zone scan only matter once the timer has expired;
+    // doing them every tick for every ant is most of the hash query cost.
+    if (ants.timeSinceLastMarker[ant] > params.stuckTimeout) {
+      const nearby = world.spatialHash.countWithin(
+        ants.posX[ant],
+        ants.posY[ant],
+        params.crowdRadiusFactor * params.antRadius,
+        ants.posX,
+        ants.posY,
+        ant,
+      );
+      const stuck = evaluateStuck(
+        ants.timeSinceLastMarker[ant],
+        inRestZone(world, ant),
+        nearby,
+        params,
+      );
+      if (stuck.stuck) {
+        ants.heading[ant] = wrapAngle(
+          ants.heading[ant] +
+            Math.PI +
+            randRange(
+              world.seed,
+              ants.uid[ant],
+              world.tick,
+              RandStream.StuckTurn,
+              -params.stuckTurnJitter,
+              params.stuckTurnJitter,
+            ),
+        );
+        ants.wanderHeading[ant] = ants.heading[ant];
+        ants.timeSinceLastMarker[ant] = 0;
+        ants.dropX[ant] = ants.posX[ant];
+        ants.dropY[ant] = ants.posY[ant];
+        if (stuck.degrade) ants.degradeTimer[ant] = params.degradeTime;
+      }
+    }
 
     let chosen = chooseHeading(world, ant);
     let desired = chosen.heading;

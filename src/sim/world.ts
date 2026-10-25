@@ -9,6 +9,7 @@ import { makeMarkerGrid, decayMarkers, type MarkerGrid } from "./marker_grid.js"
 import { makeObstacleGrid, type ObstacleGrid } from "./obstacles.js";
 import { emptyPhaseTimings, Phase, type PhaseTimings } from "./phases.js";
 import { markerDecayFactor, type SimParams } from "./params.js";
+import { SpatialHash } from "./spatial_hash.js";
 import {
   applyEvents,
   clampToWorld,
@@ -29,6 +30,7 @@ export interface World {
   obstacles: ObstacleGrid;
   colonies: Colony[];
   food: FoodSources;
+  spatialHash: SpatialHash;
   chunkEvents: ChunkEvents[];
   nextUid: number;
 }
@@ -47,6 +49,7 @@ export function makeWorld(params: SimParams, seed: number, size?: Vec2): World {
     obstacles: makeObstacleGrid(worldSize, worldParams.obstacleCell),
     colonies: [],
     food: makeFoodSources(),
+    spatialHash: new SpatialHash(),
     chunkEvents: [],
     nextUid: 0,
   };
@@ -63,6 +66,15 @@ export function stepWorld(world: World): void {
     world.timings.ms[phase] = watch.elapsedMs();
   };
 
+  timed(Phase.SpatialHash, () =>
+    world.spatialHash.build(
+      world.ants.posX,
+      world.ants.posY,
+      world.ants.size(),
+      world.size,
+      world.params.hashCell,
+    ),
+  );
   timed(Phase.Think, () => {
     resetChunkEvents(world);
     const chunkSize = world.params.chunkSize;
