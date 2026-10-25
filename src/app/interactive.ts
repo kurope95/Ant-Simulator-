@@ -6,10 +6,12 @@ import { themeForPreset } from "../render/theme.js";
 import { cycleHeatmap, defaultViewSettings } from "../render/view_settings.js";
 import { createWorldRenderCache, drawWorld } from "../render/world_view.js";
 import { defaultParams } from "../sim/params.js";
-import { loadPreset, quickStartSetup } from "../sim/presets.js";
+import { loadPreset, presetInfo, quickStartSetup } from "../sim/presets.js";
 import { worldFromSetup } from "../sim/setup_apply.js";
+import type { WorldSetup } from "../sim/setup.js";
 import { stepWorld } from "../sim/world.js";
-import { AppShell, type ShellFrame, type ShellHooks, type SpeedSetting } from "../ui/shell.js";
+import { RunHud, type HudState, type RunHudHooks } from "../ui/run_hud.js";
+import type { SpeedSetting } from "../ui/view_models.js";
 import { effectiveTicks, type AppOptions } from "./options.js";
 
 const kMaxFrameSeconds = 0.25;
@@ -29,20 +31,22 @@ export function runInteractive(
   const renderer = created.renderer;
   renderer.resizeToDisplaySize();
 
-  let setup = loadPreset(options.preset, options.seed);
-  if (setup === null) {
+  const loaded = loadPreset(options.preset, options.seed);
+  if (loaded === null) {
     log(`error: unknown preset: ${options.preset}`);
     log("falling back to meadow");
-    setup = quickStartSetup(options.seed);
   }
-  const world = worldFromSetup(setup, defaultParams());
+  const setup: WorldSetup = loaded ?? quickStartSetup(options.seed);
+  const presetName = presetInfo(setup.presetId)?.name ?? setup.presetId;
+  const theme = themeForPreset(setup.presetId);
+  const settings = defaultViewSettings();
+  const camera = new Camera();
+
+  let world = worldFromSetup(setup, defaultParams());
   const warmup = effectiveTicks(options);
   for (let i = 0; i < warmup; i++) stepWorld(world);
 
-  const theme = themeForPreset(setup.presetId);
-  const settings = defaultViewSettings();
-  const cache = createWorldRenderCache(renderer, world, theme);
-  const camera = new Camera();
+  let cache = createWorldRenderCache(renderer, world, theme);
   const clock = new FixedStepClock(1 / world.params.simHz, 16);
 
   let paused = false;
@@ -52,7 +56,6 @@ export function runInteractive(
   let dragging = false;
   let frameMs = 1000 / 60;
   let lastTime = performance.now();
-  let stepsThisFrame = 0;
   let viewportW = 0;
   let viewportH = 0;
   let fitted = false;
@@ -61,7 +64,14 @@ export function runInteractive(
   const dpr = (): number => window.devicePixelRatio || 1;
   const speedSteps = (setting: SpeedSetting): number => (setting === "max" ? 1000 : setting);
 
-  const hooks: ShellHooks = {
+  const rebuild = (): void => {
+    world = worldFromSetup(setup, defaultParams());
+    cache = createWorldRenderCache(renderer, world, theme);
+    camera.fit(world.size);
+    stepRequests = 0;
+  };
+
+  const hooks: RunHudHooks = {
     onPause: () => {
       paused = !paused;
     },
@@ -71,27 +81,27 @@ export function runInteractive(
     onSpeed: (value) => {
       speed = value;
     },
-    onHeatmap: () => {
-      settings.heatmap = cycleHeatmap(settings.heatmap);
+    onReset: () => {
+      rebuild();
     },
-    onAnts: () => {
-      settings.showAnts = !settings.showAnts;
+    onEdit: () => {
+      log("edit world: the builder arrives with a later task");
     },
-    onGrid: () => {
-      settings.showGrid = !settings.showGrid;
+    onFinish: () => {
+      log("finish run: the home screen arrives with a later task");
     },
-    onResetParams: () => {
-      Object.assign(world.params, defaultParams());
+    onColonies: () => {
+      log("colonies: the panel arrives with a later task");
     },
-    onResetCamera: () => {
+    onSettings: () => {
+      log("settings: the drawer arrives with a later task");
+    },
+    onFit: () => {
       camera.fit(world.size);
-    },
-    onParam: (key, value) => {
-      world.params[key] = value;
     },
   };
 
-  const shell = new AppShell(uiRoot, world.params, hooks);
+  const hud = new RunHud(uiRoot, world.params, hooks);
 
   log("renderer: webgl2");
   log(`display scale: ${dpr().toFixed(2)}`);
@@ -118,7 +128,7 @@ export function runInteractive(
       fitted = true;
     }
 
-    stepsThisFrame = clock.advance(frameSeconds, paused ? 0 : speedSteps(speed));
+    let stepsThisFrame = clock.advance(frameSeconds, paused ? 0 : speedSteps(speed));
     if (stepRequests > 0) {
       stepsThisFrame += stepRequests;
       stepRequests = 0;
@@ -128,22 +138,19 @@ export function runInteractive(
     drawWorld(renderer, cache, world, camera, settings, theme, paused ? 1 : clock.alpha());
     renderer.present();
 
-    let delivered = 0;
-    for (const colony of world.colonies) delivered += colony.deliveredTotal;
-    const shellFrame: ShellFrame = {
-      fps: 1000 / Math.max(frameMs, 0.001),
-      frameMs,
-      tick: world.tick,
-      ants: world.ants.size(),
-      delivered,
+    const hudState: HudState = {
+      presetName,
+      seed: setup.seed,
       paused,
       speed,
       heatmap: settings.heatmap,
       showAnts: settings.showAnts,
       showGrid: settings.showGrid,
-      stepsThisFrame,
+      zen,
+      coloniesOpen: false,
+      settingsOpen: false,
     };
-    shell.update(shellFrame);
+    hud.update(world, 1000 / Math.max(frameMs, 0.001), hudState);
   };
 
   const screenPoint = (event: MouseEvent): Vec2 => {
@@ -185,7 +192,13 @@ export function runInteractive(
         break;
       case "KeyH":
         zen = !zen;
-        shell.setVisible(!zen);
+        hud.setZen(zen);
+        break;
+      case "Escape":
+        if (zen) {
+          zen = false;
+          hud.setZen(false);
+        }
         break;
       case "KeyM":
         settings.heatmap = cycleHeatmap(settings.heatmap);
@@ -196,7 +209,16 @@ export function runInteractive(
       case "KeyG":
         settings.showGrid = !settings.showGrid;
         break;
-      case "KeyS":
+      case "Digit1":
+        speed = 1;
+        break;
+      case "Digit2":
+        speed = 2;
+        break;
+      case "Digit3":
+        speed = 4;
+        break;
+      case "Digit4":
         speed = "max";
         break;
       case "Home":
