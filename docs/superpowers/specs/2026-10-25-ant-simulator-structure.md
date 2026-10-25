@@ -372,6 +372,25 @@ class DebugPanel {
   setVisible(visible: boolean): void
 }
 
+// [M1] ui/param_specs.ts, ui/shell.ts
+type ParamKey = "antSpeed" | "turnRate" | "sensorRadius" | "sensorHalfFovDeg" | "explorerRatio"
+              | "markerHalfLife" | "markerDropDist" | "degradeTime" | "energyBurn" | "spawnCost"
+type ParamGroup = "movement" | "trails" | "colony"
+interface ParamSpec { key: ParamKey; label: string; unit: string; min: number; max: number;
+                      step: number; scale: number; group: ParamGroup }
+paramSpecs(): readonly ParamSpec[]
+specValue(spec, params): number                 // slider value = params[key] * scale
+applySpecValue(spec, params, displayValue): number   // clamp, snap, store, return stored
+formatSpecValue(spec, displayValue): string
+type SpeedSetting = 1 | 2 | 4 | "max"
+interface ShellHooks { pause, step, speed, heatmap, ants, grid, resetParams, resetCamera, param }
+class AppShell {
+  constructor(root: HTMLElement, params: SimParams, hooks: ShellHooks)
+  update(frame: ShellFrame): void
+  setParams(params: SimParams): void            // resets sliders to the live params
+  setVisible(visible: boolean): void            // zen mode
+}
+
 // [M2] ui/ui_state.ts, ui/tools.ts, ui/toolbar.ts
 enum Tool { SelectPan, WallBrush, EraseBrush, Food, NewColony }
 interface UiState { tool: Tool; brushRadius: number; foodCapacity: number;
