@@ -16,6 +16,38 @@ function runTool(args: string[]): Promise<{ code: number; stderr: string }> {
   });
 }
 
+test("screenshot: rejects an unknown screen", { timeout: 30_000 }, async () => {
+  const dir = await mkdtemp(join(tmpdir(), "antsim screen "));
+  const out = join(dir, "screen.png");
+  try {
+    const { code, stderr } = await runTool(["--screen", "nowhere", "--out", out]);
+    assert.equal(code, 2);
+    assert.match(stderr, /home.*builder.*run/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("screenshot: interactive builder renders at 800x600", { timeout: 120_000 }, async () => {
+  const dir = await mkdtemp(join(tmpdir(), "antsim builder "));
+  const out = join(dir, "builder.png");
+  try {
+    const code: number = await new Promise((resolve) => {
+      const child = spawn(process.execPath, [
+        "tools/screenshot.mjs", "--interactive", "--screen", "builder",
+        "--preset", "dunes", "--size", "800x600", "--out", out,
+      ], { stdio: "inherit" });
+      child.on("exit", (c) => resolve(c ?? 1));
+    });
+    assert.equal(code, 0);
+    const bytes = await readFile(out);
+    assert.equal(bytes.readUInt32BE(16), 800);
+    assert.equal(bytes.readUInt32BE(20), 600);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("screenshot: rejects a size below the page's 16 px minimum", { timeout: 30_000 }, async () => {
   const dir = await mkdtemp(join(tmpdir(), "antsim small "));
   const out = join(dir, "small.png");

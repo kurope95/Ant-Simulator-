@@ -96,6 +96,23 @@ test("options: errors are specific", () => {
   assert.equal(parse("--headless", "--bench", "boulder").error, "--headless and --bench cannot be combined");
 });
 
+test("options: screen and zoom validate their ranges", () => {
+  assert.equal(parseOptions(["--screen", "home"]).options.screen, "home");
+  assert.equal(parseOptions(["--screen", "builder"]).options.screen, "builder");
+  assert.match(parseOptions(["--screen", "nowhere"]).error, /home, builder, run/);
+  assert.equal(parseOptions(["--zoom", "3.5"]).options.zoom, 3.5);
+  assert.match(parseOptions(["--zoom", "0"]).error, /0\.1.*16/);
+  assert.match(parseOptions(["--zoom", "17"]).error, /0\.1.*16/);
+});
+
+test("options: URL forwards screen, preset and zoom together", () => {
+  const r = optionsFromUrl("?screen=builder&preset=dunes&zoom=2");
+  assert.equal(r.error, "");
+  assert.equal(r.options.screen, "builder");
+  assert.equal(r.options.preset, "dunes");
+  assert.equal(r.options.zoom, 2);
+});
+
 test("options: URL query strings parse like flags", () => {
   const r = optionsFromUrl("?headless&ticks=30&size=1280x720&seed=7&scenario=creek&no-vsync");
   assert.equal(r.error, "");

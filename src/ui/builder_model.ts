@@ -39,6 +39,13 @@ export enum BuilderTool {
   Erase,
 }
 
+export function paintStepReached(from: Vec2, to: Vec2, brushRadius: number): boolean {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const step = Math.max(0, brushRadius) * 0.3;
+  return dx * dx + dy * dy >= step * step;
+}
+
 export interface BuilderSelection {
   kind: "colony" | "food";
   id: number;
@@ -269,6 +276,7 @@ export class BuilderModel {
       : removeFood(this.currentSetup, selection.id);
     if (!removed) return false;
     this.currentSelection = null;
+    this.pending = null;
     this.currentDirty = true;
     return true;
   }

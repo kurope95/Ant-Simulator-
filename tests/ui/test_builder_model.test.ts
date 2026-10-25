@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { BuilderModel, BuilderTool } from "../../src/ui/builder_model.js";
+import { BuilderModel, BuilderTool, paintStepReached } from "../../src/ui/builder_model.js";
 import { addColony, addFood, FoodKind, makeSetup } from "../../src/sim/setup.js";
 
 function model() {
@@ -33,6 +33,25 @@ test("builder: deleting the selection clears it", () => {
   assert.equal(m.deleteSelection(), true);
   assert.equal(m.selection, null);
   assert.equal(m.setup.colonies.length, 1);
+});
+
+test("builder: deleting a selection clears a pending preset confirm", () => {
+  const m = model();
+  m.setTool(BuilderTool.Colony);
+  m.applyAt({ x: 100, y: 100 });
+  assert.equal(m.requestPreset("dunes"), "confirm");
+  assert.equal(m.pendingPreset(), "dunes");
+  m.selectAt({ x: 100, y: 100 }, 24);
+  assert.equal(m.deleteSelection(), true);
+  assert.equal(m.selection, null);
+  assert.equal(m.pendingPreset(), null);
+});
+
+test("builder: painting waits for a third of the brush radius", () => {
+  assert.equal(paintStepReached({ x: 0, y: 0 }, { x: 0.59, y: 0 }, 2), false);
+  assert.equal(paintStepReached({ x: 0, y: 0 }, { x: 0.6, y: 0 }, 2), true);
+  assert.equal(paintStepReached({ x: 0, y: 0 }, { x: 0.36, y: 0.5 }, 2), true);
+  assert.equal(paintStepReached({ x: 10, y: 10 }, { x: 10, y: 10 }, 0), true);
 });
 
 test("builder: food and terrain edits mark the map dirty", () => {

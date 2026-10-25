@@ -107,6 +107,7 @@ export class RunHud {
     const delivered = makeChip("Delivered");
     const clock = makeChip("Elapsed");
     const fps = makeChip("FPS");
+    fps.chip.classList.add("chip--fps");
     this.chipAnts = ants.value;
     this.chipDelivered = delivered.value;
     this.chipClock = clock.value;

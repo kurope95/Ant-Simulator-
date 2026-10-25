@@ -16,7 +16,7 @@ import { loadPreset, presetInfo, quickStartSetup } from "../sim/presets.js";
 import { cloneSetup, type WorldSetup } from "../sim/setup.js";
 import { worldFromSetup } from "../sim/setup_apply.js";
 import { stepWorld, type World } from "../sim/world.js";
-import { BuilderModel, BuilderTool } from "../ui/builder_model.js";
+import { BuilderModel, BuilderTool, paintStepReached } from "../ui/builder_model.js";
 import { BuilderScreen, type BuilderHooks } from "../ui/builder_screen.js";
 import { ColonyPanel } from "../ui/colony_panel.js";
 import { el } from "../ui/dom.js";
@@ -112,6 +112,8 @@ export class AppController {
   private panning = false;
   private painting = false;
   private movingSelection = false;
+  private lastPaintWorld: Vec2 | null = null;
+  private lastCursor = "";
   private activePointer = -1;
   private disposed = false;
 
@@ -304,6 +306,21 @@ export class AppController {
     this.builderScreen?.root.classList.toggle("screen--active", screen === Screen.Builder);
     if (this.runHud !== null) this.runHud.root.hidden = screen !== Screen.Run;
     if (this.brushRing !== null) this.brushRing.hidden = true;
+    this.focusPrimary(screen);
+  }
+
+  private focusPrimary(screen: Screen): void {
+    let root: HTMLElement | null = null;
+    if (screen === Screen.Home) root = this.homeScreen?.root ?? null;
+    else if (screen === Screen.Builder) root = this.builderScreen?.root ?? null;
+    else root = this.runHud?.root ?? null;
+    if (root === null) return;
+    const primary = root.querySelector<HTMLButtonElement>(".button--primary");
+    const target =
+      primary !== null && !primary.disabled
+        ? primary
+        : root.querySelector<HTMLButtonElement>(".button:not(:disabled)");
+    target?.focus({ preventScroll: true });
   }
 
   private closeOverlays(): void {
@@ -638,6 +655,7 @@ export class AppController {
 
     drawWorld(renderer, cache, world, this.camera, this.view, this.activeTheme, alpha);
     this.updateBrushRing();
+    this.updateCursor();
     renderer.present();
     this.updateOverlays();
 
@@ -722,6 +740,18 @@ export class AppController {
     ring.style.top = `${this.pointerCss.y - diameter / 2}px`;
   }
 
+  private updateCursor(): void {
+    let cursor = "";
+    if (this.panning && this.session.screen !== Screen.Home) {
+      cursor = "grabbing";
+    } else if (this.session.screen === Screen.Builder && this.builderModel !== null) {
+      cursor = this.builderModel.tool === BuilderTool.Select ? "default" : "crosshair";
+    }
+    if (cursor === this.lastCursor) return;
+    this.lastCursor = cursor;
+    this.canvas.style.cursor = cursor;
+  }
+
   private readonly onWheel = (event: WheelEvent): void => {
     if (this.session.screen === Screen.Home) return;
     event.preventDefault();
@@ -768,6 +798,7 @@ export class AppController {
       return;
     }
     this.painting = true;
+    this.lastPaintWorld = point;
     if (model.paintAt(point)) {
       this.builderScreen?.update();
       this.syncPreviewTerrain();
@@ -795,7 +826,12 @@ export class AppController {
     if (model === null) return;
 
     if (this.painting && (event.buttons & 1) !== 0) {
-      if (model.paintAt(this.worldPoint(event))) {
+      const point = this.worldPoint(event);
+      if (this.lastPaintWorld !== null && !paintStepReached(this.lastPaintWorld, point, model.brushRadius)) {
+        return;
+      }
+      this.lastPaintWorld = point;
+      if (model.paintAt(point)) {
         this.builderScreen?.update();
         this.syncPreviewTerrain();
       }
@@ -815,6 +851,7 @@ export class AppController {
     this.panning = false;
     this.painting = false;
     this.movingSelection = false;
+    this.lastPaintWorld = null;
     if (this.canvas.hasPointerCapture(event.pointerId)) {
       this.canvas.releasePointerCapture(event.pointerId);
     }
