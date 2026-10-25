@@ -9,7 +9,7 @@ A real-time 2D ant colony / stigmergy simulator inspired by Pezzza's Work "Ant S
 **Plans:** one per milestone, in `docs/superpowers/plans/`. Carry them out task by task, and don't run ahead into the next milestone.
 
 ## Status
-- Current milestone: **M2 (navigation and foraging) complete** (2026-10-25). 226 tests, clean build. Bench (plugged in, meadow, 1200 ticks, 200 ants): 0.448 ms average step, 0.555 ms p95, against a 0.385 ms baseline — inside the +25% budget of 0.481 ms. Reach: first delivery 36.1 s at 1000 u, 53 deliveries in minute 3 at 1500 u; contest colony B 1 / 69 / 63 per minute; maze 6 deliveries in minutes 7–9 and 1044 in minutes 12–14 after the breach at 10:00. Boulder ants touching rock 0.0211 → 0.0007. **M1.6 (camera and looks) is planned next.** Ant-to-ant collisions stay in M4; birth tuning is unscheduled. Update this line as each milestone lands; the milestone list is in spec §15.
+- Current milestone: **M2 (navigation and foraging) complete** (2026-10-25). 228 tests, clean build. Bench (plugged in, meadow, 1200 ticks, 200 ants): 0.455 ms average step, 0.564 ms p95, against a 0.385 ms baseline — inside the +25% budget of 0.481 ms. Reach: first delivery 36.3 s at 1000 u, 84 deliveries in minute 3 at 1500 u; contest colony B 1 / 58 / 84 per minute; maze 4 deliveries in minutes 7–9 and 1016 in minutes 12–14 after the breach at 10:00. Boulder ants touching rock 0.0211 → 0.0007. **M1.6 (camera and looks) is planned next.** Ant-to-ant collisions stay in M4; birth tuning is unscheduled. Update this line as each milestone lands; the milestone list is in spec §15.
 
 ## This machine
 - **Windows 11 ARM64.** Snapdragon X Plus, 8 equal cores, 16 GB shared RAM, Adreno X1-45 GPU.

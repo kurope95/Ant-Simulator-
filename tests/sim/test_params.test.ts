@@ -19,7 +19,7 @@ test("params: defaults match spec section 12", () => {
   assert.equal(p.followerSamples, 25);
   assert.equal(p.explorerSamples, 6);
   assert.equal(p.explorerRatio, 0.10);
-  assert.equal(p.markerHalfLife, 20);
+  assert.equal(p.markerHalfLife, 15);
   assert.equal(p.emissionDecay, 0.11);
   assert.equal(p.stuckTimeout, 2.5);
   assert.equal(p.crowdLimit, 4);

@@ -136,6 +136,22 @@ test("markers: the decay factor halves per half-life and is frame-rate independe
   assert.ok(Math.abs(f120 * f120 - f60) < 1e-12);
 });
 
+test("trails: an exhausted food's trail fades below markerDetectMin within 150 s", () => {
+  // A full-strength deposit is what an ant lays at the instant it picks up, so
+  // the cell at a food source holds one; once the source is empty nothing
+  // refreshes it and only decay is left (spec §4.2, §5.4).
+  const params = defaultParams();
+  const grid = makeMarkerGrid({ x: 64, y: 32 }, 8);
+  const cell = grid.cellIndex({ x: 4, y: 4 });
+  deposit(grid, cell, 0, MarkerChannel.ToFood, 1, params);
+  const factor = markerDecayFactor(params, 1 / params.simHz);
+  for (let tick = 0; tick < 150 * params.simHz; tick++) {
+    decayMarkers(grid, factor, params.markerDetectMin);
+  }
+  const left = foodAt(grid, 0, cell);
+  assert.ok(left < params.markerDetectMin, `trail still ${left} after 150 s`);
+});
+
 test("markers: emission strength falls off with time since the anchor", () => {
   const params = defaultParams();
   assert.equal(emissionStrength(0, params), 1);

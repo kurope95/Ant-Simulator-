@@ -15,7 +15,7 @@ import { obstacleGridFromCells } from "../sim/obstacles.js";
 import { defaultParams, type SimParams } from "../sim/params.js";
 import { loadPreset, presetInfo, quickStartSetup } from "../sim/presets.js";
 import { cloneSetup, type WorldSetup } from "../sim/setup.js";
-import { worldFromSetup } from "../sim/setup_apply.js";
+import { paramsForSetup, worldFromSetup } from "../sim/setup_apply.js";
 import { stepWorld, applyBreach, type World } from "../sim/world.js";
 import { BuilderModel, BuilderTool, paintStepReached } from "../ui/builder_model.js";
 import { BuilderScreen, type BuilderHooks } from "../ui/builder_screen.js";
@@ -542,7 +542,7 @@ export class AppController {
   }
 
   private resetParams(): void {
-    const defaults = defaultParams();
+    const defaults = paramsForSetup(this.setup, defaultParams());
     resetLiveParams(this.params, defaults);
     if (this.runWorld !== null) resetLiveParams(this.runWorld.params, defaults);
     this.settingsDrawer?.update(this.view);

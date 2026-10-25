@@ -71,8 +71,8 @@ test("reach: report format is stable", () => {
 });
 
 test("reach: 1000 u delivers", { timeout: 120_000 }, () => {
-  // Measured with the tuned defaults (emissionDecay 0.11, markerHalfLife 20,
-  // energyBurn 0.5, exhaustedAt 60): 116 deliveries in 120 s from 150 ants.
+  // Measured with the tuned defaults (emissionDecay 0.11, markerHalfLife 15,
+  // energyBurn 0.5, exhaustedAt 60): 113 deliveries in 120 s from 150 ants.
   const setup = makeSetup({ x: 2600, y: 1000 }, 7, "reach-test");
   addColony(setup, { x: 200, y: 500 }, 0, 150);
   addFood(setup, { x: 1200, y: 500 }, 20000, FoodKind.Seeds);

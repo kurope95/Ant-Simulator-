@@ -351,6 +351,7 @@ validateSetup(setup): string | null        // null when the map can start
 // sim/setup_apply.ts
 interface WorldFromSetupOptions { spawnAnts?: boolean }
 spawnStartingAnts(world, setup): void
+paramsForSetup(setup, params): SimParams   // the caller's params with the scenario's overrides on top; "Reset parameters" uses it too
 worldFromSetup(setup, params, options?): World   // colony ids are array indices
 
 // sim/presets.ts

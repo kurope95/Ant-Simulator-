@@ -94,7 +94,7 @@ export function defaultParams(): SimParams {
     wanderAngleExplorer: 1.0,
     markerDropDist: 8,
     emissionDecay: 0.11,
-    markerHalfLife: 20,
+    markerHalfLife: 15,
     markerEps: 1e-4,
     markerDetectMin: 1e-3,
     territoryRule: true,

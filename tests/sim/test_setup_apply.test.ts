@@ -5,7 +5,7 @@ import { lineOfSight, obstacleGridFromCells } from "../../src/sim/obstacles.js";
 import { defaultParams } from "../../src/sim/params.js";
 import { loadPreset } from "../../src/sim/presets.js";
 import { addColony, addFood, FoodKind, makeSetup, type WorldSetup } from "../../src/sim/setup.js";
-import { worldFromSetup } from "../../src/sim/setup_apply.js";
+import { paramsForSetup, worldFromSetup } from "../../src/sim/setup_apply.js";
 import { AntState } from "../../src/sim/types.js";
 import { applyBreach, stepWorld } from "../../src/sim/world.js";
 
@@ -66,6 +66,16 @@ test("setup apply: param overrides reach the world and leave the rest alone", ()
   const world = worldFromSetup(setup, defaultParams());
   assert.equal(world.params.energyBurn, 0.3);
   assert.equal(world.params.antSpeed, defaultParams().antSpeed);
+});
+
+test("setup apply: a scenario's defaults keep its own overrides", () => {
+  const maze = loadPreset("maze", 1)!;
+  const reset = paramsForSetup(maze, defaultParams());
+  assert.equal(reset.energyBurn, 0.2);
+  assert.equal(reset.antSpeed, defaultParams().antSpeed);
+
+  const meadow = loadPreset("meadow", 1)!;
+  assert.equal(paramsForSetup(meadow, defaultParams()).energyBurn, defaultParams().energyBurn);
 });
 
 test("maze: line of sight is blocked before the breach", () => {
