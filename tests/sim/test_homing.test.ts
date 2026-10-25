@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 
 import { worldChecksum } from "../../src/sim/checksum.js";
 import { makeColony } from "../../src/sim/colony.js";
+import { rebuildBorder } from "../../src/sim/obstacles.js";
 import { defaultParams } from "../../src/sim/params.js";
+import { ObstacleKind } from "../../src/sim/setup.js";
 import { AntState } from "../../src/sim/types.js";
 import { makeWorld, stepWorld, type World } from "../../src/sim/world.js";
 
@@ -41,6 +43,31 @@ function deliveredTick(world: World, ticks: number): number | null {
   return null;
 }
 
+// A carrier 200 u above a 24 u rock wall that runs from x=200 to x=2000, so it
+// can go round either end; the nest sits below the middle at (1100, 800).
+function walledWorld(uid: number): World {
+  const params = defaultParams();
+  const world = makeWorld(params, 5, { x: 2200, y: 1000 });
+  const colony = makeColony(0, { x: 1100, y: 800 });
+  colony.population = 1;
+  world.colonies.push(colony);
+  const grid = world.obstacles;
+  for (let row = Math.floor(400 / grid.cell); row < Math.floor(424 / grid.cell); row++) {
+    for (let col = Math.floor(200 / grid.cell); col < Math.floor(2000 / grid.cell); col++) {
+      grid.kind[row * grid.width + col] = ObstacleKind.Rock;
+    }
+  }
+  rebuildBorder(grid);
+  const index = world.ants.spawn(
+    { pos: { x: 1100, y: 200 }, heading: Math.PI / 2, state: AntState.ReturningFood },
+    uid,
+    params.antSpeed,
+    world.params,
+  );
+  world.ants.mass[index] = params.massCarrying;
+  return world;
+}
+
 test("homing: a carrier with no trail gets home", () => {
   const homing = carrierWorld(true);
   assert.notEqual(deliveredTick(homing.world, 1800), null, "homing on should deliver");
@@ -71,6 +98,21 @@ test("homing: drift accumulates on wander picks and resets at the nest", () => {
   stepWorld(world);
   assert.equal(world.ants.homeErrX[index], 0);
   assert.equal(world.ants.homeErrY[index], 0);
+});
+
+test("homing: a carrier keeps to one side of a wall and gets round it", () => {
+  // A wall across the map with a gap at either end, the carrier directly above
+  // it: whichever end it chooses, the way home is open. Turning back at every
+  // wander pick would leave it pressed against the wall. One even and one odd
+  // uid, because the side an ant keeps comes from its own identity.
+  for (const uid of [kCarrierUid - 1, kCarrierUid]) {
+    const world = walledWorld(uid);
+    assert.notEqual(
+      deliveredTick(world, 5400),
+      null,
+      `carrier ${uid} should get round the wall (ended at ${world.ants.posX[0].toFixed(0)},${world.ants.posY[0].toFixed(0)}, delivered ${world.colonies[0].deliveredTotal})`,
+    );
+  }
 });
 
 test("homing: determinism", () => {

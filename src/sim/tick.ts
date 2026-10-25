@@ -79,20 +79,22 @@ function chooseHeading(world: World, ant: number): ChosenHeading {
   };
 }
 
-// Returns a heading that has `lookAhead` units of free space, as close as possible to `desired`.
+// Returns a free heading for an ant whose `desired` heading is blocked. The ant
+// turns one way only — its own, taken from its uid, so it never flips sides —
+// and it searches from the heading it already holds, not from `desired`.
+// Searching from the current heading is what makes it follow the wall: search
+// from `desired` and the answer jumps back and forth as the target moves, which
+// leaves the ant pressed against the wall instead of getting round it. With no
+// free heading inside half a turn, it reverses.
 function steerAroundWalls(world: World, ant: number, desired: number): number {
   const p = { x: world.ants.posX[ant], y: world.ants.posY[ant] };
   const look = world.params.lookAhead;
   if (freeDistance(world.obstacles, p, desired, look) >= look) return desired;
-  const side = world.ants.wanderOffset[ant] >= 0 ? 1 : -1;
-  for (let k = 1; k <= 6; k++) {
-    const off = (k * Math.PI) / 12;
-    if (freeDistance(world.obstacles, p, desired + side * off, look) >= look) {
-      return desired + side * off;
-    }
-    if (freeDistance(world.obstacles, p, desired - side * off, look) >= look) {
-      return desired - side * off;
-    }
+  const side = (world.ants.uid[ant] & 1) === 0 ? 1 : -1;
+  const current = world.ants.heading[ant];
+  for (let k = 0; k <= 12; k++) {
+    const candidate = current + side * ((k * Math.PI) / 12);
+    if (freeDistance(world.obstacles, p, candidate, look) >= look) return candidate;
   }
   return desired + Math.PI;
 }
@@ -391,7 +393,8 @@ export function clampToWorld(world: World): void {
   }
 }
 
-export function removeDead(world: World): void {  const ants = world.ants;
+export function removeDead(world: World): void {
+  const ants = world.ants;
   for (let index = ants.size() - 1; index >= 0; index--) {
     if (ants.energy[index] > 0) continue;
     const colony = world.colonies[ants.colony[index]];
