@@ -1,13 +1,14 @@
 import { FixedStepClock } from "../core/fixed_step.js";
 import type { Vec2 } from "../core/vec2.js";
-import { GeometryBatch } from "../render/batch.js";
 import { Camera } from "../render/camera.js";
 import { GlRenderer } from "../render/gl_renderer.js";
-import { buildTestPattern } from "../render/test_pattern.js";
-import { sandTheme } from "../render/theme.js";
+import { nightTheme } from "../render/theme.js";
+import { cycleHeatmap, defaultViewSettings } from "../render/view_settings.js";
+import { createWorldRenderCache, drawWorld } from "../render/world_view.js";
 import { defaultParams } from "../sim/params.js";
+import { loadScenario } from "../sim/scenarios.js";
 import { makeWorld, stepWorld } from "../sim/world.js";
-import { DebugPanel } from "../ui/debug_panel.js";
+import { AppShell, type ShellFrame, type ShellHooks, type SpeedSetting } from "../ui/shell.js";
 import type { AppOptions } from "./options.js";
 
 const kMaxFrameSeconds = 0.25;
@@ -28,16 +29,24 @@ export function runInteractive(
   renderer.resizeToDisplaySize();
 
   const world = makeWorld(defaultParams(), options.seed);
+  const scenarioError = loadScenario(world, options.scenario);
+  if (scenarioError !== null) {
+    log(`error: ${scenarioError}`);
+    log("falling back to sandbox");
+    loadScenario(world, "sandbox");
+  }
+
+  const theme = nightTheme();
+  const settings = defaultViewSettings();
+  const cache = createWorldRenderCache(renderer, world);
   const camera = new Camera();
   const clock = new FixedStepClock(1 / world.params.simHz, 16);
-  const panel = new DebugPanel(uiRoot);
-  const theme = sandTheme();
-  const batch = new GeometryBatch();
 
   let paused = false;
   let zen = false;
-  let dragging = false;
+  let speed: SpeedSetting = 1;
   let stepRequests = 0;
+  let dragging = false;
   let frameMs = 1000 / 60;
   let lastTime = performance.now();
   let stepsThisFrame = 0;
@@ -47,6 +56,39 @@ export function runInteractive(
   let rafId = 0;
 
   const dpr = (): number => window.devicePixelRatio || 1;
+  const speedSteps = (setting: SpeedSetting): number => (setting === "max" ? 1000 : setting);
+
+  const hooks: ShellHooks = {
+    onPause: () => {
+      paused = !paused;
+    },
+    onStep: () => {
+      stepRequests += 1;
+    },
+    onSpeed: (value) => {
+      speed = value;
+    },
+    onHeatmap: () => {
+      settings.heatmap = cycleHeatmap(settings.heatmap);
+    },
+    onAnts: () => {
+      settings.showAnts = !settings.showAnts;
+    },
+    onGrid: () => {
+      settings.showGrid = !settings.showGrid;
+    },
+    onResetParams: () => {
+      Object.assign(world.params, defaultParams());
+    },
+    onResetCamera: () => {
+      camera.fit(world.size);
+    },
+    onParam: (key, value) => {
+      world.params[key] = value;
+    },
+  };
+
+  const shell = new AppShell(uiRoot, world.params, hooks);
 
   log("renderer: webgl2");
   log(`display scale: ${dpr().toFixed(2)}`);
@@ -70,35 +112,32 @@ export function runInteractive(
       fitted = true;
     }
 
-    stepsThisFrame = clock.advance(frameSeconds, paused ? 0 : 1);
+    stepsThisFrame = clock.advance(frameSeconds, paused ? 0 : speedSteps(speed));
     if (stepRequests > 0) {
       stepsThisFrame += stepRequests;
       stepRequests = 0;
     }
     for (let i = 0; i < stepsThisFrame; i++) stepWorld(world);
 
-    renderer.clear(theme.outside);
-    batch.clear();
-    const simSeconds = (world.tick + (paused ? 0 : clock.alpha())) / world.params.simHz;
-    buildTestPattern(batch, camera, world.size, theme, simSeconds);
-    renderer.drawBatch(batch);
+    drawWorld(renderer, cache, world, camera, settings, theme, paused ? 1 : clock.alpha());
     renderer.present();
 
-    panel.setVisible(!zen);
-    panel.update({
+    let delivered = 0;
+    for (const colony of world.colonies) delivered += colony.deliveredTotal;
+    const shellFrame: ShellFrame = {
       fps: 1000 / Math.max(frameMs, 0.001),
       frameMs,
-      renderer: "webgl2",
-      displayScale: dpr(),
-      widthPx: size.x,
-      heightPx: size.y,
       tick: world.tick,
-      stepsThisFrame,
+      ants: world.ants.size(),
+      delivered,
       paused,
-      cameraScale: camera.scale(),
-      cameraCenter: camera.center(),
-      alpha: clock.alpha(),
-    });
+      speed,
+      heatmap: settings.heatmap,
+      showAnts: settings.showAnts,
+      showGrid: settings.showGrid,
+      stepsThisFrame,
+    };
+    shell.update(shellFrame);
   };
 
   const screenPoint = (event: MouseEvent): Vec2 => {
@@ -140,6 +179,19 @@ export function runInteractive(
         break;
       case "KeyH":
         zen = !zen;
+        shell.setVisible(!zen);
+        break;
+      case "KeyM":
+        settings.heatmap = cycleHeatmap(settings.heatmap);
+        break;
+      case "KeyA":
+        settings.showAnts = !settings.showAnts;
+        break;
+      case "KeyG":
+        settings.showGrid = !settings.showGrid;
+        break;
+      case "KeyS":
+        speed = "max";
         break;
       case "Home":
         camera.fit(world.size);

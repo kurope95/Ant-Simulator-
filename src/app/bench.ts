@@ -2,6 +2,7 @@ import { stopwatch } from "../core/stopwatch.js";
 import { summarize, type SampleSummary } from "../core/stats.js";
 import { kPhaseCount, phaseName } from "../sim/phases.js";
 import { defaultParams } from "../sim/params.js";
+import { loadScenario } from "../sim/scenarios.js";
 import { makeWorld, stepWorld } from "../sim/world.js";
 import { effectiveTicks, type AppOptions } from "./options.js";
 
@@ -35,14 +36,21 @@ export function formatBenchReport(report: BenchReport): string {
 
 export function runBench(options: AppOptions): number {
   const world = makeWorld(defaultParams(), options.seed);
+  const scenarioError = loadScenario(world, options.scenario);
+  if (scenarioError !== null) {
+    process.stderr.write(`${scenarioError}\n`);
+    return 1;
+  }
   for (let i = 0; i < 60; i++) stepWorld(world);
 
   const ticks = effectiveTicks(options);
   const phaseSamples: number[][] = Array.from({ length: kPhaseCount }, () => []);
   const totalSamples: number[] = [];
+  let antTicks = 0;
   const watch = stopwatch();
   for (let i = 0; i < ticks; i++) {
     stepWorld(world);
+    antTicks += world.ants.size();
     for (let phase = 0; phase < kPhaseCount; phase++) phaseSamples[phase].push(world.timings.ms[phase]);
     totalSamples.push(world.timings.totalMs);
   }
@@ -53,11 +61,11 @@ export function runBench(options: AppOptions): number {
     ticks,
     // M0 is single-threaded; the worker pool arrives in M4.
     threads: 1,
-    ants: 0,
+    ants: world.ants.size(),
     phases: phaseSamples.map(summarize),
     total: summarize(totalSamples),
     ticksPerSec: seconds > 0 ? ticks / seconds : 0,
-    antUpdatesPerSec: 0,
+    antUpdatesPerSec: seconds > 0 ? antTicks / seconds : 0,
   };
   process.stdout.write(formatBenchReport(report));
   return 0;
