@@ -1,14 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { angleDiff } from "../../src/core/math.js";
 import { makeColony } from "../../src/sim/colony.js";
 import {
+  chooseFallback,
   directSightHeading,
   explorerPattern,
+  fallbackHeading,
   followerPattern,
   senseMarkers,
 } from "../../src/sim/sensing.js";
 import { MarkerChannel } from "../../src/sim/marker_grid.js";
+import { freeDistance } from "../../src/sim/obstacles.js";
 import { defaultParams } from "../../src/sim/params.js";
 import { FoodKind, ObstacleKind } from "../../src/sim/setup.js";
 import { AntState } from "../../src/sim/types.js";
@@ -32,9 +36,10 @@ test("sensing: follower and explorer patterns have pinned shapes at default para
   assert.deepEqual(follower[0], { angleOffset: -Math.PI / 3, distance: 6.4 });
   assert.deepEqual(follower[24], { angleOffset: Math.PI / 3, distance: 32 });
   const explorer = explorerPattern(defaultParams());
-  assert.equal(explorer.length, 4);
+  assert.equal(explorer.length, 6);
   assert.deepEqual(explorer[0], { angleOffset: -Math.PI / 3, distance: 16 });
-  assert.deepEqual(explorer[3], { angleOffset: Math.PI / 3, distance: 32 });
+  assert.deepEqual(explorer[1], { angleOffset: 0, distance: 16 });
+  assert.deepEqual(explorer[5], { angleOffset: Math.PI / 3, distance: 32 });
 });
 
 test("sensing: the patterns follow the sensor params", () => {
@@ -50,14 +55,13 @@ test("sensing: the patterns follow the sensor params", () => {
   }
   assert.ok(Math.abs(follower[24].distance - 10) < 1e-9);
   const explorer = explorerPattern(params);
-  assert.equal(explorer.length, 4);
-  assert.ok(Math.abs(explorer[3].distance - 10) < 1e-9);
+  assert.equal(explorer.length, 6);
+  assert.ok(Math.abs(explorer[5].distance - 10) < 1e-9);
 });
 
 test("sensing: a narrowed cone stops sensing a far marker", () => {
   const { world, index } = makeSenseWorld();
   const cell = world.markers.cellIndex({ x: 120, y: 100 });
-  world.markers.owner[cell] = 0;
   world.markers.toFood[cell] = 0.8;
   world.params.sensorRadius = 10;
   world.params.sensorHalfFovDeg = 20;
@@ -72,7 +76,6 @@ test("sensing: a narrowed cone stops sensing a far marker", () => {
 test("sensing: an own-colony cell ahead is found", () => {
   const { world, index } = makeSenseWorld();
   const cell = world.markers.cellIndex({ x: 120, y: 100 });
-  world.markers.owner[cell] = 0;
   world.markers.toFood[cell] = 0.8;
   const result = senseMarkers(world, index, MarkerChannel.ToFood, followerPattern(world.params));
   assert.equal(result.found, true);
@@ -84,7 +87,6 @@ test("sensing: an own-colony cell ahead is found", () => {
 test("sensing: a solid halfway point blocks the sample", () => {
   const { world, index } = makeSenseWorld();
   const cell = world.markers.cellIndex({ x: 132, y: 100 });
-  world.markers.owner[cell] = 0;
   world.markers.toFood[cell] = 0.8;
   const pattern = [{ angleOffset: 0, distance: 32 }];
   const open = senseMarkers(world, index, MarkerChannel.ToFood, pattern);
@@ -106,7 +108,6 @@ test("sensing: a saturated field keeps the ant heading straight", () => {
     for (let x = 64; x <= 168; x += 8) {
       const cell = world.markers.cellIndex({ x, y });
       if (cell < 0) continue;
-      world.markers.owner[cell] = 0;
       world.markers.toFood[cell] = 0.8;
     }
   }
@@ -116,11 +117,12 @@ test("sensing: a saturated field keeps the ant heading straight", () => {
   assert.ok(Math.abs(result.targetHeading) < 1e-9, `heading ${result.targetHeading}`);
 });
 
-test("sensing: a foreign-owned cell is ignored", () => {
+test("sensing: a foreign colony's layer is invisible", () => {
   const { world, index } = makeSenseWorld();
+  world.markers.resize(world.size, world.markers.cell, 2);
+  const cells = world.markers.width * world.markers.height;
   const cell = world.markers.cellIndex({ x: 120, y: 100 });
-  world.markers.owner[cell] = 1;
-  world.markers.toFood[cell] = 0.9;
+  world.markers.toFood[cells + cell] = 0.9;
   const result = senseMarkers(world, index, MarkerChannel.ToFood, followerPattern(world.params));
   assert.equal(result.found, false);
   assert.equal(result.bestSignal, 0);
@@ -130,7 +132,6 @@ test("sensing: a foreign-owned cell is ignored", () => {
 test("sensing: the food signal is reported even while following home", () => {
   const { world, index } = makeSenseWorld();
   const cell = world.markers.cellIndex({ x: 120, y: 100 });
-  world.markers.owner[cell] = 0;
   world.markers.toHome[cell] = 0.2;
   world.markers.toFood[cell] = 0.7;
   const result = senseMarkers(world, index, MarkerChannel.ToHome, followerPattern(world.params));
@@ -160,4 +161,45 @@ test("sensing: direct sight needs range, facing and the right target", () => {
   const far = makeSenseWorld();
   far.world.food.items.push({ uid: 1, pos: { x: 300, y: 100 }, amount: 500, infinite: false, kind: FoodKind.Seeds });
   assert.equal(directSightHeading(far.world, far.index), null);
+});
+
+test("sensing: fallback picks the open gap", () => {
+  const { world, index } = makeSenseWorld();
+  const grid = world.obstacles;
+  for (let row = 25; row <= 39; row++) {
+    for (let col = 35; col <= 39; col++) grid.kind[row * grid.width + col] = ObstacleKind.Rock;
+  }
+  world.ants.wanderHeading[index] = -Math.PI / 6;
+  const chosen = fallbackHeading(world, index);
+  assert.ok(
+    Math.abs(angleDiff(chosen, -Math.PI / 6)) <= (10 * Math.PI) / 180,
+    `chosen ${chosen}`,
+  );
+  assert.equal(
+    freeDistance(grid, { x: 100, y: 100 }, chosen, world.params.fallbackRange),
+    world.params.fallbackRange,
+  );
+  assert.ok(freeDistance(grid, { x: 100, y: 100 }, 0, world.params.fallbackRange) < world.params.fallbackRange);
+});
+
+test("sensing: fallback's clearAhead matches the chosen heading's look-ahead", () => {
+  const { world, index } = makeSenseWorld();
+  world.ants.wanderHeading[index] = 0;
+  let choice = chooseFallback(world, index);
+  assert.equal(
+    choice.clearAhead,
+    freeDistance(world.obstacles, { x: 100, y: 100 }, choice.heading, world.params.lookAhead) >=
+      world.params.lookAhead,
+  );
+
+  const grid = world.obstacles;
+  for (let row = 22; row <= 28; row++) {
+    for (let col = 22; col <= 28; col++) {
+      if (row === 22 || row === 28 || col === 22 || col === 28) {
+        grid.kind[row * grid.width + col] = ObstacleKind.Rock;
+      }
+    }
+  }
+  choice = chooseFallback(world, index);
+  assert.equal(choice.clearAhead, false, "boxed in by the rock ring");
 });

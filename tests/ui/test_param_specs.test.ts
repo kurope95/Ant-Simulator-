@@ -31,11 +31,11 @@ function assertFiniteWorld(world: World): void {
   }
 }
 
-test("param specs: nine live controls with valid ranges and defaults", () => {
+test("param specs: ten live controls with valid ranges and defaults", () => {
   const specs = paramSpecs();
-  assert.equal(specs.length, 9);
-  assert.equal(new Set(specs.map((spec) => spec.key)).size, 9);
-  // No stuck detection in M1, so no degrade event can fire: the control waits for M2.
+  assert.equal(specs.length, 10);
+  assert.equal(new Set(specs.map((spec) => spec.key)).size, 10);
+  // The live degradeTime control is scheduled for M5 (design spec section 15).
   assert.equal(specs.some((spec) => spec.key === "degradeTime"), false);
   const defaults = defaultParams();
   for (const spec of specs) {
@@ -59,6 +59,21 @@ test("param specs: explorer ratio is edited as a percentage", () => {
   assert.equal(applySpecValue(spec, params, 0), 0);
   assert.equal(params.explorerRatio, 0);
   assert.equal(formatSpecValue(spec, 25), "25 %");
+});
+
+test("param specs: trail fade edits the emission decay in thousandths", () => {
+  const spec = paramSpecs().find((candidate) => candidate.key === "emissionDecay");
+  assert.ok(spec);
+  assert.equal(spec.label, "Trail fade with distance");
+  assert.equal(spec.group, "trails");
+  assert.equal(spec.min, 0.005);
+  assert.equal(spec.max, 0.2);
+  const params = defaultParams();
+  assert.equal(specValue(spec, params), 0.11);
+  near(applySpecValue(spec, params, 99), 0.2);
+  near(applySpecValue(spec, params, 0), 0.005);
+  near(applySpecValue(spec, params, 0.031), 0.03);
+  assert.equal(formatSpecValue(spec, specValue(spec, params)), "0.030");
 });
 
 test("param specs: values clamp and snap to the step", () => {

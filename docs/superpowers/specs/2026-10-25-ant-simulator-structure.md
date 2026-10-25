@@ -31,7 +31,7 @@ Ant Simulator/
 │   ├── sim/                    the simulation (no DOM, no WebGL)
 │   ├── render/                 camera, batches, WebGL2 renderer, atlas, terrain, layers
 │   ├── ui/                     DOM screens, HUD, panels and the builder model
-│   └── app/                    entries: controller, session, headless, bench, options
+│   └── app/                    entries: controller, session, headless, bench, reach, options
 ├── tests/                      node:test unit tests, mirroring src/ (plus tests/tools)
 ├── tools/
 │   ├── serve.mjs               dependency-free static server
@@ -51,15 +51,16 @@ Ant Simulator/
 |---|---|---|---|
 | `dist/src/app/main.js` | Chrome | `app/main.ts`, `interactive.ts`, `headless.ts`, `controller.ts` | everything |
 | `dist/src/app/bench_cli.js` | Node | `app/bench_cli.ts`, `bench.ts` | `core`, `sim`, `app/options`, `app/bench` |
+| `dist/src/app/reach_cli.js` | Node | `app/reach_cli.ts`, `reach.ts` | `core`, `sim`, `app/reach` |
 | `node --test "dist/tests/**/*.test.js"` | Node | `tests/**/*.test.ts` | `core`, `sim`, pure `render`/`ui`/`app` |
 | `tools/serve.mjs` | Node | — | Node built-ins only |
 | `tools/chrome.mjs` | Node | — | Node built-ins only |
 | `tools/launch.mjs` | Node, spawning Chrome | — | `tools/serve.mjs`, `tools/chrome.mjs`, Node built-ins |
 | `tools/screenshot.mjs` | Node, spawning Chrome | — | `tools/serve.mjs`, `tools/chrome.mjs`, Node built-ins |
 
-- **Scripts:** `npm run build` = `tsc -p tsconfig.json`, emitting `dist/src/...` and `dist/tests/...`; `npm test` builds then runs `node --test "dist/tests/**/*.test.js"`; `npm run serve` = `node tools/serve.mjs`; `npm run bench` = build then `node dist/src/app/bench_cli.js`; `npm run screenshot` = build then `node tools/screenshot.mjs`.
+- **Scripts:** `npm run build` = `tsc -p tsconfig.json`, emitting `dist/src/...` and `dist/tests/...`; `npm test` builds then runs `node --test "dist/tests/**/*.test.js"`; `npm run serve` = `node tools/serve.mjs`; `npm run bench` = build then `node dist/src/app/bench_cli.js`; `npm run reach` = build then `node dist/src/app/reach_cli.js`; `npm run screenshot` = build then `node tools/screenshot.mjs`.
 - **Launcher.** `Play Ant Simulator.bat` (and the Desktop shortcut pointing at it) installs dependencies if `node_modules` is missing, runs `npm run build`, then `node tools/launch.mjs`. The launcher serves the repo on `127.0.0.1:8080`, opens it as a Chrome `--app` window with a dedicated profile (`%LOCALAPPDATA%\AntSimulator\ChromeProfile`), and stops the server when that window closes. A second launch reuses the running server and opens one more window. `--check` runs the same server and Chrome path headless and validates the rendered PNG.
-- **Layering is enforced by imports, not the type system.** `core` imports nothing. `sim` imports `core`. `render` imports `core`, `sim`, the DOM and WebGL. `ui` imports `core`/`sim`, the DOM and `render/view_settings`. `app/options.ts`, `app/bench.ts` and the bench CLI import `core`/`sim` only. Only `src/app/main.ts`, `interactive.ts`, `headless.ts` and `controller.ts` bring `render` and `ui` together.
+- **Layering is enforced by imports, not the type system.** `core` imports nothing. `sim` imports `core`. `render` imports `core`, `sim`, the DOM and WebGL. `ui` imports `core`/`sim`, the DOM and `render/view_settings`. `app/options.ts`, `app/bench.ts`, `app/reach.ts` and their CLIs import `core`/`sim` only. Only `src/app/main.ts`, `interactive.ts`, `headless.ts` and `controller.ts` bring `render` and `ui` together.
 - **`src/core` and `src/sim` never reference `document`, `window`, `canvas`, `WebGLRenderingContext` or `chrome`.** They must stay runnable by `node --test` and the bench CLI. Node executing them in tests is the practical guard.
 - **No runtime npm dependencies.** Dev dependencies are pinned exactly: `typescript` 5.9.3 and `@types/node` 24.10.0.
 - **Bundlers are banned.** Vite, esbuild, Rollup with native binaries and TypeScript 7's Go compiler are unsigned native programs that Smart App Control may block. `tsc` 5.9.3 is JavaScript and runs under Node.
@@ -153,7 +154,7 @@ const kNoOwner = -1
 enum AntState { Foraging = 0, ReturningFood = 1, ReturningExhausted = 2 }
 enum AntRole { Follower = 0, Explorer = 1 }
 enum RandStream { WanderOffset = 1, WanderInterval, StuckTurn, SpawnHeading,
-                  SpawnRole, SpeedJitter, ContactTurn }
+                  SpawnRole, SpeedJitter, ContactTurn, HomingDrift }
 
 // sim/params.ts
 interface SimParams { /* every tunable from spec §12; see defaultParams */ }
@@ -167,17 +168,32 @@ const kPhaseCount = 7
 phaseName(phase): string                          // "spatial_hash", "think", ...
 interface PhaseTimings { ms: number[]; totalMs: number }
 emptyPhaseTimings(): PhaseTimings
-// stepWorld fills six of the seven slots; SpatialHash is reserved for M2/M4.
+// stepWorld runs all seven; SpatialHash rebuilds the ant bucket grid every tick.
 
 // sim/world.ts
 interface World {
   params: SimParams; seed: number; tick: number; size: Vec2; timings: PhaseTimings
   ants: Ants; markers: MarkerGrid; obstacles: ObstacleGrid
-  colonies: Colony[]; food: FoodSources
+  colonies: Colony[]; food: FoodSources; spatialHash: SpatialHash
   chunkEvents: ChunkEvents[]; nextUid: number
 }
 makeWorld(params: SimParams, seed: number, size?: Vec2): World
-stepWorld(world: World): void          // Think -> Events -> Collisions -> Removals -> Decay -> Stats
+applyBreach(world, rects: readonly SetupRect[]): void   // clears the obstacle kind in each rect, then rebuildBorder
+stepWorld(world: World): void
+// SpatialHash -> Think -> Events -> Collisions -> Removals -> Decay -> Stats
+
+// sim/spatial_hash.ts
+class SpatialHash {   // counting sort over occupied cells only; O(ants) per build
+  cell: number; cols: number; rows: number
+  cellStart: Uint32Array; cellEnd: Uint32Array; items: Uint32Array // ranges into items, per occupied cell
+  build(xs: Float32Array, ys: Float32Array, count, worldSize: Vec2, cell: number): void
+  countWithin(x, y, radius, xs, ys, exclude): number  // excludes one index (the asker itself)
+}
+
+// sim/stuck.ts
+interface StuckState { stuck: boolean; degrade: boolean }
+evaluateStuck(timeSinceLastMarker, inZone, nearby, params): StuckState
+inRestZone(world, ant): boolean   // inside its nest zone or any food zone (+ zoneMargin)
 
 // sim/ants.ts
 interface AntSpawn { pos: Vec2; heading?; colony?; role?; state? }
@@ -185,7 +201,8 @@ class Ants {   // SoA; every field is an array-like of the same length
   uid: Uint32Array; colony: Uint8Array; role: Uint8Array; state: Uint8Array
   posX, posY, prevX, prevY, velX, velY, heading, speed, mass: Float32Array
   energy, timeSinceAnchor, dropX, dropY, timeSinceLastMarker, degradeTimer: Float32Array
-  lastMarkerCell: Int32Array; wanderOffset, wanderTimer: Float32Array
+  lastMarkerCell: Int32Array; wanderOffset, wanderHeading, wanderTimer: Float32Array
+  homeErrX, homeErrY: Float32Array   // path-integration estimate of the way home (§5.7)
   constructor(capacity?)
   size(): number
   spawn(a: AntSpawn, uid: number, speed: number, params: SimParams): number
@@ -196,14 +213,19 @@ class Ants {   // SoA; every field is an array-like of the same length
 // sim/marker_grid.ts
 enum MarkerChannel { ToHome, ToFood }
 interface MarkerGrid { width: number; height: number; cell: number;
-                       owner: Int8Array; toHome: Float32Array; toFood: Float32Array;
-                       resize(worldSize: Vec2, cellSize: number): void;
+                       colonies: number;                           // layers, >= 1
+                       owner: Int8Array;                           // derived by decayMarkers, drawing only
+                       toHome: Float32Array;                       // colonies * cells, index = colony * cells + cell
+                       toFood: Float32Array;
+                       resize(worldSize: Vec2, cellSize: number, colonies?: number): void;
                        cellIndex(pos: Vec2): number }              // -1 outside the world
-makeMarkerGrid(worldSize, cellSize): MarkerGrid
+makeMarkerGrid(worldSize, cellSize, colonies?): MarkerGrid
+homeAt(grid, colony, cell): number         // 0 for a cell or colony out of range
+foodAt(grid, colony, cell): number
 emissionStrength(timeSinceAnchor, params): number
 deposit(grid, cell, colony, channel, strength, params): void
-degrade(grid, cell, colony, channel, factor): void
-decayMarkers(grid, factor, eps): void
+degrade(grid, cell, colony, channel, factor): void     // the depositor's own layer only
+decayMarkers(grid, factor, eps): void                  // all layers, then recompute owner
 
 // sim/food.ts
 interface FoodAmount { pos: Vec2; amount: number; infinite: boolean }
@@ -233,14 +255,22 @@ makeChunkEvents(): ChunkEvents
 // sim/sensing.ts, sim/steering.ts
 interface SensorSample { angleOffset: number; distance: number }
 followerPattern(params): readonly SensorSample[] // 25 = 5 angles x 5 distances, scaled by the sensor params
-explorerPattern(params): readonly SensorSample[] // 4, scaled the same way; cached per params pair
+explorerPattern(params): readonly SensorSample[] // 6 = 3 angles x 2 distances, scaled the same way; cached per params pair
 interface SenseResult { found: boolean; targetHeading: number; bestSignal: number; bestFoodSignal: number }
 senseMarkers(world, ant, channel, pattern): SenseResult
+interface FallbackChoice { heading: number; clearAhead: boolean }
+chooseFallback(world, ant): FallbackChoice   // wander heading if its look-ahead is free, else the longest free ray
+fallbackHeading(world, ant): number          // chooseFallback(...).heading
 directSightHeading(world, ant): number | null
 turnToward(heading, target, maxTurn): number
-updateWander(world, ant, dt): boolean        // true on the tick a new offset is drawn
+updateWander(world, ant, dt): boolean        // true on the tick a new offset and wander heading are drawn
 
 // sim/tick.ts
+// Internal to tick.ts: steerAroundWalls(world, ant, desired) -> heading. An ant
+// whose desired heading is blocked turns one way only — the side its uid picks —
+// searching from its current heading in 15° steps up to half a turn, and reverses
+// if the whole half turn is solid. Searching from the current heading is what
+// makes it follow a wall instead of oscillating against it (spec §5.3).
 thinkChunk(world, begin, end, out: ChunkEvents): void
 spawnAtNest(world, colony): number
 resetChunkEvents(world): void
@@ -257,7 +287,7 @@ const kSandSpeedFactor = 0.6
 const kMudSpeedFactor = 0.45
 // ObstacleKind and FoodKind live in sim/setup.ts; kind is one ObstacleKind per cell.
 interface ObstacleGrid { cell: number; width: number; height: number; size: Vec2;
-                         kind: Uint8Array; border: Uint8Array }
+                         kind: Uint8Array; border: Uint8Array; nearSolid: Uint8Array }
 makeObstacleGrid(size: Vec2, cell: number): ObstacleGrid
 obstacleGridFromCells(cells: ObstacleCells): ObstacleGrid
 rebuildBorder(grid: ObstacleGrid): void
@@ -265,9 +295,13 @@ isSolidCell(grid, col, row): boolean
 isSolidAt(grid, p): boolean
 speedFactorAt(grid, p): number             // 1, 0.6 (sand) or 0.45 (mud)
 lineOfSight(grid, a, b): boolean           // Amanatides-Woo DDA through solid cells
+freeDistance(grid, origin, angle, maxDist): number // DDA: distance to the first solid cell
+freeDistanceDir(grid, origin, unitX, unitY, maxDist): number // the same walk for a unit direction already in hand
+nearestFreePoint(grid, pos, maxCells): Vec2 | null // BFS from the cell holding pos to the closest open cell centre; null once maxCells solid cells are expanded
 
 // sim/collide.ts
-resolveObstacles(world): void              // pushes ants out of Rock/Water, both axes
+resolveObstacles(world): void              // pushes ants out of Rock/Water, both axes; teleports ants buried in a solid interior to the nearest open cell (energy 0 when none is found)
+slideHeadingAlongNormal(ants, index, nx, ny): void  // removes the into-wall part of a heading
 
 // sim/palette.ts
 interface ColonyPaletteEntry { name: string; hex: number }
@@ -287,14 +321,21 @@ const kSetupObstacleCell = 4, kMinStartingAnts = 10, kMaxStartingAnts = 600,
 interface ColonySetup { id: number; nest: Vec2; color: number; startingAnts: number }
 interface FoodSetup { uid: number; pos: Vec2; amount: number; kind: FoodKind }
 interface ObstacleCells { cell: number; width: number; height: number; kind: Uint8Array }
+interface SetupRect { pos: Vec2; size: Vec2 }
 interface WorldSetup { presetId: string; seed: number; size: Vec2;
                        colonies: ColonySetup[]; food: FoodSetup[];
-                       obstacles: ObstacleCells; nextFoodUid: number }
+                       obstacles: ObstacleCells;
+                       breach: SetupRect[];                 // cleared by applyBreach when a scenario opens it
+                       paramOverrides: Partial<SimParams>;  // spread over defaultParams() by worldFromSetup
+                       nextFoodUid: number }
 makeObstacleCells(size, cell?): ObstacleCells
 makeSetup(size, seed, presetId?): WorldSetup
 cloneSetup(setup): WorldSetup
 cellKindAt(setup, p): ObstacleKind
 paintCells(setup, kind, center, radius): number          // cells changed
+paintRect(setup, kind, rect: SetupRect): number          // the same for an axis-aligned rectangle
+interface CellBounds { minCol: number; maxCol: number; minRow: number; maxRow: number }
+rectCellBounds(grid, rect): CellBounds                   // clamped to the grid; presets and breaches share it
 addColony(setup, nest, color?, startingAnts?): ColonySetup | null   // null at 8 colonies
 removeColony(setup, id): boolean
 moveColony(setup, id, nest): boolean
@@ -310,19 +351,21 @@ validateSetup(setup): string | null        // null when the map can start
 // sim/setup_apply.ts
 interface WorldFromSetupOptions { spawnAnts?: boolean }
 spawnStartingAnts(world, setup): void
+paramsForSetup(setup, params): SimParams   // the caller's params with the scenario's overrides on top; "Reset parameters" uses it too
 worldFromSetup(setup, params, options?): World   // colony ids are array indices
 
 // sim/presets.ts
 interface PresetInfo { id: string; name: string }
-const kPresetIds = ["meadow", "dunes", "creek", "boulder", "blank"] as const
+const kPresetIds = ["meadow", "dunes", "creek", "boulder", "maze", "blank"] as const
 presetNames(): readonly string[]
 presetInfo(id): PresetInfo | null
 loadPreset(id, seed): WorldSetup | null
 quickStartSetup(seed): WorldSetup          // meadow
 ```
 
-Exact preset geometry is recorded in the presentation design doc, §13. Colony colours index
-`COLONY_PALETTE`; a colony's `id` is its index in `WorldSetup.colonies`.
+Exact preset geometry is recorded in the design doc, §10. Colony colours index `COLONY_PALETTE`;
+a colony's `id` is its index in `WorldSetup.colonies`. The maze is the only preset that sets
+`breach` and `paramOverrides`.
 
 ### 4.3 `render`: drawing (WebGL2)
 
@@ -477,11 +520,12 @@ colonyRows(world): ColonyRow[]
 
 // ui/param_specs.ts
 type ParamKey = "antSpeed" | "turnRate" | "sensorRadius" | "sensorHalfFovDeg" | "explorerRatio"
-              | "markerHalfLife" | "markerDropDist" | "degradeTime" | "energyBurn" | "spawnCost"
+              | "markerHalfLife" | "markerDropDist" | "emissionDecay" | "degradeTime"
+              | "energyBurn" | "spawnCost"
 type ParamGroup = "movement" | "trails" | "colony"
 interface ParamSpec { key: ParamKey; label: string; unit: string; min: number; max: number;
-                      step: number; scale: number; group: ParamGroup }
-paramSpecs(): readonly ParamSpec[]      // nine live rows; degradeTime typed but not shown until M2
+                      step: number; scale: number; group: ParamGroup; digits?: number }
+paramSpecs(): readonly ParamSpec[]      // ten live rows; degradeTime typed but not shown until M5
 specValue(spec, params): number
 applySpecValue(spec, params, displayValue): number
 formatSpecValue(spec, displayValue): string
@@ -548,7 +592,7 @@ class ColonyPanel { readonly root: HTMLElement
 // ui/settings_drawer.ts
 interface SettingsHooks { onHeatmap(mode: HeatmapMode): void; onAnts(): void; onGrid(): void;
                           onParam(key: ParamKey, value: number): void;
-                          onResetParams(): void; onFit(): void }
+                          onResetParams(): void; onHoming(): void; onFit(): void }
 class SettingsDrawer { readonly root: HTMLElement
                        constructor(root, params: SimParams, hooks: SettingsHooks)
                        update(view?: ViewSettings): void
@@ -628,7 +672,17 @@ interface BenchReport { preset: string; ticks: number; threads: number; ants: nu
 formatBenchReport(report): string
 runBench(options): number              // prints the report; returns the exit code
 
+// app/reach.ts
+const kReachDistances = [500, 1000, 1500, 2000]
+interface ReachRow { label: string; firstSeconds: number | null; minute1: number;
+                     minute2: number; minute3: number; alive: number;
+                     bMinute1: number | null; bMinute2: number | null; bMinute3: number | null }
+interface ReachReport { seed: number; ants: number; seconds: number; rows: ReachRow[]; contest: ReachRow }
+formatReachReport(report): string
+runReach(): number                     // prints the foraging-range table; returns the exit code
+
 // app/bench_cli.ts                  Node entry: argv -> runBench
+// app/reach_cli.ts                  Node entry: -> runReach
 // app/main.ts                       Chrome entry: URL -> mode; wires canvas, ui root and log
 ```
 
@@ -657,6 +711,7 @@ a phase may write only its own ants' slots, and anything cross-ant goes through 
 
 | Phase | Runs now | Reads | Writes |
 |---|---|---|---|
+| SpatialHash | serial | ant positions | the hash (occupied cells only) |
 | Think | serial, chunks of `chunkSize` | anything | only its own ants' fields and `chunkEvents[chunk]` |
 | Events | serial, in chunk order | `chunkEvents` | markers, food, colonies, contacted ants, new ants (appended) |
 | Collisions | serial | positions, obstacles | all ants' `pos` (pushed out of Rock/Water), then clamped to the world |
@@ -664,7 +719,7 @@ a phase may write only its own ants' slots, and anything cross-ant goes through 
 | Decay | serial by grid rows | markers | markers |
 | Stats | serial | colonies | colony stats |
 
-`Phase.SpatialHash` is reserved but not run until M2 needs neighbour counts or M4 adds the hash.
+`Phase.SpatialHash` now runs every tick for stuck detection's crowd counts; M4 reuses it for avoidance neighbours.
 `GaitTracker` runs per frame outside `stepWorld` and only reads ant positions.
 
 ---
@@ -676,14 +731,15 @@ a phase may write only its own ants' slots, and anything cross-ant goes through 
 | M0 Skeleton **(done)** | npm/tsc project; `core/{vec2,rect,math,color,rng,fixed_step,stopwatch,stats,build_info}`; `sim/{types,params,phases,world}`; `render/{camera,batch,gl_renderer}`; `ui/debug_panel`; `app/*`; `tools/{serve,chrome,launch,screenshot}` | [plans/2026-10-25-m0-skeleton.md](../plans/2026-10-25-m0-skeleton.md) |
 | M1 Core foraging **(done 2026-10-25)** | `core/ring_buffer`; `sim/{ants,marker_grid,food,colony,events,sensing,steering,tick,checksum}`; `render/{view_settings,heatmap,ant_layer,world_view}`; `ui/param_specs` | [plans/2026-10-25-m1-core-foraging.md](../plans/2026-10-25-m1-core-foraging.md) |
 | M1.5 Presentation & world builder **(done 2026-10-25)** | `sim/{setup,setup_apply,obstacles,presets,palette,collide}`; `render/{atlas,sprite_atlas,sprite_batch,legs,theme(rewrite),terrain_texture,food_layout,food_layer,nest_layer,world_view(rewrite)}`; `ui/{dom,view_models,builder_model,builder_screen,home_screen,run_hud,colony_panel,settings_drawer,pause_menu,finish_dialog}`; `app/{session,controller,attract}`; `options`/`screenshot` flags; `styles.css` overhaul | [plans/2026-10-25-presentation-overhaul.md](../plans/2026-10-25-presentation-overhaul.md) |
-| M2 Walls and adaptation | `sim/{spatial_hash,stuck,edits}`; stuck detection wired to `StuckTurn` and `degradeTime`; fallback rays in `sensing`; a maze preset and breach edit; wall-following tuning | later |
+| M1.6 Camera and looks | `app/camera_input`; `render/{terrain_mask,terrain_shader}`; map-style pan and zoom; glowing trails; procedural terrain; anthill mounds; ant and food shadows | [plans/2026-10-25-m1.6-camera-looks.md](../plans/2026-10-25-m1.6-camera-looks.md) |
+| M2 Navigation and foraging | `sim/{spatial_hash,stuck}`; `app/{reach,reach_cli}`; wander fix; wall sliding; look-ahead and fallback rays; stuck detection and degrading; spawn safety; retuned defaults; homing memory; per-colony trail layers; maze preset and breach | [plans/2026-10-25-m2-navigation-foraging.md](../plans/2026-10-25-m2-navigation-foraging.md) |
 | M3 Colonies | **closed** — multi-colony setup, palette, territory and the colony heatmap shipped in M1.5. Only the open hostilities topic (main spec §14) remains, unscheduled | — |
-| M4 Crowds and scale | `core/worker_pool`; ant-to-ant PBD in `collide`; `sim/avoidance`; stress preset; determinism test with 1 and N workers; the spatial-hash phase | later |
+| M4 Crowds and scale | `core/worker_pool`; ant-to-ant PBD in `collide`; `sim/avoidance`; stress preset; determinism test with 1 and N workers; worker-scale neighbour queries through the spatial hash | later |
 | M5 Inspector | `sim/{picking,names}`; ant inspector with follow; sensor drawing; telemetry sparklines; live `degradeTime` control | later |
 | M6 Tuning and hardening | parameter tuning, performance passes, edge cases, README | later |
 
-The separate mechanics project — pathfinding, collisions, starvation and births — is not a
-milestone here and follows M1.5.
+Navigation and foraging range, formerly part of a separate mechanics project, are now M2. Ant-to-ant
+collisions stay in M4. Birth and population tuning remain unscheduled.
 
 ---
 
@@ -695,13 +751,15 @@ replaced by the presentation overhaul.
 ```text
 tests/core/   test_build_info.test.ts  test_fixed_step.test.ts  test_math.test.ts
               test_ring_buffer.test.ts test_rng.test.ts         test_stats.test.ts
-tests/sim/    test_ants.test.ts               test_food_colony.test.ts
-              test_marker_grid.test.ts        test_obstacles.test.ts              [M1.5]
+tests/sim/    test_ants.test.ts               test_collide.test.ts    [M2]
+              test_food_colony.test.ts        test_homing.test.ts     [M2]
+              test_marker_grid.test.ts        test_obstacles.test.ts
               test_obstacles_physics.test.ts  [M1.5]  test_params.test.ts
-              test_pipeline.test.ts           test_presets.test.ts               [M1.5]
+              test_pipeline.test.ts           test_presets.test.ts    [M1.5]
               test_presets_checksum.test.ts   [M1.5]  test_rand_stream.test.ts
-              test_sensing.test.ts            test_setup.test.ts                 [M1.5]
-              test_setup_apply.test.ts        [M1.5]  test_steering.test.ts
+              test_sensing.test.ts            test_setup.test.ts      [M1.5]
+              test_setup_apply.test.ts        [M1.5]  test_spatial_hash.test.ts [M2]
+              test_steering.test.ts           test_stuck.test.ts      [M2]
               test_think.test.ts              test_world.test.ts
 tests/render/ test_ant_layer.test.ts   [M1.5]  test_atlas.test.ts        [M1.5]
               test_batch.test.ts              test_camera.test.ts
@@ -712,12 +770,18 @@ tests/render/ test_ant_layer.test.ts   [M1.5]  test_atlas.test.ts        [M1.5]
 tests/ui/     test_builder_model.test.ts [M1.5] test_param_specs.test.ts
               test_view_models.test.ts   [M1.5]
 tests/app/    test_attract.test.ts [M1.5] test_bench.test.ts [M1.5]
-              test_options.test.ts        test_session.test.ts [M1.5]
+              test_options.test.ts        test_reach.test.ts   [M2]
+              test_session.test.ts [M1.5]
 tests/tools/  test_screenshot.test.ts [M1.5]   // spawns Chrome for the interactive builder check
 ```
 
 Behaviour that needs a browser is verified by `npm run screenshot` and by reading the PNG, not by
 unit tests: art, layout, focus, and the interactive flow.
+
+`test_collide.test.ts` holds `fractionTouchingSolid(world)` — the share of ants within
+`antRadius + 1` of a solid cell — sampled every 600 ticks over 7200 ticks on the boulder preset.
+It is the regression guard for wall handling and must average below 0.05; M2 took it from 0.0211
+to 0.0007.
 
 ---
 
@@ -742,7 +806,7 @@ written where `--out` says and are gitignored.
 - **The project is a browser TypeScript app** (2026-10-25 pivot). The C++/SDL3/ImGui version is archived on branch `archive/cpp-m0`; no native programs are built or run because Smart App Control blocks unsigned executables.
 - **Obstacles, multi-colony setup and presentation moved into M1.5.** The former M2 wall work, M3 colony work and M5 look work shipped there; M3 is closed.
 - **`sim/scenarios.ts` was deleted.** Presets (`sim/presets.ts`) and the staged builder replace scenarios; `--scenario` survives only as a deprecated alias for `--preset`.
-- **The spatial hash moves to M4**, because M1.5's obstacle checks use the 4 u obstacle grid and no phase needs neighbour counts yet.
+- **The spatial hash arrives in M2** for stuck detection's crowd counts, and returns in M4 for worker-scale neighbour queries.
 - **Home and Builder refit the camera** to the world; the Run applies `--zoom` once on its first fit.
 - Bench prints both ticks per second and ant updates per second.
 - Workers (the "thread pool") remain M4; M0–M3 are single-threaded and deterministic by construction.

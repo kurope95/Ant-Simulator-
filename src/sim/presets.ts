@@ -5,6 +5,8 @@ import {
   addFood,
   makeSetup,
   paintCells,
+  paintRect,
+  type SetupRect,
   type WorldSetup,
 } from "./setup.js";
 
@@ -13,13 +15,14 @@ export interface PresetInfo {
   name: string;
 }
 
-export const kPresetIds = ["meadow", "dunes", "creek", "boulder", "blank"] as const;
+export const kPresetIds = ["meadow", "dunes", "creek", "boulder", "maze", "blank"] as const;
 
 const kPresetNames: Record<string, string> = {
   meadow: "Meadow",
   dunes: "Dunes",
   creek: "Creek",
   boulder: "Boulder",
+  maze: "Maze",
   blank: "Blank",
 };
 
@@ -115,6 +118,34 @@ function boulder(seed: number): WorldSetup {
   return setup;
 }
 
+const kMazeWallThickness = 24;
+const kMazeGap = 160;
+
+// Three walls split the map into four lanes; the only route between the nest
+// and the food snakes through the gaps at alternating ends. The left ends of
+// the two lower walls are the breach segments: clearing them opens a straight
+// 840 u climb up the left side.
+function mazeRect(x: number, wallY: number, width: number): SetupRect {
+  return { pos: { x, y: wallY - kMazeWallThickness / 2 }, size: { x: width, y: kMazeWallThickness } };
+}
+
+function maze(seed: number): WorldSetup {
+  const setup = makeSetup({ x: 1920, y: 1080 }, seed, "maze");
+  addColony(setup, { x: 90, y: 960 }, 0, 200);
+  addFood(setup, { x: 90, y: 120 }, 20000, FoodKind.Seeds);
+  paintRect(setup, ObstacleKind.Rock, mazeRect(0, 270, 1760));
+  paintRect(setup, ObstacleKind.Rock, mazeRect(kMazeGap, 540, 1920 - kMazeGap));
+  paintRect(setup, ObstacleKind.Rock, mazeRect(0, 810, 1760));
+  setup.breach = [mazeRect(0, 270, kMazeGap), mazeRect(0, 810, kMazeGap)];
+  // The route is about 7,000 u long, so an ant must not run out of energy
+  // partway; the preset overrides the burn rate rather than every preset's.
+  // The route is long enough that an ant on the default burn gives up looking
+  // before it arrives: the search budget is (energyMax - exhaustedAt) / burn,
+  // and the food lies 157 s away.
+  setup.paramOverrides = { energyBurn: 0.2 };
+  return setup;
+}
+
 function blank(seed: number): WorldSetup {
   return makeSetup({ x: 1920, y: 1080 }, seed, "blank");
 }
@@ -129,6 +160,8 @@ export function loadPreset(id: string, seed: number): WorldSetup | null {
       return creek(seed);
     case "boulder":
       return boulder(seed);
+    case "maze":
+      return maze(seed);
     case "blank":
       return blank(seed);
     default:

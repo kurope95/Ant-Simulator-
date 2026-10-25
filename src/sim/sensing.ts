@@ -1,7 +1,7 @@
 import { angleDiff } from "../core/math.js";
 import { angleOf, fromAngle } from "../core/vec2.js";
-import { MarkerChannel } from "./marker_grid.js";
-import { isSolidAt, lineOfSight } from "./obstacles.js";
+import { MarkerChannel, type MarkerGrid } from "./marker_grid.js";
+import { isSolidAt, freeDistance, freeDistanceDir, lineOfSight } from "./obstacles.js";
 import type { SimParams } from "./params.js";
 import { AntState } from "./types.js";
 import type { World } from "./world.js";
@@ -15,7 +15,7 @@ export interface SensorSample {
 // marker sense itself; at the defaults they reproduce the original pinned grids.
 const kFollowerAngleFractions = [-1, -0.5, 0, 0.5, 1];
 const kFollowerDistanceFractions = [0.2, 0.4, 0.6, 0.8, 1];
-const kExplorerAngleFractions = [-1, 1];
+const kExplorerAngleFractions = [-1, 0, 1];
 const kExplorerDistanceFractions = [0.5, 1];
 
 interface PatternKey {
@@ -85,7 +85,14 @@ export function senseMarkers(
   const posX = ants.posX[ant];
   const posY = ants.posY[ant];
   const heading = ants.heading[ant];
+  const grid: MarkerGrid = world.markers;
   const colony = ants.colony[ant];
+  // The grid holds one layer per colony, so this is homeAt/foodAt inlined into
+  // the per-sample loop: 25 samples per ant per tick makes the calls show.
+  if (colony < 0 || colony >= grid.colonies) {
+    return { found: false, targetHeading: 0, bestSignal: 0, bestFoodSignal: 0 };
+  }
+  const layer = colony * grid.width * grid.height;
   let bestSignal = 0;
   let bestFoodSignal = 0;
   let bestBias = Infinity;
@@ -99,10 +106,11 @@ export function senseMarkers(
     if (isSolidAt(world.obstacles, { x, y })) continue;
     // Cheap line of sight: a wall at the halfway point blocks the sample too.
     if (isSolidAt(world.obstacles, { x: (posX + x) * 0.5, y: (posY + y) * 0.5 })) continue;
-    const cell = world.markers.cellIndex({ x, y });
-    if (cell < 0 || world.markers.owner[cell] !== colony) continue;
-    const home = world.markers.toHome[cell];
-    const food = world.markers.toFood[cell];
+    const cell = grid.cellIndex({ x, y });
+    if (cell < 0) continue;
+    const index = layer + cell;
+    const home = grid.toHome[index];
+    const food = grid.toFood[index];
     if (food > bestFoodSignal) bestFoodSignal = food;
     const signal = channel === MarkerChannel.ToHome ? home : food;
     const bias = Math.abs(sample.angleOffset);
@@ -121,6 +129,81 @@ export function senseMarkers(
     bestSignal,
     bestFoodSignal,
   };
+}
+
+export interface FallbackChoice {
+  heading: number;
+  clearAhead: boolean;
+}
+
+interface RayFan {
+  rayCount: number;
+  halfFovDeg: number;
+  offsets: Float64Array;
+  cos: Float64Array;
+  sin: Float64Array;
+}
+
+let cachedFan: RayFan | null = null;
+
+function rayFan(params: SimParams): RayFan {
+  const rayCount = Math.max(1, Math.round(params.fallbackRays));
+  if (cachedFan !== null && cachedFan.rayCount === rayCount && cachedFan.halfFovDeg === params.sensorHalfFovDeg) {
+    return cachedFan;
+  }
+  const halfFov = (params.sensorHalfFovDeg * Math.PI) / 180;
+  const offsets = new Float64Array(rayCount);
+  const cos = new Float64Array(rayCount);
+  const sin = new Float64Array(rayCount);
+  for (let ray = 0; ray < rayCount; ray++) {
+    const fraction = rayCount === 1 ? 0 : (2 * ray) / (rayCount - 1) - 1;
+    offsets[ray] = halfFov * fraction;
+    cos[ray] = Math.cos(offsets[ray]);
+    sin[ray] = Math.sin(offsets[ray]);
+  }
+  cachedFan = { rayCount, halfFovDeg: params.sensorHalfFovDeg, offsets, cos, sin };
+  return cachedFan;
+}
+
+export function chooseFallback(world: World, ant: number): FallbackChoice {
+  const ants = world.ants;
+  const params = world.params;
+  const pos = { x: ants.posX[ant], y: ants.posY[ant] };
+  const heading = ants.heading[ant];
+  const wander = ants.wanderHeading[ant];
+  // Open space: head straight for the wander target. Casting rays here instead
+  // would leave the ant chasing the nearest ray, which sits half a ray step off
+  // the target and flips sides every tick, so it would turn at full rate forever.
+  if (freeDistance(world.obstacles, pos, wander, params.lookAhead) >= params.lookAhead) {
+    return { heading: wander, clearAhead: true };
+  }
+
+  const fan = rayFan(params);
+  const cosH = Math.cos(heading);
+  const sinH = Math.sin(heading);
+  let bestDistance = -Infinity;
+  let bestAngle = heading;
+  let bestBias = Infinity;
+  for (let ray = 0; ray < fan.rayCount; ray++) {
+    const cos = cosH * fan.cos[ray] - sinH * fan.sin[ray];
+    const sin = sinH * fan.cos[ray] + cosH * fan.sin[ray];
+    const distance = freeDistanceDir(world.obstacles, pos, cos, sin, params.fallbackRange);
+    const angle = heading + fan.offsets[ray];
+    const bias = Math.abs(angleDiff(wander, angle));
+    if (
+      distance > bestDistance + 0.5 ||
+      (Math.abs(distance - bestDistance) <= 0.5 && bias < bestBias)
+    ) {
+      bestDistance = distance;
+      bestAngle = angle;
+      bestBias = bias;
+    }
+  }
+  return { heading: bestAngle, clearAhead: bestDistance >= params.lookAhead };
+}
+
+export function fallbackHeading(world: World, ant: number): number {
+  return chooseFallback(world, ant).heading;
 }
 
 export function directSightHeading(world: World, ant: number): number | null {

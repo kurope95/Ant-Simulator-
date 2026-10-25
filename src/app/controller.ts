@@ -15,8 +15,8 @@ import { obstacleGridFromCells } from "../sim/obstacles.js";
 import { defaultParams, type SimParams } from "../sim/params.js";
 import { loadPreset, presetInfo, quickStartSetup } from "../sim/presets.js";
 import { cloneSetup, type WorldSetup } from "../sim/setup.js";
-import { worldFromSetup } from "../sim/setup_apply.js";
-import { stepWorld, type World } from "../sim/world.js";
+import { paramsForSetup, worldFromSetup } from "../sim/setup_apply.js";
+import { stepWorld, applyBreach, type World } from "../sim/world.js";
 import { BuilderModel, BuilderTool, paintStepReached } from "../ui/builder_model.js";
 import { BuilderScreen, type BuilderHooks } from "../ui/builder_screen.js";
 import { ColonyPanel } from "../ui/colony_panel.js";
@@ -103,6 +103,8 @@ export class AppController {
   private stepRequests = 0;
   private zoomApplied = false;
   private needsFit = true;
+  private breached = false;
+  private breachRequested = false;
   private frameMs = 1000 / 60;
   private lastTime = 0;
   private rafId = 0;
@@ -208,8 +210,11 @@ export class AppController {
         const world = worldFromSetup(this.setup, this.params);
         const warmup = Math.max(0, effectiveTicks(this.options));
         for (let i = 0; i < warmup; i++) stepWorld(world);
+        const breached = this.breachDue(world);
+        if (breached) applyBreach(world, this.setup.breach);
         this.session = started.state;
         this.showRun(world, started.state, true);
+        this.breached = breached;
         break;
       }
       default:
@@ -286,6 +291,8 @@ export class AppController {
     this.closeOverlays();
     this.runWorld = world;
     this.session = session;
+    this.breached = false;
+    this.breachRequested = false;
     this.activeWorld = world;
     this.activeTheme = this.runTheme;
     this.cache = this.makeCache(world, this.runTheme);
@@ -395,6 +402,9 @@ export class AppController {
       onFit: () => {
         this.requestFit();
       },
+      onBreach: () => {
+        this.breachRequested = true;
+      },
     };
   }
 
@@ -436,6 +446,11 @@ export class AppController {
       onResetParams: () => {
         this.resetParams();
       },
+      onHoming: () => {
+        const enabled = !this.params.homingEnabled;
+        this.params.homingEnabled = enabled;
+        if (this.runWorld !== null) this.runWorld.params.homingEnabled = enabled;
+      },
       onFit: () => {
         this.requestFit();
       },
@@ -447,6 +462,26 @@ export class AppController {
     this.finishDialog?.close();
     this.pauseMenu?.close();
     this.session = resumeRun(this.session);
+  }
+
+  // The scheduled breach (URL or CLI) fires once the run reaches its tick;
+  // the HUD button asks for it immediately, paused or not.
+  private breachDue(world: World): boolean {
+    if (this.breached || this.setup.breach.length === 0) return false;
+    return this.breachRequested || (this.options.breachTick >= 0 && world.tick >= this.options.breachTick);
+  }
+
+  private applyScheduledBreach(): void {
+    const world = this.runWorld;
+    if (world === null || !this.breachDue(world)) return;
+    this.breached = true;
+    this.breachRequested = false;
+    applyBreach(world, this.setup.breach);
+    this.log(`breach: opened at tick ${world.tick}`);
+    const renderer = this.renderer;
+    if (renderer !== null && this.cache !== null) {
+      refreshTerrain(renderer, this.cache, world, this.activeTheme);
+    }
   }
 
   private keepWatching(): void {
@@ -507,7 +542,7 @@ export class AppController {
   }
 
   private resetParams(): void {
-    const defaults = defaultParams();
+    const defaults = paramsForSetup(this.setup, defaultParams());
     resetLiveParams(this.params, defaults);
     if (this.runWorld !== null) resetLiveParams(this.runWorld.params, defaults);
     this.settingsDrawer?.update(this.view);
@@ -654,6 +689,7 @@ export class AppController {
       for (let i = 0; i < steps; i++) stepWorld(this.runWorld);
       alpha = this.session.paused ? 1 : this.clock.alpha();
     }
+    if (this.session.screen === Screen.Run) this.applyScheduledBreach();
 
     drawWorld(renderer, cache, world, this.camera, this.view, this.activeTheme, alpha);
     this.updateBrushRing();
@@ -677,6 +713,7 @@ export class AppController {
         zen: this.session.zen,
         coloniesOpen: this.coloniesOpen,
         settingsOpen: this.settingsOpen,
+        breachAvailable: this.setup.breach.length > 0,
       };
       this.runHud.update(this.runWorld, 1000 / Math.max(this.frameMs, 0.001), state);
     }

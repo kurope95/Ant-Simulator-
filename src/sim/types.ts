@@ -21,4 +21,5 @@ export enum RandStream {
   SpawnRole,
   SpeedJitter,
   ContactTurn,
+  HomingDrift,
 }

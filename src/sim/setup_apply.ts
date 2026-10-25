@@ -17,12 +17,26 @@ export function spawnStartingAnts(world: World, setup: WorldSetup): void {
   }
 }
 
+// The parameters a setup starts from: the caller's params with the scenario's
+// own overrides on top. "Reset parameters" goes through here too, or resetting
+// would strip the overrides a scenario depends on — the maze's burn rate among
+// them — and leave it unwinnable.
+export function paramsForSetup(setup: WorldSetup, params: SimParams): SimParams {
+  return { ...params, ...setup.paramOverrides };
+}
+
 export function worldFromSetup(
   setup: WorldSetup,
   params: SimParams,
   options: WorldFromSetupOptions = {},
 ): World {
-  const worldParams = { ...params, worldW: setup.size.x, worldH: setup.size.y };
+  // Preset overrides beat the live params, but the world size always comes
+  // from the setup itself.
+  const worldParams = {
+    ...paramsForSetup(setup, params),
+    worldW: setup.size.x,
+    worldH: setup.size.y,
+  };
   const world = makeWorld(worldParams, setup.seed, setup.size);
   world.obstacles = obstacleGridFromCells(setup.obstacles);
 
@@ -30,6 +44,8 @@ export function worldFromSetup(
     const colony = setup.colonies[i];
     world.colonies.push(makeColony(i, { x: colony.nest.x, y: colony.nest.y }, colony.color));
   }
+  // One marker layer per colony; the count is known only after the colonies exist.
+  world.markers.resize(world.size, world.params.markerCell, Math.max(1, world.colonies.length));
 
   let maxUid = 0;
   for (const source of setup.food) {

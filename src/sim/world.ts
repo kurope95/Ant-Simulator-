@@ -6,9 +6,11 @@ import type { Colony } from "./colony.js";
 import type { ChunkEvents } from "./events.js";
 import { makeFoodSources, type FoodSources } from "./food.js";
 import { makeMarkerGrid, decayMarkers, type MarkerGrid } from "./marker_grid.js";
-import { makeObstacleGrid, type ObstacleGrid } from "./obstacles.js";
+import { makeObstacleGrid, rebuildBorder, type ObstacleGrid } from "./obstacles.js";
 import { emptyPhaseTimings, Phase, type PhaseTimings } from "./phases.js";
 import { markerDecayFactor, type SimParams } from "./params.js";
+import { ObstacleKind, rectCellBounds, type SetupRect } from "./setup.js";
+import { SpatialHash } from "./spatial_hash.js";
 import {
   applyEvents,
   clampToWorld,
@@ -29,8 +31,29 @@ export interface World {
   obstacles: ObstacleGrid;
   colonies: Colony[];
   food: FoodSources;
+  spatialHash: SpatialHash;
   chunkEvents: ChunkEvents[];
   nextUid: number;
+}
+
+// Opens the breach segments in a running world: the cells become empty ground
+// and the collision border plus the near-solid map are rebuilt around them.
+// Called between ticks, so the next think phase sees the new geometry.
+export function applyBreach(world: World, rects: readonly SetupRect[]): void {
+  const grid = world.obstacles;
+  let changed = false;
+  for (const rect of rects) {
+    const { minCol, maxCol, minRow, maxRow } = rectCellBounds(grid, rect);
+    for (let row = minRow; row <= maxRow; row++) {
+      for (let col = minCol; col <= maxCol; col++) {
+        const index = row * grid.width + col;
+        if (grid.kind[index] === ObstacleKind.None) continue;
+        grid.kind[index] = ObstacleKind.None;
+        changed = true;
+      }
+    }
+  }
+  if (changed) rebuildBorder(grid);
 }
 
 export function makeWorld(params: SimParams, seed: number, size?: Vec2): World {
@@ -47,6 +70,7 @@ export function makeWorld(params: SimParams, seed: number, size?: Vec2): World {
     obstacles: makeObstacleGrid(worldSize, worldParams.obstacleCell),
     colonies: [],
     food: makeFoodSources(),
+    spatialHash: new SpatialHash(),
     chunkEvents: [],
     nextUid: 0,
   };
@@ -63,6 +87,15 @@ export function stepWorld(world: World): void {
     world.timings.ms[phase] = watch.elapsedMs();
   };
 
+  timed(Phase.SpatialHash, () =>
+    world.spatialHash.build(
+      world.ants.posX,
+      world.ants.posY,
+      world.ants.size(),
+      world.size,
+      world.params.hashCell,
+    ),
+  );
   timed(Phase.Think, () => {
     resetChunkEvents(world);
     const chunkSize = world.params.chunkSize;

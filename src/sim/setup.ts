@@ -1,6 +1,6 @@
 import type { Vec2 } from "../core/vec2.js";
 import { foodRadius } from "./food.js";
-import { defaultParams } from "./params.js";
+import { defaultParams, type SimParams } from "./params.js";
 import { COLONY_PALETTE, firstFreeColor } from "./palette.js";
 import { kMaxColonies } from "./types.js";
 
@@ -53,6 +53,13 @@ export interface ObstacleCells {
   kind: Uint8Array;
 }
 
+// An axis-aligned world-space rectangle; the maze's breach segments are stored
+// as these so a running world can clear them later.
+export interface SetupRect {
+  pos: Vec2;
+  size: Vec2;
+}
+
 export interface WorldSetup {
   presetId: string;
   seed: number;
@@ -60,6 +67,8 @@ export interface WorldSetup {
   colonies: ColonySetup[];
   food: FoodSetup[];
   obstacles: ObstacleCells;
+  breach: SetupRect[];
+  paramOverrides: Partial<SimParams>;
   nextFoodUid: number;
 }
 
@@ -93,6 +102,8 @@ export function makeSetup(size: Vec2, seed: number, presetId = "blank"): WorldSe
     colonies: [],
     food: [],
     obstacles: makeObstacleCells(worldSize),
+    breach: [],
+    paramOverrides: {},
     nextFoodUid: 1,
   };
 }
@@ -120,6 +131,11 @@ export function cloneSetup(setup: WorldSetup): WorldSetup {
       height: setup.obstacles.height,
       kind: new Uint8Array(setup.obstacles.kind),
     },
+    breach: setup.breach.map((rect) => ({
+      pos: { x: rect.pos.x, y: rect.pos.y },
+      size: { x: rect.size.x, y: rect.size.y },
+    })),
+    paramOverrides: { ...setup.paramOverrides },
     nextFoodUid: setup.nextFoodUid,
   };
 }
@@ -149,6 +165,44 @@ export function paintCells(setup: WorldSetup, kind: ObstacleKind, center: Vec2, 
       const dx = cx - center.x;
       const dy = cy - center.y;
       if (dx * dx + dy * dy > rSq) continue;
+      const index = row * grid.width + col;
+      if (grid.kind[index] === kind) continue;
+      grid.kind[index] = kind;
+      changed++;
+    }
+  }
+  return changed;
+}
+
+export interface CellBounds {
+  minCol: number;
+  maxCol: number;
+  minRow: number;
+  maxRow: number;
+}
+
+// Cells wholly covered by a world-space rectangle. The near edge picks its
+// cell with floor and the far edge is exclusive, so a rect aligned to cell
+// boundaries covers exactly the cells it spans. Shared by the preset painter
+// and applyBreach so a breach clears precisely the cells a wall painted.
+export function rectCellBounds(
+  grid: { width: number; height: number; cell: number },
+  rect: SetupRect,
+): CellBounds {
+  return {
+    minCol: Math.max(0, Math.floor(rect.pos.x / grid.cell)),
+    maxCol: Math.min(grid.width - 1, Math.floor((rect.pos.x + rect.size.x) / grid.cell) - 1),
+    minRow: Math.max(0, Math.floor(rect.pos.y / grid.cell)),
+    maxRow: Math.min(grid.height - 1, Math.floor((rect.pos.y + rect.size.y) / grid.cell) - 1),
+  };
+}
+
+export function paintRect(setup: WorldSetup, kind: ObstacleKind, rect: SetupRect): number {
+  const grid = setup.obstacles;
+  const { minCol, maxCol, minRow, maxRow } = rectCellBounds(grid, rect);
+  let changed = 0;
+  for (let row = minRow; row <= maxRow; row++) {
+    for (let col = minCol; col <= maxCol; col++) {
       const index = row * grid.width + col;
       if (grid.kind[index] === kind) continue;
       grid.kind[index] = kind;

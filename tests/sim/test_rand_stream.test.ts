@@ -12,7 +12,8 @@ test("rand streams: values are pinned and unique", () => {
     RandStream.SpawnRole,
     RandStream.SpeedJitter,
     RandStream.ContactTurn,
+    RandStream.HomingDrift,
   ];
-  assert.deepEqual(values, [1, 2, 3, 4, 5, 6, 7]);
-  assert.equal(new Set(values).size, 7);
+  assert.deepEqual(values, [1, 2, 3, 4, 5, 6, 7, 8]);
+  assert.equal(new Set(values).size, 8);
 });

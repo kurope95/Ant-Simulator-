@@ -9,7 +9,7 @@ A real-time 2D ant colony / stigmergy simulator inspired by Pezzza's Work "Ant S
 **Plans:** one per milestone, in `docs/superpowers/plans/`. Carry them out task by task, and don't run ahead into the next milestone.
 
 ## Status
-- Current milestone: **M1.5 (presentation overhaul) complete** (2026-10-25). **M2 (walls and adaptation) next, not started.** M1 was complete 2026-10-25. M1.5 has 192 passing tests, a clean `npm run build`, the six acceptance screenshots in `captures/`, and the interactive page runs. Bench baseline (plugged in, meadow preset, 1200 ticks, 200 ants): 2,674 ticks/s, 534,872 ant-updates/s, 0.373 ms average step, 0.465 ms p95. Pathfinding, collisions, starvation and birth tuning are a **separate later project**, not M2. Update this line as each milestone lands; the milestone list is in spec §15.
+- Current milestone: **M2 (navigation and foraging) complete** (2026-10-25). 228 tests, clean build. Bench (plugged in, meadow, 1200 ticks, 200 ants): 0.455 ms average step, 0.564 ms p95, against a 0.385 ms baseline — inside the +25% budget of 0.481 ms. Reach: first delivery 36.3 s at 1000 u, 84 deliveries in minute 3 at 1500 u; contest colony B 1 / 58 / 84 per minute; maze 4 deliveries in minutes 7–9 and 1016 in minutes 12–14 after the breach at 10:00. Boulder ants touching rock 0.0211 → 0.0007. **M1.6 (camera and looks) is planned next.** Ant-to-ant collisions stay in M4; birth tuning is unscheduled. Update this line as each milestone lands; the milestone list is in spec §15.
 
 ## This machine
 - **Windows 11 ARM64.** Snapdragon X Plus, 8 equal cores, 16 GB shared RAM, Adreno X1-45 GPU.
@@ -33,13 +33,15 @@ npm run build          # tsc -> dist/
 npm test               # builds, then node --test "dist/tests/**/*.test.js"
 npm run serve          # http://127.0.0.1:8080/ - open in Chrome
 npm run bench -- --preset meadow --ticks 1200
+npm run reach          # acceptance harness: deliveries per minute at four distances, contest, maze
 npm run screenshot -- --preset creek --ticks 1800 --zoom 2 --out captures\run.png
 npm run screenshot -- --interactive --screen home --ticks 0 --out captures\home.png
 ```
 
 - `npm run serve` is a tiny Node static server (`tools/serve.mjs`), no packages.
 - `npm run screenshot` runs Chrome headless against the served page and writes a PNG; `--interactive` uses the real screen flow, `--screen home|builder|run` picks the starting screen, and `--zoom` sets the camera scale.
-- The served page accepts `?screen=`, `?preset=`, `?seed=`, `?ticks=`, `?zoom=` and `?size=` for reproducible screenshots and links.
+- `npm run reach` prints the reach table (no flags): deliveries per minute at four distances, the two-colony contest, and the maze before/after its breach. Each maze line ends `pass` or `fail` against its target.
+- The served page accepts `?screen=`, `?preset=`, `?seed=`, `?ticks=`, `?zoom=`, `?size=` and `?breach=<tick>` for reproducible screenshots and links.
 - Everything the browser loads is compiled JavaScript under `dist/`; `index.html` and `styles.css` sit at the repo root.
 
 ## Architecture rules

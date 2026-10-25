@@ -38,20 +38,41 @@ test("terrain: mud moves an ant at 45% speed", () => {
   assert.ok(Math.abs(world.ants.posX[index] - 122.5) < 0.6, `x=${world.ants.posX[index]}`);
 });
 
-test("collision: an ant stops outside a rock wall and is never left inside it", () => {
+test("collision: an ant goes around a rock wall without touching it", () => {
   const { world, params } = groundWorld((s) => paintCells(s, ObstacleKind.Rock, { x: 160, y: 50 }, 16));
   const index = spawn(world, 100, 50);
-  for (let i = 0; i < 120; i++) stepWorld(world);
-  let wallX = Infinity;
-  for (let cell = 0; cell < world.obstacles.kind.length; cell++) {
-    if (world.obstacles.kind[cell] !== ObstacleKind.Rock) continue;
-    const row = Math.floor(cell / world.obstacles.width);
-    const col = cell % world.obstacles.width;
-    if (50 >= row * 4 && 50 < (row + 1) * 4) wallX = Math.min(wallX, col * 4);
+  const grid = world.obstacles;
+  let rockMaxX = -Infinity;
+  for (let cell = 0; cell < grid.kind.length; cell++) {
+    if (grid.kind[cell] === ObstacleKind.Rock) {
+      rockMaxX = Math.max(rockMaxX, ((cell % grid.width) + 1) * grid.cell);
+    }
   }
-  assert.ok(Number.isFinite(wallX));
-  assert.ok(world.ants.posX[index] + params.antRadius <= wallX + 0.01, `x=${world.ants.posX[index]}`);
-  assert.equal(isSolidAt(world.obstacles, { x: world.ants.posX[index], y: 50 }), false);
+  function clearance(x: number, y: number): number {
+    let best = Infinity;
+    const col0 = Math.floor(x / grid.cell);
+    const row0 = Math.floor(y / grid.cell);
+    for (let row = row0 - 2; row <= row0 + 2; row++) {
+      for (let col = col0 - 2; col <= col0 + 2; col++) {
+        if (col < 0 || row < 0 || col >= grid.width || row >= grid.height) continue;
+        if (grid.kind[row * grid.width + col] !== ObstacleKind.Rock) continue;
+        const nearestX = Math.max(col * grid.cell, Math.min(x, (col + 1) * grid.cell));
+        const nearestY = Math.max(row * grid.cell, Math.min(y, (row + 1) * grid.cell));
+        best = Math.min(best, Math.hypot(x - nearestX, y - nearestY));
+      }
+    }
+    return best;
+  }
+  for (let i = 0; i < 120; i++) {
+    stepWorld(world);
+    const gap = clearance(world.ants.posX[index], world.ants.posY[index]);
+    assert.ok(gap >= params.antRadius - 1e-6, `overlap ${gap} at tick ${i}`);
+  }
+  assert.ok(
+    world.ants.posX[index] > rockMaxX + params.antRadius,
+    `ant never got past the rock: x=${world.ants.posX[index]}`,
+  );
+  assert.equal(isSolidAt(world.obstacles, { x: world.ants.posX[index], y: world.ants.posY[index] }), false);
 });
 
 test("sight: rock blocks direct sight, open ground does not", () => {

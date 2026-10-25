@@ -32,7 +32,10 @@ export class Ants {
   degradeTimer: Float32Array;
   lastMarkerCell: Int32Array;
   wanderOffset: Float32Array;
+  wanderHeading: Float32Array;
   wanderTimer: Float32Array;
+  homeErrX: Float32Array;
+  homeErrY: Float32Array;
 
   private count = 0;
   private capacity: number;
@@ -61,7 +64,10 @@ export class Ants {
     this.degradeTimer = new Float32Array(capacity);
     this.lastMarkerCell = new Int32Array(capacity);
     this.wanderOffset = new Float32Array(capacity);
+    this.wanderHeading = new Float32Array(capacity);
     this.wanderTimer = new Float32Array(capacity);
+    this.homeErrX = new Float32Array(capacity);
+    this.homeErrY = new Float32Array(capacity);
   }
 
   size(): number {
@@ -92,7 +98,10 @@ export class Ants {
     this.degradeTimer[i] = 0;
     this.lastMarkerCell[i] = -1;
     this.wanderOffset[i] = 0;
+    this.wanderHeading[i] = a.heading ?? 0;
     this.wanderTimer[i] = 0;
+    this.homeErrX[i] = 0;
+    this.homeErrY[i] = 0;
     this.indexByUid.set(uid, i);
     this.count += 1;
     return i;
@@ -126,7 +135,10 @@ export class Ants {
       this.degradeTimer[index] = this.degradeTimer[last];
       this.lastMarkerCell[index] = this.lastMarkerCell[last];
       this.wanderOffset[index] = this.wanderOffset[last];
+      this.wanderHeading[index] = this.wanderHeading[last];
       this.wanderTimer[index] = this.wanderTimer[last];
+      this.homeErrX[index] = this.homeErrX[last];
+      this.homeErrY[index] = this.homeErrY[last];
       this.indexByUid.set(this.uid[index], index);
     }
     this.indexByUid.delete(removedUid);
@@ -162,7 +174,10 @@ export class Ants {
     this.degradeTimer = grow(this.degradeTimer, next);
     this.lastMarkerCell = grow(this.lastMarkerCell, next);
     this.wanderOffset = grow(this.wanderOffset, next);
+    this.wanderHeading = grow(this.wanderHeading, next);
     this.wanderTimer = grow(this.wanderTimer, next);
+    this.homeErrX = grow(this.homeErrX, next);
+    this.homeErrY = grow(this.homeErrY, next);
     this.capacity = next;
   }
 }

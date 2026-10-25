@@ -7,34 +7,39 @@ export enum MarkerChannel {
   ToFood,
 }
 
+// One layer per colony: layer `c` starts at c * (width * height), so every
+// colony's trail survives its rivals' trails on the same cell.
 export interface MarkerGrid {
   width: number;
   height: number;
   cell: number;
-  owner: Int8Array;
+  colonies: number;
+  owner: Int8Array; // derived by decayMarkers: the dominant colony, for drawing only
   toHome: Float32Array;
   toFood: Float32Array;
-  resize(worldSize: Vec2, cellSize: number): void;
+  resize(worldSize: Vec2, cellSize: number, colonies?: number): void;
   cellIndex(pos: Vec2): number;
 }
 
-export function makeMarkerGrid(worldSize: Vec2, cellSize: number): MarkerGrid {
+export function makeMarkerGrid(worldSize: Vec2, cellSize: number, colonies = 1): MarkerGrid {
   const grid: MarkerGrid = {
     width: 0,
     height: 0,
     cell: cellSize,
+    colonies: 1,
     owner: new Int8Array(0),
     toHome: new Float32Array(0),
     toFood: new Float32Array(0),
-    resize(size: Vec2, cell: number): void {
+    resize(size: Vec2, cell: number, layers = 1): void {
       this.cell = cell;
       this.width = Math.ceil(size.x / cell);
       this.height = Math.ceil(size.y / cell);
+      this.colonies = Math.max(1, Math.floor(layers));
       const cells = this.width * this.height;
       this.owner = new Int8Array(cells);
       this.owner.fill(kNoOwner);
-      this.toHome = new Float32Array(cells);
-      this.toFood = new Float32Array(cells);
+      this.toHome = new Float32Array(cells * this.colonies);
+      this.toFood = new Float32Array(cells * this.colonies);
     },
     cellIndex(pos: Vec2): number {
       if (pos.x < 0 || pos.y < 0 || pos.x >= this.width * this.cell || pos.y >= this.height * this.cell) {
@@ -45,8 +50,18 @@ export function makeMarkerGrid(worldSize: Vec2, cellSize: number): MarkerGrid {
       return row * this.width + col;
     },
   };
-  grid.resize(worldSize, cellSize);
+  grid.resize(worldSize, cellSize, colonies);
   return grid;
+}
+
+export function homeAt(grid: MarkerGrid, colony: number, cell: number): number {
+  if (cell < 0 || colony < 0 || colony >= grid.colonies) return 0;
+  return grid.toHome[colony * grid.width * grid.height + cell];
+}
+
+export function foodAt(grid: MarkerGrid, colony: number, cell: number): number {
+  if (cell < 0 || colony < 0 || colony >= grid.colonies) return 0;
+  return grid.toFood[colony * grid.width * grid.height + cell];
 }
 
 export function emissionStrength(timeSinceAnchor: number, params: SimParams): number {
@@ -61,17 +76,22 @@ export function deposit(
   strength: number,
   params: SimParams,
 ): void {
-  const owner = grid.owner[cell];
-  if (owner !== colony && owner !== kNoOwner) {
-    if (!params.territoryRule) return;
-    const erasure = strength * params.foreignErasureFactor;
-    grid.toHome[cell] = Math.max(0, grid.toHome[cell] - erasure);
-    grid.toFood[cell] = Math.max(0, grid.toFood[cell] - erasure);
-    if (grid.toHome[cell] > 0 || grid.toFood[cell] > 0) return;
+  if (colony < 0 || colony >= grid.colonies) return;
+  const cells = grid.width * grid.height;
+  if (params.territoryRule) {
+    // Territory wears rival layers down at the deposit cell, but a rival's
+    // trail never stops the depositor from laying its own.
+    const keep = 1 - strength * params.foreignErasureFactor;
+    for (let other = 0; other < grid.colonies; other++) {
+      if (other === colony) continue;
+      const index = other * cells + cell;
+      grid.toHome[index] *= keep;
+      grid.toFood[index] *= keep;
+    }
   }
-  grid.owner[cell] = colony;
   const values = channel === MarkerChannel.ToHome ? grid.toHome : grid.toFood;
-  values[cell] = Math.max(values[cell], strength);
+  const index = colony * cells + cell;
+  values[index] = Math.max(values[index], strength);
 }
 
 export function degrade(
@@ -81,19 +101,46 @@ export function degrade(
   channel: MarkerChannel,
   factor: number,
 ): void {
-  if (grid.owner[cell] !== colony) return;
+  if (colony < 0 || colony >= grid.colonies) return;
   const values = channel === MarkerChannel.ToHome ? grid.toHome : grid.toFood;
-  values[cell] *= factor;
+  const index = colony * grid.width * grid.height + cell;
+  values[index] *= factor;
 }
 
 export function decayMarkers(grid: MarkerGrid, factor: number, eps: number): void {
-  for (let i = 0; i < grid.owner.length; i++) {
-    let home = grid.toHome[i] * factor;
-    let food = grid.toFood[i] * factor;
-    if (home < eps) home = 0;
-    if (food < eps) food = 0;
-    grid.toHome[i] = home;
-    grid.toFood[i] = food;
-    if (home === 0 && food === 0) grid.owner[i] = kNoOwner;
+  const cells = grid.width * grid.height;
+  const { colonies, owner, toHome, toFood } = grid;
+  if (colonies === 1) {
+    // The overwhelmingly common case: one layer, so the argmax is trivial and
+    // the loop stays one pass over the cells.
+    for (let cell = 0; cell < cells; cell++) {
+      let home = toHome[cell] * factor;
+      let food = toFood[cell] * factor;
+      if (home < eps) home = 0;
+      if (food < eps) food = 0;
+      toHome[cell] = home;
+      toFood[cell] = food;
+      owner[cell] = home === 0 && food === 0 ? kNoOwner : 0;
+    }
+    return;
+  }
+  for (let cell = 0; cell < cells; cell++) {
+    let best = 0;
+    let bestColony = kNoOwner;
+    for (let colony = 0; colony < colonies; colony++) {
+      const index = colony * cells + cell;
+      let home = toHome[index] * factor;
+      let food = toFood[index] * factor;
+      if (home < eps) home = 0;
+      if (food < eps) food = 0;
+      toHome[index] = home;
+      toFood[index] = food;
+      const strongest = home > food ? home : food;
+      if (strongest > best) {
+        best = strongest;
+        bestColony = colony;
+      }
+    }
+    owner[cell] = bestColony;
   }
 }

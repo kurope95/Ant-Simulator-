@@ -1,11 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { worldChecksum } from "../../src/sim/checksum.js";
-import { addColony, addFood, FoodKind, makeSetup, type WorldSetup } from "../../src/sim/setup.js";
-import { worldFromSetup } from "../../src/sim/setup_apply.js";
+import { lineOfSight, obstacleGridFromCells } from "../../src/sim/obstacles.js";
 import { defaultParams } from "../../src/sim/params.js";
+import { loadPreset } from "../../src/sim/presets.js";
+import { addColony, addFood, FoodKind, makeSetup, type WorldSetup } from "../../src/sim/setup.js";
+import { paramsForSetup, worldFromSetup } from "../../src/sim/setup_apply.js";
 import { AntState } from "../../src/sim/types.js";
-import { stepWorld } from "../../src/sim/world.js";
+import { applyBreach, stepWorld } from "../../src/sim/world.js";
 
 function twoColonySetup(): WorldSetup {
   const setup = makeSetup({ x: 400, y: 300 }, 7, "test");
@@ -56,4 +58,39 @@ test("setup apply: same setup and seed are deterministic after 600 ticks", () =>
   assert.equal(worldChecksum(a), worldChecksum(b));
   b.colonies[0].color = 3;
   assert.notEqual(worldChecksum(a), worldChecksum(b));
+});
+
+test("setup apply: param overrides reach the world and leave the rest alone", () => {
+  const setup = twoColonySetup();
+  setup.paramOverrides = { energyBurn: 0.3 };
+  const world = worldFromSetup(setup, defaultParams());
+  assert.equal(world.params.energyBurn, 0.3);
+  assert.equal(world.params.antSpeed, defaultParams().antSpeed);
+});
+
+test("setup apply: a scenario's defaults keep its own overrides", () => {
+  const maze = loadPreset("maze", 1)!;
+  const reset = paramsForSetup(maze, defaultParams());
+  assert.equal(reset.energyBurn, 0.2);
+  assert.equal(reset.antSpeed, defaultParams().antSpeed);
+
+  const meadow = loadPreset("meadow", 1)!;
+  assert.equal(paramsForSetup(meadow, defaultParams()).energyBurn, defaultParams().energyBurn);
+});
+
+test("maze: line of sight is blocked before the breach", () => {
+  const setup = loadPreset("maze", 1)!;
+  const world = worldFromSetup(setup, defaultParams());
+  assert.equal(lineOfSight(world.obstacles, world.colonies[0].nest, world.food.items[0].pos), false);
+  assert.equal(world.params.energyBurn, 0.2);
+});
+
+test("maze: applyBreach clears the shortcut", () => {
+  const setup = loadPreset("maze", 1)!;
+  const world = worldFromSetup(setup, defaultParams());
+  applyBreach(world, setup.breach);
+  assert.equal(lineOfSight(world.obstacles, world.colonies[0].nest, world.food.items[0].pos), true);
+  const rebuilt = obstacleGridFromCells(world.obstacles);
+  assert.deepEqual(world.obstacles.border, rebuilt.border);
+  assert.deepEqual(world.obstacles.nearSolid, rebuilt.nearSolid);
 });

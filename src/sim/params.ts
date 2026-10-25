@@ -17,6 +17,7 @@ export interface SimParams {
   explorerSamples: number;
   fallbackRays: number;
   fallbackRange: number;
+  lookAhead: number;
   explorerRatio: number;
   wanderIntervalFollower: number;
   wanderIntervalExplorer: number;
@@ -39,6 +40,8 @@ export interface SimParams {
   energyMax: number;
   energyBurn: number;
   exhaustedAt: number;
+  homingEnabled: boolean;
+  homingDrift: number;
   pushOnSignal: number;
   mass: number;
   massCarrying: number;
@@ -80,9 +83,10 @@ export function defaultParams(): SimParams {
     sensorRadius: 32,
     sensorHalfFovDeg: 60,
     followerSamples: 25,
-    explorerSamples: 4,
+    explorerSamples: 6,
     fallbackRays: 12,
     fallbackRange: 48,
+    lookAhead: 20,
     explorerRatio: 0.10,
     wanderIntervalFollower: 0.4,
     wanderIntervalExplorer: 0.25,
@@ -90,7 +94,7 @@ export function defaultParams(): SimParams {
     wanderAngleExplorer: 1.0,
     markerDropDist: 8,
     emissionDecay: 0.11,
-    markerHalfLife: 7.7,
+    markerHalfLife: 15,
     markerEps: 1e-4,
     markerDetectMin: 1e-3,
     territoryRule: true,
@@ -103,8 +107,10 @@ export function defaultParams(): SimParams {
     crowdRadiusFactor: 3,
     zoneMargin: 16,
     energyMax: 100,
-    energyBurn: 1.0,
-    exhaustedAt: 30,
+    energyBurn: 0.5,
+    exhaustedAt: 60,
+    homingEnabled: true,
+    homingDrift: 0.04,
     pushOnSignal: 0.4,
     mass: 1,
     massCarrying: 3,

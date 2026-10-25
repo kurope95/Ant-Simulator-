@@ -1,12 +1,20 @@
 import { wrapAngle } from "../core/math.js";
 import { randRange, randUnit } from "../core/rng.js";
 import { fromAngle } from "../core/vec2.js";
+import { slideHeadingAlongNormal } from "./collide.js";
 import { nestRadius, type Colony } from "./colony.js";
 import { ContactKind, makeChunkEvents, type ChunkEvents } from "./events.js";
-import { degrade, deposit, emissionStrength, MarkerChannel } from "./marker_grid.js";
-import { speedFactorAt } from "./obstacles.js";
-import { directSightHeading, explorerPattern, followerPattern, senseMarkers } from "./sensing.js";
+import { degrade, deposit, emissionStrength, foodAt, homeAt, MarkerChannel } from "./marker_grid.js";
+import { isSolidAt, speedFactorAt, freeDistance } from "./obstacles.js";
+import {
+  chooseFallback,
+  directSightHeading,
+  explorerPattern,
+  followerPattern,
+  senseMarkers,
+} from "./sensing.js";
 import { turnToward, updateWander } from "./steering.js";
+import { evaluateStuck, inRestZone } from "./stuck.js";
 import { AntRole, AntState, RandStream } from "./types.js";
 import type { World } from "./world.js";
 
@@ -20,21 +28,75 @@ function depositChannel(state: number): MarkerChannel | null {
   return null;
 }
 
-function chooseHeading(world: World, ant: number): { heading: number; bestFoodSignal: number } {
+interface ChosenHeading {
+  heading: number;
+  bestFoodSignal: number;
+  fromSight: boolean;
+  fromMarkers: boolean;
+  fromHoming: boolean;
+}
+
+function chooseHeading(world: World, ant: number): ChosenHeading {
   const ants = world.ants;
   const state = ants.state[ant];
   const sight = directSightHeading(world, ant);
   if (sight !== null) {
-    return { heading: sight, bestFoodSignal: state === AntState.Foraging ? 1 : 0 };
+    return {
+      heading: sight,
+      bestFoodSignal: state === AntState.Foraging ? 1 : 0,
+      fromSight: true,
+      fromMarkers: false,
+      fromHoming: false,
+    };
   }
   const usesExplorerPattern =
     ants.role[ant] === AntRole.Explorer && state !== AntState.ReturningExhausted;
   const pattern = usesExplorerPattern ? explorerPattern(world.params) : followerPattern(world.params);
   const sensed = senseMarkers(world, ant, senseChannel(state), pattern);
+  if (!sensed.found && world.params.homingEnabled && state !== AntState.Foraging) {
+    // Nothing to see and no trail: a returning ant trusts its own path
+    // estimate of where the nest is (spec §5.7).
+    const colony = world.colonies[ants.colony[ant]];
+    if (colony !== undefined) {
+      return {
+        heading: Math.atan2(
+          colony.nest.y + ants.homeErrY[ant] - ants.posY[ant],
+          colony.nest.x + ants.homeErrX[ant] - ants.posX[ant],
+        ),
+        bestFoodSignal: sensed.bestFoodSignal,
+        fromSight: false,
+        fromMarkers: false,
+        fromHoming: true,
+      };
+    }
+  }
   return {
     heading: sensed.found ? sensed.targetHeading : ants.heading[ant],
     bestFoodSignal: sensed.bestFoodSignal,
+    fromSight: false,
+    fromMarkers: sensed.found,
+    fromHoming: false,
   };
+}
+
+// Returns a free heading for an ant whose `desired` heading is blocked. The ant
+// turns one way only — its own, taken from its uid, so it never flips sides —
+// and it searches from the heading it already holds, not from `desired`.
+// Searching from the current heading is what makes it follow the wall: search
+// from `desired` and the answer jumps back and forth as the target moves, which
+// leaves the ant pressed against the wall instead of getting round it. With no
+// free heading inside half a turn, it reverses.
+function steerAroundWalls(world: World, ant: number, desired: number): number {
+  const p = { x: world.ants.posX[ant], y: world.ants.posY[ant] };
+  const look = world.params.lookAhead;
+  if (freeDistance(world.obstacles, p, desired, look) >= look) return desired;
+  const side = (world.ants.uid[ant] & 1) === 0 ? 1 : -1;
+  const current = world.ants.heading[ant];
+  for (let k = 0; k <= 12; k++) {
+    const candidate = current + side * ((k * Math.PI) / 12);
+    if (freeDistance(world.obstacles, p, candidate, look) >= look) return candidate;
+  }
+  return desired + Math.PI;
 }
 
 export function thinkChunk(world: World, begin: number, end: number, out: ChunkEvents): void {
@@ -47,6 +109,44 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
     ants.timeSinceAnchor[ant] += dt;
     ants.timeSinceLastMarker[ant] += dt;
     ants.degradeTimer[ant] = Math.max(0, ants.degradeTimer[ant] - dt);
+
+    // The crowd count and zone scan only matter once the timer has expired;
+    // doing them every tick for every ant is most of the hash query cost.
+    if (ants.timeSinceLastMarker[ant] > params.stuckTimeout) {
+      const nearby = world.spatialHash.countWithin(
+        ants.posX[ant],
+        ants.posY[ant],
+        params.crowdRadiusFactor * params.antRadius,
+        ants.posX,
+        ants.posY,
+        ant,
+      );
+      const stuck = evaluateStuck(
+        ants.timeSinceLastMarker[ant],
+        inRestZone(world, ant),
+        nearby,
+        params,
+      );
+      if (stuck.stuck) {
+        ants.heading[ant] = wrapAngle(
+          ants.heading[ant] +
+            Math.PI +
+            randRange(
+              world.seed,
+              ants.uid[ant],
+              world.tick,
+              RandStream.StuckTurn,
+              -params.stuckTurnJitter,
+              params.stuckTurnJitter,
+            ),
+        );
+        ants.wanderHeading[ant] = ants.heading[ant];
+        ants.timeSinceLastMarker[ant] = 0;
+        ants.dropX[ant] = ants.posX[ant];
+        ants.dropY[ant] = ants.posY[ant];
+        if (stuck.degrade) ants.degradeTimer[ant] = params.degradeTime;
+      }
+    }
 
     let chosen = chooseHeading(world, ant);
     let desired = chosen.heading;
@@ -61,7 +161,21 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
       desired = chosen.heading;
     }
 
-    if (updateWander(world, ant, dt)) desired += ants.wanderOffset[ant];
+    const pickedWander = updateWander(world, ant, dt);
+    let clearAhead = false;
+    if (!chosen.fromSight && !chosen.fromHoming) {
+      if (chosen.fromMarkers) {
+        // A redraw nudges a marker-following ant; between redraws the marker wins.
+        if (pickedWander) desired += ants.wanderOffset[ant];
+      } else {
+        const fallback = chooseFallback(world, ant);
+        desired = fallback.heading;
+        // The fallback already proved the look-ahead is free, which is exactly
+        // what steerAroundWalls would check, so it can skip the probe.
+        clearAhead = fallback.clearAhead;
+      }
+    }
+    if (!clearAhead) desired = steerAroundWalls(world, ant, desired);
 
     ants.heading[ant] = turnToward(ants.heading[ant], desired, params.turnRate * dt);
     const direction = fromAngle(ants.heading[ant]);
@@ -69,7 +183,10 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
     ants.velY[ant] = ants.speed[ant] * direction.y;
     ants.prevX[ant] = ants.posX[ant];
     ants.prevY[ant] = ants.posY[ant];
-    const terrain = speedFactorAt(world.obstacles, { x: ants.posX[ant], y: ants.posY[ant] });
+    // A centre inside a solid cell must still be able to move, or the ant
+    // freezes there forever; collision resolution handles the walls.
+    const factor = speedFactorAt(world.obstacles, { x: ants.posX[ant], y: ants.posY[ant] });
+    const terrain = factor === 0 ? 1 : factor;
     ants.posX[ant] += ants.velX[ant] * dt * terrain;
     ants.posY[ant] += ants.velY[ant] * dt * terrain;
 
@@ -91,12 +208,16 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
       const cell = world.markers.cellIndex({ x: ants.posX[ant], y: ants.posY[ant] });
       if (cell !== ants.lastMarkerCell[ant]) {
         ants.lastMarkerCell[ant] = cell;
-        if (cell >= 0 && world.markers.owner[cell] === ants.colony[ant]) {
-          out.degrades.push({
-            cell,
-            colony: ants.colony[ant],
-            channel: senseChannel(ants.state[ant]),
-          });
+        if (cell >= 0) {
+          const channel = senseChannel(ants.state[ant]);
+          const colony = ants.colony[ant];
+          // Only cells that still hold this colony's trail need erasing; the
+          // check keeps the event list from filling with no-ops.
+          const own =
+            channel === MarkerChannel.ToHome
+              ? homeAt(world.markers, colony, cell)
+              : foodAt(world.markers, colony, cell);
+          if (own > 0) out.degrades.push({ cell, colony, channel });
         }
       }
     }
@@ -141,13 +262,22 @@ export function spawnAtNest(world: World, colony: Colony): number {
       1 + params.speedJitter,
     );
   const radius = nestRadius(colony, params);
-  const direction = fromAngle(angle);
+  // Walk the spawn ring in golden-angle steps: a boulder or pond overlapping
+  // the nest blocks some directions, and the samples that follow visit the
+  // rest of the ring evenly. If all 16 are solid, use the nest centre.
+  let pos = { x: colony.nest.x, y: colony.nest.y };
+  for (let k = 0; k < 16; k++) {
+    const a = angle + k * 2.39996;
+    const x = colony.nest.x + Math.cos(a) * radius;
+    const y = colony.nest.y + Math.sin(a) * radius;
+    if (!isSolidAt(world.obstacles, { x, y })) {
+      pos = { x, y };
+      break;
+    }
+  }
   const index = world.ants.spawn(
     {
-      pos: {
-        x: colony.nest.x + direction.x * radius,
-        y: colony.nest.y + direction.y * radius,
-      },
+      pos,
       heading: angle,
       colony: colony.id,
       role,
@@ -197,6 +327,7 @@ export function applyEvents(world: World, events: readonly ChunkEvents[]): void 
           ants.mass[ant] = params.massCarrying;
           ants.energy[ant] = params.energyMax;
           ants.heading[ant] = wrapAngle(ants.heading[ant] + Math.PI);
+          ants.wanderHeading[ant] = ants.heading[ant];
           ants.timeSinceAnchor[ant] = 0;
           ants.dropX[ant] = ants.posX[ant];
           ants.dropY[ant] = ants.posY[ant];
@@ -205,6 +336,8 @@ export function applyEvents(world: World, events: readonly ChunkEvents[]): void 
       } else {
         const colony = world.colonies[contact.target];
         if (colony === undefined) continue;
+        ants.homeErrX[ant] = 0;
+        ants.homeErrY[ant] = 0;
         const state = ants.state[ant];
         if (state === AntState.ReturningFood) {
           colony.foodPool += 1;
@@ -219,6 +352,7 @@ export function applyEvents(world: World, events: readonly ChunkEvents[]): void 
         ants.timeSinceAnchor[ant] = 0;
         if (state === AntState.ReturningFood || state === AntState.ReturningExhausted) {
           ants.heading[ant] = wrapAngle(ants.heading[ant] + Math.PI);
+          ants.wanderHeading[ant] = ants.heading[ant];
           ants.dropX[ant] = ants.posX[ant];
           ants.dropY[ant] = ants.posY[ant];
           ants.timeSinceLastMarker[ant] = 0;
@@ -242,14 +376,25 @@ export function clampToWorld(world: World): void {
   const maxX = world.size.x - radius;
   const maxY = world.size.y - radius;
   for (let index = 0; index < ants.size(); index++) {
-    if (ants.posX[index] < radius) ants.posX[index] = radius;
-    else if (ants.posX[index] > maxX) ants.posX[index] = maxX;
-    if (ants.posY[index] < radius) ants.posY[index] = radius;
-    else if (ants.posY[index] > maxY) ants.posY[index] = maxY;
+    if (ants.posX[index] < radius) {
+      ants.posX[index] = radius;
+      slideHeadingAlongNormal(ants, index, 1, 0);
+    } else if (ants.posX[index] > maxX) {
+      ants.posX[index] = maxX;
+      slideHeadingAlongNormal(ants, index, -1, 0);
+    }
+    if (ants.posY[index] < radius) {
+      ants.posY[index] = radius;
+      slideHeadingAlongNormal(ants, index, 0, 1);
+    } else if (ants.posY[index] > maxY) {
+      ants.posY[index] = maxY;
+      slideHeadingAlongNormal(ants, index, 0, -1);
+    }
   }
 }
 
-export function removeDead(world: World): void {  const ants = world.ants;
+export function removeDead(world: World): void {
+  const ants = world.ants;
   for (let index = ants.size() - 1; index >= 0; index--) {
     if (ants.energy[index] > 0) continue;
     const colony = world.colonies[ants.colony[index]];

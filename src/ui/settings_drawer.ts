@@ -17,6 +17,7 @@ export interface SettingsHooks {
   onGrid(): void;
   onParam(key: ParamKey, value: number): void;
   onResetParams(): void;
+  onHoming(): void;
   onFit(): void;
 }
 
@@ -64,6 +65,7 @@ export class SettingsDrawer {
   private readonly controls: ControlParts[] = [];
   private readonly antsSwitch: HTMLButtonElement;
   private readonly gridSwitch: HTMLButtonElement;
+  private readonly homingSwitch: HTMLButtonElement;
   private readonly trailButtons = new Map<HeatmapMode, HTMLButtonElement>();
   private lastView: ViewSettings | null = null;
 
@@ -109,6 +111,17 @@ export class SettingsDrawer {
     trails.append(trailHead, trailRow);
     view.append(switches, trails);
 
+    const rules = el("section", "drawer__section");
+    rules.append(el("h3", "drawer__title", "Rules"));
+    this.homingSwitch = this.makeSwitch(
+      "Homing memory",
+      "Ants steer home from their own path estimate when no trail is in range",
+      () => hooks.onHoming(),
+    );
+    const ruleSwitches = el("div", "drawer__switches");
+    ruleSwitches.append(this.homingSwitch);
+    rules.append(ruleSwitches);
+
     const groups = new Map<ParamGroup, { section: HTMLElement; grid: HTMLElement }>();
     for (const group of kGroups) {
       const section = el("section", "drawer__section");
@@ -148,6 +161,7 @@ export class SettingsDrawer {
     card.append(
       head,
       view,
+      rules,
       ...[...groups.values()].map((group) => group.section),
       actions,
       shortcuts,
@@ -166,6 +180,7 @@ export class SettingsDrawer {
       control.value.textContent = formatSpecValue(control.spec, Number.isFinite(display) ? display : 0);
       control.input.style.setProperty("--fill", this.fillPercent(control));
     }
+    this.homingSwitch.setAttribute("aria-checked", String(this.params.homingEnabled));
     if (this.lastView !== null) {
       this.antsSwitch.setAttribute("aria-checked", String(this.lastView.showAnts));
       this.gridSwitch.setAttribute("aria-checked", String(this.lastView.showGrid));
@@ -194,7 +209,7 @@ export class SettingsDrawer {
     node.append(el("span", "switch-row__label", label), track);
     node.addEventListener("click", () => {
       onClick();
-      if (this.lastView !== null) this.update(this.lastView);
+      this.update(this.lastView ?? undefined);
     });
     return node;
   }

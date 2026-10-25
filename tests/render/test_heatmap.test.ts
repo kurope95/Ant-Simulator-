@@ -26,6 +26,15 @@ test("heatmap: dual-channel sums both channels and clamps them to 255", () => {
   assert.deepEqual([...out], [255, 255, 255, 158]);
 });
 
+test("heatmap: dual-channel sums the same channel over colonies", () => {
+  const grid = makeMarkerGrid({ x: 8, y: 8 }, 8, 2);
+  grid.toHome[0] = 0.5;
+  grid.toHome[1] = 0.4;
+  const out = new Uint8Array(4);
+  fillHeatmapRgba(grid, HeatmapMode.DualChannel, meadowTheme(), out);
+  assert.deepEqual([...out], [71, 176, 158, 142]);
+});
+
 test("heatmap: off writes transparent pixels", () => {
   const grid = makeMarkerGrid({ x: 8, y: 8 }, 8);
   grid.owner[0] = 0;
@@ -36,10 +45,10 @@ test("heatmap: off writes transparent pixels", () => {
 });
 
 test("heatmap: colonies mode uses the palette colour and the stronger channel", () => {
-  const grid = makeMarkerGrid({ x: 8, y: 8 }, 8);
+  const grid = makeMarkerGrid({ x: 8, y: 8 }, 8, 3);
   grid.owner[0] = 2;
-  grid.toFood[0] = 0.5;
-  grid.toHome[0] = 0;
+  grid.toFood[2] = 0.5;
+  grid.toHome[2] = 0;
   const out = new Uint8Array(4);
   fillHeatmapRgba(grid, HeatmapMode.ColonyColor, meadowTheme(), out);
   assert.deepEqual([...out], [0x4c, 0x8d, 0xde, 79]);
