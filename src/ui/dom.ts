@@ -13,7 +13,14 @@ export type IconName =
   | "chevron"
   | "palette"
   | "colonies"
-  | "settings";
+  | "settings"
+  | "select"
+  | "food"
+  | "rock"
+  | "water"
+  | "sand"
+  | "mud"
+  | "erase";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "icon";
 
@@ -60,6 +67,29 @@ const kIcons: Record<IconName, string> = {
   settings:
     '<path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1"/>' +
     '<circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17" r="2"/>',
+  select: '<path d="M5 3.5 18.5 12l-6 1.5-3 6Z"/>',
+  food:
+    '<path d="M12 3.5c3.5 4 6 7.1 6 10a6 6 0 0 1-12 0c0-2.9 2.5-6 6-10Z"/>' +
+    '<path d="M9 13.5c1 .9 2 .9 3 0"/>',
+  rock:
+    '<path d="M4.5 15 7 7.5l5-2 5.2 3L20 15l-3 4.5H7.5Z"/>' +
+    '<path d="m7.2 8 4 5 5.8-4.5M11.2 13l-1 6.5"/>',
+  water:
+    '<path d="M12 3.5s6 6.3 6 10.2a6 6 0 0 1-12 0C6 9.8 12 3.5 12 3.5Z"/>' +
+    '<path d="M8.5 14.5c1.2-1 2.3-1 3.5 0s2.3 1 3.5 0"/>',
+  sand:
+    '<path d="M3 16.5c3-4.2 6-4.2 9 0s6 4.2 9 0"/>' +
+    '<path d="M3 20.5c3-4.2 6-4.2 9 0s6 4.2 9 0"/>' +
+    '<circle cx="8" cy="7" r="0.9" fill="currentColor" stroke="none"/>' +
+    '<circle cx="13" cy="5.5" r="0.9" fill="currentColor" stroke="none"/>' +
+    '<circle cx="17" cy="8" r="0.9" fill="currentColor" stroke="none"/>',
+  mud:
+    '<path d="M4 13.5c1.8-3.4 5-5 8.5-4.5s6.5.6 7.5 3.2c1 2.8-1.8 6.8-6 7.3s-8.5-.5-10-6Z"/>' +
+    '<circle cx="10" cy="13" r="0.9" fill="currentColor" stroke="none"/>' +
+    '<circle cx="15" cy="15" r="0.9" fill="currentColor" stroke="none"/>',
+  erase:
+    '<path d="m4.5 14.5 7-8.5a2 2 0 0 1 3-.2l3.7 3a2 2 0 0 1 .2 3l-7 8.2H6.5l-2-2a2 2 0 0 1 0-3.5Z"/>' +
+    '<path d="m10 9 5.5 4.5"/>',
 };
 
 export function el<K extends keyof HTMLElementTagNameMap>(
