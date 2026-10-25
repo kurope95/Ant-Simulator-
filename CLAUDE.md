@@ -28,7 +28,7 @@ A real-time 2D ant colony / stigmergy simulator inspired by Pezzza's Work "Ant S
 ```powershell
 npm install            # once: typescript + @types/node, no native binaries
 npm run build          # tsc -> dist/
-npm test               # builds, then node --test dist/tests
+npm test               # builds, then node --test "dist/tests/**/*.test.js"
 npm run serve          # http://127.0.0.1:8080/ - open in Chrome
 npm run bench -- --scenario sandbox --ticks 1200
 npm run screenshot -- --ticks 30 --out captures\m0.png

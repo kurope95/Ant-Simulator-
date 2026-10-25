@@ -1,13 +1,4 @@
-# Build output
-build/
-out/
-
-# IDE / tool state
-.vs/
-imgui.ini
-.vscode/
-*.user
-CMakeUserPresets.json
-
-# Headless screenshots and benchmark logs
+node_modules/
+dist/
 captures/
+imgui.ini

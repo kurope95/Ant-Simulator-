@@ -1,0 +1,11 @@
+html, body { margin: 0; height: 100%; overflow: hidden; background: #2b2b2b; }
+body { font-family: "Segoe UI", system-ui, sans-serif; }
+#view { display: block; width: 100vw; height: 100vh; }
+#ui { position: fixed; top: 12px; left: 12px; color: #e8dcc2; pointer-events: none; }
+#log { position: fixed; left: 12px; bottom: 12px; color: #e8dcc2;
+       font: 13px/1.45 Consolas, monospace; white-space: pre; }
+.panel { background: rgba(20, 20, 20, 0.82); border: 1px solid #8c7a5b;
+         border-radius: 6px; padding: 10px 14px; min-width: 330px; }
+.panel h2 { margin: 0 0 6px; font-size: 14px; font-weight: 600; color: #f2c12e; }
+.panel .row { font: 13px/1.5 Consolas, monospace; }
+.panel .hint { margin-top: 6px; color: #b9a98a; }
