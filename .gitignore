@@ -1,0 +1,12 @@
+# Build output
+build/
+out/
+
+# IDE / tool state
+.vs/
+.vscode/
+*.user
+CMakeUserPresets.json
+
+# Headless screenshots and benchmark logs
+captures/
