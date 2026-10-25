@@ -365,6 +365,7 @@ export class AppController {
           this.options.zoom,
         );
       }
+      if (this.options.focus !== null) this.camera.centerOn(this.options.focus);
     }
     this.needsFit = false;
   }

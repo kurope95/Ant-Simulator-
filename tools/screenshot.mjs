@@ -19,7 +19,7 @@ const kScreens = ["home", "builder", "run"];
 class UsageError extends Error {}
 
 function parseArgs(argv) {
-  const args = { ticks: 30, out: "", size: kDefaultSize, seed: 1, preset: "meadow", screen: "home", zoom: 1, interactive: false, breachTick: -1 };
+  const args = { ticks: 30, out: "", size: kDefaultSize, seed: 1, preset: "meadow", screen: "home", zoom: 1, focus: "", interactive: false, breachTick: -1 };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--ticks") args.ticks = Number(argv[++i]);
@@ -29,6 +29,7 @@ function parseArgs(argv) {
     else if (arg === "--preset") args.preset = argv[++i] ?? "";
     else if (arg === "--screen") args.screen = argv[++i] ?? "";
     else if (arg === "--zoom") args.zoom = Number(argv[++i]);
+    else if (arg === "--focus") args.focus = argv[++i] ?? "";
     else if (arg === "--breach-tick") args.breachTick = Number(argv[++i]);
     else if (arg === "--interactive") args.interactive = true;
     else throw new UsageError(`unknown option: ${arg}`);
@@ -103,6 +104,7 @@ async function main() {
     query.set("preset", args.preset);
     if (args.interactive) query.set("screen", args.screen);
     if (args.zoom !== 1) query.set("zoom", String(args.zoom));
+    if (args.focus !== "") query.set("focus", args.focus);
     if (args.breachTick >= 0) query.set("breach", String(args.breachTick));
     const url = `${server.url}/?${query.toString()}`;
 

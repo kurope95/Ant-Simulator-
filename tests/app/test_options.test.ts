@@ -44,6 +44,15 @@ test("options: --zoom selects the run close-up", () => {
   assert.ok(usageText().includes("--zoom"));
 });
 
+test("options: --focus centres the run camera on a world point", () => {
+  assert.deepEqual(parse("--focus", "400,540").options.focus, { x: 400, y: 540 });
+  assert.equal(parseOptions([]).options.focus, null);
+  assert.equal(parse("--focus", "400").error, "invalid value for --focus: 400 (expected x,y in world units)");
+  assert.equal(parse("--focus", "400,").error, "invalid value for --focus: 400, (expected x,y in world units)");
+  assert.deepEqual(optionsFromUrl("?focus=10,20").options.focus, { x: 10, y: 20 });
+  assert.ok(usageText().includes("--focus"));
+});
+
 test("options: headless screenshot", () => {
   const r = parse("--headless", "--ticks", "120", "--screenshot", "captures/a b.png", "--size", "1280x720");
   assert.equal(r.error, "");

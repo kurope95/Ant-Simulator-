@@ -22,6 +22,7 @@ export interface AppOptions {
   threads: number;
   vsync: boolean;
   zoom: number;
+  focus: { x: number; y: number } | null;
   breachTick: number;
 }
 
@@ -52,6 +53,7 @@ function defaults(): AppOptions {
     threads: 0,
     vsync: true,
     zoom: 1,
+    focus: null,
     breachTick: -1,
   };
 }
@@ -193,6 +195,19 @@ export function parseOptions(tokens: readonly string[]): ParseResult {
         i = taken.next;
         break;
       }
+      case "--focus": {
+        const taken = take(i, "--focus");
+        if (taken === null) break;
+        const parts = taken.value.split(",");
+        const values = parts.map(Number);
+        if (parts.length !== 2 || parts.some((part) => part.trim() === "") || !values.every(Number.isFinite)) {
+          error = `invalid value for --focus: ${taken.value} (expected x,y in world units)`;
+          break;
+        }
+        options.focus = { x: values[0], y: values[1] };
+        i = taken.next;
+        break;
+      }
       case "--zoom": {
         const taken = take(i, "--zoom");
         if (taken === null) break;
@@ -262,6 +277,7 @@ export function usageText(): string {
     "  --bench <preset>      timing table (Node CLI); --scenario sandbox is deprecated",
     "  --threads <n>         worker threads, 1-64 (default: all cores)",
     "  --zoom <n>            camera zoom on run, 0.1-16 (default 1)",
+    "  --focus <x,y>         centre the run camera on this world point (default: the centre)",
     "  --breach-tick <n>     open the maze's breach shortcut at this tick (default: never)",
     "  --no-vsync            uncapped frame rate (debug timing)",
     "  --help, -h            show this text",

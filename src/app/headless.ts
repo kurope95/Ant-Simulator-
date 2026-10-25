@@ -37,6 +37,7 @@ export function runHeadless(
     const size = renderer.sizePx();
     camera.zoomAt({ x: size.x / 2, y: size.y / 2 }, options.zoom);
   }
+  if (options.focus !== null) camera.centerOn(options.focus);
 
   const ticks = effectiveTicks(options);
   let breached = false;
