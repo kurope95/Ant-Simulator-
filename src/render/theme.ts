@@ -10,11 +10,27 @@ export interface Theme {
   heatHome: Rgba8;
   heatFood: Rgba8;
   heatAlpha: number;
-  rock: Rgba8;
-  water: Rgba8;
+  groundA: Rgba8;
+  groundB: Rgba8;
+  rockDark: Rgba8;
+  rockLight: Rgba8;
+  waterShallow: Rgba8;
+  waterDeep: Rgba8;
   sand: Rgba8;
   mud: Rgba8;
   speckle: Rgba8;
+}
+
+// Terrain colours as 0xRRGGBB. The terrain shader reads them as uniforms.
+interface TerrainHex {
+  groundA: number;
+  groundB: number;
+  rockDark: number;
+  rockLight: number;
+  waterShallow: number;
+  waterDeep: number;
+  sand: number;
+  mud: number;
 }
 
 const kOutside = rgba(0x05, 0x07, 0x0a, 255);
@@ -22,10 +38,6 @@ const kBorder = rgba(0xeb, 0xf1, 0xe5, 46);
 const kHeatHome = rgba(0x4f, 0xc3, 0xb0, 255);
 const kHeatFood = rgba(0xf0, 0xb4, 0x5e, 255);
 const kHeatAlpha = 0.62;
-const kRock = rgba(0x2c, 0x30, 0x34, 255);
-const kWater = rgba(0x0f, 0x2f, 0x3c, 255);
-const kSand = rgba(0x3a, 0x31, 0x22, 255);
-const kMud = rgba(0x25, 0x1f, 0x17, 255);
 
 function makeTheme(
   name: string,
@@ -33,6 +45,7 @@ function makeTheme(
   grid: Rgba8,
   speckleHex: number,
   foodHex: number,
+  terrain: TerrainHex,
 ): Theme {
   return {
     name,
@@ -44,32 +57,81 @@ function makeTheme(
     heatHome: kHeatHome,
     heatFood: kHeatFood,
     heatAlpha: kHeatAlpha,
-    rock: kRock,
-    water: kWater,
-    sand: kSand,
-    mud: kMud,
+    groundA: rgb(terrain.groundA),
+    groundB: rgb(terrain.groundB),
+    rockDark: rgb(terrain.rockDark),
+    rockLight: rgb(terrain.rockLight),
+    waterShallow: rgb(terrain.waterShallow),
+    waterDeep: rgb(terrain.waterDeep),
+    sand: rgb(terrain.sand),
+    mud: rgb(terrain.mud),
     speckle: rgb(speckleHex),
   };
 }
 
 export function meadowTheme(): Theme {
-  return makeTheme("Meadow", 0x0b100d, rgba(0x59, 0x5f, 0x59, 15), 0x2e3d2a, 0xa8d86b);
+  return makeTheme("Meadow", 0x0b100d, rgba(0x59, 0x5f, 0x59, 15), 0x2e3d2a, 0xa8d86b, {
+    groundA: 0x141c12,
+    groundB: 0x1d2918,
+    rockDark: 0x3a3d40,
+    rockLight: 0x8a8f94,
+    waterShallow: 0x2f7d85,
+    waterDeep: 0x123b4a,
+    sand: 0x8c7650,
+    mud: 0x3e3022,
+  });
 }
 
 export function dunesTheme(): Theme {
-  return makeTheme("Dunes", 0x2a2117, rgba(0x6e, 0x6a, 0x5f, 15), 0x4a3b28, 0xc8b25a);
+  return makeTheme("Dunes", 0x2a2117, rgba(0x6e, 0x6a, 0x5f, 15), 0x4a3b28, 0xc8b25a, {
+    groundA: 0x2b2116,
+    groundB: 0x3a2c1c,
+    rockDark: 0x4a4036,
+    rockLight: 0xa39580,
+    waterShallow: 0x3c8a8c,
+    waterDeep: 0x17434f,
+    sand: 0xb39a68,
+    mud: 0x4a3827,
+  });
 }
 
 export function creekTheme(): Theme {
-  return makeTheme("Creek", 0x0d1412, rgba(0x5b, 0x61, 0x5c, 15), 0x23403a, 0x8fd9a8);
+  return makeTheme("Creek", 0x0d1412, rgba(0x5b, 0x61, 0x5c, 15), 0x23403a, 0x8fd9a8, {
+    groundA: 0x121a16,
+    groundB: 0x1a2620,
+    rockDark: 0x383d3d,
+    rockLight: 0x858c8a,
+    waterShallow: 0x3a8f96,
+    waterDeep: 0x0f3a4a,
+    sand: 0x8a7a58,
+    mud: 0x3a2f24,
+  });
 }
 
 export function boulderTheme(): Theme {
-  return makeTheme("Boulder", 0x14171a, rgba(0x5f, 0x63, 0x61, 15), 0x2e353b, 0xb8c46a);
+  return makeTheme("Boulder", 0x14171a, rgba(0x5f, 0x63, 0x61, 15), 0x2e353b, 0xb8c46a, {
+    groundA: 0x16191b,
+    groundB: 0x1f2428,
+    rockDark: 0x45494d,
+    rockLight: 0x9aa0a5,
+    waterShallow: 0x357a86,
+    waterDeep: 0x133847,
+    sand: 0x857457,
+    mud: 0x3b3026,
+  });
 }
 
 export function blankTheme(): Theme {
-  return makeTheme("Blank", 0x0b0e0f, rgba(0x59, 0x5d, 0x5a, 15), 0x23282a, 0x9bd48a);
+  return makeTheme("Blank", 0x0b0e0f, rgba(0x59, 0x5d, 0x5a, 15), 0x23282a, 0x9bd48a, {
+    groundA: 0x0f1213,
+    groundB: 0x15191a,
+    rockDark: 0x3a3e41,
+    rockLight: 0x868b8f,
+    waterShallow: 0x2f7a84,
+    waterDeep: 0x11384a,
+    sand: 0x857350,
+    mud: 0x382d22,
+  });
 }
 
 export function themeForPreset(presetId: string): Theme {

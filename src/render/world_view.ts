@@ -1,3 +1,4 @@
+import type { Rect } from "../core/rect.js";
 import type { Vec2 } from "../core/vec2.js";
 import type { World } from "../sim/world.js";
 import { buildAnts } from "./ant_layer.js";
@@ -5,18 +6,21 @@ import type { AtlasFrames } from "./atlas.js";
 import { GeometryBatch } from "./batch.js";
 import type { Camera } from "./camera.js";
 import { buildFood } from "./food_layer.js";
-import type { GlRenderer } from "./gl_renderer.js";
+import type { GlRenderer, RenderTarget } from "./gl_renderer.js";
 import { fillHeatmapRgba } from "./heatmap.js";
 import { GaitTracker } from "./legs.js";
 import { buildNests } from "./nest_layer.js";
 import { paintSpriteAtlas } from "./sprite_atlas.js";
 import { SpriteBatch } from "./sprite_batch.js";
-import { paintTerrainTexture, terrainTextureSize, type TextureSize } from "./terrain_texture.js";
+import { terrainMask } from "./terrain_mask.js";
+import { terrainLook } from "./terrain_shader.js";
 import type { Theme } from "./theme.js";
 import { HeatmapMode, type ViewSettings } from "./view_settings.js";
 
 const kGridStep = 120;
 const kBorderWidthPx = 2;
+// The water shimmer is redrawn this often. It moves slowly, so 10 Hz looks smooth.
+const kShimmerMs = 100;
 
 interface AtlasResource {
   texture: WebGLTexture | null;
@@ -24,6 +28,26 @@ interface AtlasResource {
 }
 
 const kAtlasByRenderer = new WeakMap<GlRenderer, AtlasResource>();
+
+// What the screen-size terrain copy was drawn from. A frame redraws the terrain only when this changes.
+interface TerrainStamp {
+  terrain: number;
+  scale: number;
+  centerX: number;
+  centerY: number;
+  width: number;
+  height: number;
+  theme: string;
+  shimmer: number;
+}
+
+interface TerrainCopy {
+  target: RenderTarget;
+  stamp: TerrainStamp | null;
+}
+
+const kTerrainCopyByRenderer = new WeakMap<GlRenderer, TerrainCopy>();
+let nextTerrainId = 1;
 
 function uploadCanvas(renderer: GlRenderer, texture: WebGLTexture, canvas: HTMLCanvasElement): void {
   const ctx = canvas.getContext("2d");
@@ -45,11 +69,13 @@ function atlasFor(renderer: GlRenderer): AtlasResource {
 
 export interface WorldRenderCache {
   atlasTexture: WebGLTexture | null;
-  terrainTexture: WebGLTexture | null;
+  terrainTexture: WebGLTexture | null; // the obstacle mask the terrain shader reads
+  terrainId: number; // changes whenever the mask is rebuilt
+  terrainCell: number; // world units per mask texel
+  terrainWater: boolean; // the mask has water, so the terrain shimmers
   heatmapTexture: WebGLTexture | null;
   heatmapPixels: Uint8Array;
   atlasFrames: AtlasFrames;
-  terrain: TextureSize;
   under: GeometryBatch;
   back: SpriteBatch;
   legs: GeometryBatch;
@@ -57,28 +83,25 @@ export interface WorldRenderCache {
   gait: GaitTracker;
 }
 
-export function createWorldRenderCache(
-  renderer: GlRenderer,
-  world: World,
-  theme: Theme,
-): WorldRenderCache {
+export function createWorldRenderCache(renderer: GlRenderer, world: World): WorldRenderCache {
   const atlas = atlasFor(renderer);
-  const terrain = paintTerrainTexture(world, theme);
-  const terrainTexture = renderer.createTexture();
-  if (terrainTexture !== null) uploadCanvas(renderer, terrainTexture, terrain);
-  return {
+  const cache: WorldRenderCache = {
     atlasTexture: atlas.texture,
-    terrainTexture,
+    terrainTexture: renderer.createTexture(),
+    terrainId: 0,
+    terrainCell: world.obstacles.cell,
+    terrainWater: false,
     heatmapTexture: renderer.createTexture(),
     heatmapPixels: new Uint8Array(world.markers.width * world.markers.height * 4),
     atlasFrames: atlas.frames,
-    terrain: terrainTextureSize(world.size),
     under: new GeometryBatch(),
     back: new SpriteBatch(),
     legs: new GeometryBatch(),
     actors: new SpriteBatch(),
     gait: new GaitTracker(),
   };
+  refreshTerrain(renderer, cache, world);
+  return cache;
 }
 
 // The atlas texture is shared per renderer and outlives caches; only the two
@@ -93,15 +116,76 @@ export function disposeWorldRenderCache(
   cache.heatmapTexture = null;
 }
 
-export function refreshTerrain(
+// The terrain is a mask the shader samples, so a builder edit only re-uploads that mask.
+export function refreshTerrain(renderer: GlRenderer, cache: WorldRenderCache, world: World): void {
+  if (cache.terrainTexture === null) return;
+  const mask = terrainMask(world.obstacles, renderer.maxTextureSize());
+  renderer.updateMask(cache.terrainTexture, mask.width, mask.height, mask.rgba);
+  cache.terrainCell = mask.cell;
+  cache.terrainWater = mask.water;
+  cache.terrainId = nextTerrainId++;
+}
+
+function sameStamp(a: TerrainStamp | null, b: TerrainStamp): boolean {
+  return (
+    a !== null &&
+    a.terrain === b.terrain &&
+    a.scale === b.scale &&
+    a.centerX === b.centerX &&
+    a.centerY === b.centerY &&
+    a.width === b.width &&
+    a.height === b.height &&
+    a.theme === b.theme &&
+    a.shimmer === b.shimmer
+  );
+}
+
+// The shader costs about 3.9 ms at 2880 x 1620 on the laptop GPU, so the terrain is drawn into a
+// screen-size copy and only redrawn when the view, the mask, the theme or the shimmer changes.
+function drawTerrainCopy(
   renderer: GlRenderer,
   cache: WorldRenderCache,
   world: World,
+  camera: Camera,
   theme: Theme,
+  worldRect: Rect,
 ): void {
-  const terrain = paintTerrainTexture(world, theme);
-  cache.terrain = terrainTextureSize(world.size);
-  if (cache.terrainTexture !== null) uploadCanvas(renderer, cache.terrainTexture, terrain);
+  const mask = cache.terrainTexture;
+  if (mask === null) return;
+  const size = renderer.sizePx();
+  const shimmer = cache.terrainWater ? Math.floor(performance.now() / kShimmerMs) : 0;
+  const center = camera.center();
+  const stamp: TerrainStamp = {
+    terrain: cache.terrainId,
+    scale: camera.scale(),
+    centerX: center.x,
+    centerY: center.y,
+    width: size.x,
+    height: size.y,
+    theme: theme.name,
+    shimmer,
+  };
+  const look = terrainLook(theme, world.size, cache.terrainCell, (shimmer * kShimmerMs) / 1000);
+
+  let copy = kTerrainCopyByRenderer.get(renderer);
+  if (copy === undefined || copy.target.width !== size.x || copy.target.height !== size.y) {
+    if (copy !== undefined) renderer.deleteTarget(copy.target);
+    const target = renderer.createTarget(size.x, size.y);
+    if (target === null) {
+      renderer.drawTerrain(mask, worldRect, look);
+      return;
+    }
+    copy = { target, stamp: null };
+    kTerrainCopyByRenderer.set(renderer, copy);
+  }
+  if (!sameStamp(copy.stamp, stamp)) {
+    renderer.bindTarget(copy.target);
+    renderer.clear(theme.outside);
+    renderer.drawTerrain(mask, worldRect, look);
+    renderer.bindTarget(null);
+    copy.stamp = stamp;
+  }
+  renderer.drawTargetToScreen(copy.target);
 }
 
 function buildUnder(
@@ -159,7 +243,7 @@ export function drawWorld(
   };
 
   if (cache.terrainTexture !== null) {
-    renderer.drawTexture(cache.terrainTexture, worldRect);
+    drawTerrainCopy(renderer, cache, world, camera, theme, worldRect);
   }
 
   if (settings.heatmap !== HeatmapMode.Off && cache.heatmapTexture !== null) {

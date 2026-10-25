@@ -255,7 +255,7 @@ export class AppController {
     this.session = { ...this.session, screen: Screen.Home, zen: false };
     this.activeWorld = world;
     this.activeTheme = theme;
-    this.cache = this.makeCache(world, theme);
+    this.cache = this.makeCache(world);
     this.view.showGrid = false;
     this.setScreenRoots(Screen.Home);
     this.homeScreen?.update(this.session.lastRun);
@@ -283,7 +283,7 @@ export class AppController {
     this.previewPresetId = model.setup.presetId;
     this.activeWorld = this.previewWorld;
     this.activeTheme = themeForPreset(model.setup.presetId);
-    this.cache = this.makeCache(this.previewWorld, this.activeTheme);
+    this.cache = this.makeCache(this.previewWorld);
     this.view.showGrid = true;
     this.setScreenRoots(Screen.Builder);
     this.builderScreen.update();
@@ -298,7 +298,7 @@ export class AppController {
     this.breachRequested = false;
     this.activeWorld = world;
     this.activeTheme = this.runTheme;
-    this.cache = this.makeCache(world, this.runTheme);
+    this.cache = this.makeCache(world);
     this.clock.reset();
     this.stepRequests = 0;
     this.view.showGrid = this.runShowGrid;
@@ -307,10 +307,10 @@ export class AppController {
     this.requestFit();
   }
 
-  private makeCache(world: World, theme: Theme): WorldRenderCache | null {
+  private makeCache(world: World): WorldRenderCache | null {
     if (this.renderer === null) return null;
     if (this.cache !== null) disposeWorldRenderCache(this.renderer, this.cache);
-    return createWorldRenderCache(this.renderer, world, theme);
+    return createWorldRenderCache(this.renderer, world);
   }
 
   private setScreenRoots(screen: Screen): void {
@@ -483,7 +483,7 @@ export class AppController {
     this.log(`breach: opened at tick ${world.tick}`);
     const renderer = this.renderer;
     if (renderer !== null && this.cache !== null) {
-      refreshTerrain(renderer, this.cache, world, this.activeTheme);
+      refreshTerrain(renderer, this.cache, world);
     }
   }
 
@@ -600,7 +600,7 @@ export class AppController {
     this.previewPresetId = model.setup.presetId;
     this.activeWorld = world;
     this.activeTheme = themeForPreset(model.setup.presetId);
-    this.cache = this.makeCache(world, this.activeTheme);
+    this.cache = this.makeCache(world);
     if (fit || presetChanged) this.requestFit();
   }
 
@@ -609,7 +609,7 @@ export class AppController {
     const world = this.previewWorld;
     if (model === null || world === null || this.renderer === null || this.cache === null) return;
     world.obstacles = obstacleGridFromCells(model.setup.obstacles);
-    refreshTerrain(this.renderer, this.cache, world, this.activeTheme);
+    refreshTerrain(this.renderer, this.cache, world);
   }
 
   private addListeners(): void {

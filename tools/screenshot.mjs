@@ -115,6 +115,7 @@ async function main() {
       `--window-size=${width},${height}`,
       "--force-device-scale-factor=1",
       "--virtual-time-budget=5000",
+      "--enable-logging=stderr",
       `--screenshot=${outPath}`,
       url,
     ];
@@ -122,6 +123,9 @@ async function main() {
     if (code !== 0) {
       throw new Error(`Chrome exited with ${code}: ${stderr.slice(0, 400).trim()}`);
     }
+    // The page reports renderer failures to its log (console), which headless Chrome echoes to stderr.
+    const pageFailure = stderr.split("\n").find((line) => /"(error: |headless render failed)/.test(line));
+    if (pageFailure !== undefined) throw new Error(`the page reported a failure: ${pageFailure.trim()}`);
 
     const bytes = await readFile(outPath);
     if (bytes.length < 24 || bytes.readUInt32BE(0) !== 0x89504e47 || bytes.readUInt32BE(4) !== 0x0d0a1a0a) {

@@ -50,7 +50,7 @@ export function runHeadless(
 
   const settings = defaultViewSettings();
   const theme = themeForPreset(setup.presetId);
-  const cache = createWorldRenderCache(renderer, world, theme);
+  const cache = createWorldRenderCache(renderer, world);
   drawWorld(renderer, cache, world, camera, settings, theme, 1);
   renderer.present();
 

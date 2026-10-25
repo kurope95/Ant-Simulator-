@@ -5,7 +5,6 @@ import { Camera } from "../../src/render/camera.js";
 import { buildFood } from "../../src/render/food_layer.js";
 import { buildNests } from "../../src/render/nest_layer.js";
 import { SpriteBatch } from "../../src/render/sprite_batch.js";
-import { terrainTextureSize } from "../../src/render/terrain_texture.js";
 import { makeColony } from "../../src/sim/colony.js";
 import { addFoodSource } from "../../src/sim/food.js";
 import { defaultParams } from "../../src/sim/params.js";
@@ -21,13 +20,6 @@ function layerWorld() {
   camera.fit(world.size);
   return { world, camera };
 }
-
-test("terrain: the texture is baked at half scale", () => {
-  assert.deepEqual(terrainTextureSize({ x: 1920, y: 1080 }), { width: 960, height: 540, scale: 0.5 });
-  assert.deepEqual(terrainTextureSize({ x: 2240, y: 1200 }), { width: 1120, height: 600, scale: 0.5 });
-  const big = terrainTextureSize({ x: 8192, y: 4096 });
-  assert.equal(Math.max(big.width, big.height), 2048);
-});
 
 test("food: every piece gets a shadow and a piece sprite", () => {
   const { world, camera } = layerWorld();

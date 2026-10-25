@@ -3,6 +3,7 @@ import type { Rect } from "../core/rect.js";
 import type { Vec2 } from "../core/vec2.js";
 import type { GeometryBatch } from "./batch.js";
 import type { SpriteBatch } from "./sprite_batch.js";
+import { kTerrainFragmentShader, setTerrainUniforms, terrainUniforms, type TerrainLook, type TerrainUniforms } from "./terrain_shader.js";
 
 const kVertexShader = `#version 300 es
 in vec2 a_pos;
@@ -70,6 +71,21 @@ void main() {
   out_color = texture(u_texture, v_uv) * v_color;
 }`;
 
+export interface RenderTarget {
+  framebuffer: WebGLFramebuffer;
+  texture: WebGLTexture;
+  width: number;
+  height: number;
+}
+
+interface TerrainPass {
+  program: WebGLProgram;
+  vao: WebGLVertexArrayObject;
+  resolution: WebGLUniformLocation;
+  rect: WebGLUniformLocation;
+  uniforms: TerrainUniforms;
+}
+
 export type GlRendererResult = { renderer: GlRenderer } | { error: string };
 
 export class GlRenderer {
@@ -90,6 +106,7 @@ export class GlRenderer {
   private readonly spriteIndexBuffer: WebGLBuffer;
   private readonly spriteVao: WebGLVertexArrayObject;
   private readonly spriteResolution: WebGLUniformLocation;
+  private readonly terrain: TerrainPass;
 
   private constructor(init: {
     canvas: HTMLCanvasElement;
@@ -109,6 +126,7 @@ export class GlRenderer {
     spriteIndexBuffer: WebGLBuffer;
     spriteVao: WebGLVertexArrayObject;
     spriteResolution: WebGLUniformLocation;
+    terrain: TerrainPass;
   }) {
     this.canvas = init.canvas;
     this.gl = init.gl;
@@ -127,6 +145,7 @@ export class GlRenderer {
     this.spriteIndexBuffer = init.spriteIndexBuffer;
     this.spriteVao = init.spriteVao;
     this.spriteResolution = init.spriteResolution;
+    this.terrain = init.terrain;
   }
 
   static create(canvas: HTMLCanvasElement): GlRendererResult {
@@ -183,6 +202,28 @@ export class GlRenderer {
       gl.useProgram(textureProgram);
       gl.uniform1i(gl.getUniformLocation(textureProgram, "u_texture"), 0);
 
+      const terrainProgram = linkProgram(gl, kTextureVertexShader, kTerrainFragmentShader);
+      const terrainUniformSet = terrainUniforms(gl, terrainProgram);
+      const terrainResolution = gl.getUniformLocation(terrainProgram, "u_resolution");
+      const terrainRect = gl.getUniformLocation(terrainProgram, "u_rect");
+      const terrainVao = gl.createVertexArray();
+      if (terrainUniformSet === null || terrainResolution === null || terrainRect === null || terrainVao === null) {
+        return { error: "terrain shader is missing its uniforms" };
+      }
+      gl.bindVertexArray(terrainVao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+      const terrainQuadLocation = gl.getAttribLocation(terrainProgram, "a_quad");
+      gl.enableVertexAttribArray(terrainQuadLocation);
+      gl.vertexAttribPointer(terrainQuadLocation, 2, gl.FLOAT, false, 0, 0);
+      gl.bindVertexArray(null);
+      const terrain: TerrainPass = {
+        program: terrainProgram,
+        vao: terrainVao,
+        resolution: terrainResolution,
+        rect: terrainRect,
+        uniforms: terrainUniformSet,
+      };
+
       const spriteProgram = linkProgram(gl, kSpriteVertexShader, kSpriteFragmentShader);
       const spriteVertexBuffer = gl.createBuffer();
       const spriteIndexBuffer = gl.createBuffer();
@@ -233,6 +274,7 @@ export class GlRenderer {
           spriteIndexBuffer,
           spriteVao,
           spriteResolution,
+          terrain,
         }),
       };
     } catch (error) {
@@ -323,6 +365,81 @@ export class GlRenderer {
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
+  }
+
+  maxTextureSize(): number {
+    return this.gl.getParameter(this.gl.MAX_TEXTURE_SIZE) as number;
+  }
+
+  // The obstacle mask. Mipmaps keep the shader's blurred lookups smooth at any zoom.
+  updateMask(texture: WebGLTexture, width: number, height: number, rgba: Uint8Array): void {
+    const gl = this.gl;
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  }
+
+  drawTerrain(mask: WebGLTexture, rect: Rect, look: TerrainLook): void {
+    const width = rect.max.x - rect.min.x;
+    const height = rect.max.y - rect.min.y;
+    if (width <= 0 || height <= 0) return;
+    const gl = this.gl;
+    const pass = this.terrain;
+    gl.bindVertexArray(pass.vao);
+    gl.useProgram(pass.program);
+    gl.uniform2f(pass.resolution, this.canvas.width, this.canvas.height);
+    gl.uniform4f(pass.rect, rect.min.x, rect.min.y, width, height);
+    setTerrainUniforms(gl, pass.uniforms, look);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, mask);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.bindVertexArray(null);
+  }
+
+  // A screen-size colour target, used to keep a copy of the terrain between frames.
+  createTarget(width: number, height: number): RenderTarget | null {
+    const gl = this.gl;
+    const texture = gl.createTexture();
+    const framebuffer = gl.createFramebuffer();
+    if (texture === null || framebuffer === null) return null;
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return { framebuffer, texture, width, height };
+  }
+
+  // Draws go to the target until bindTarget(null) sends them back to the screen.
+  bindTarget(target: RenderTarget | null): void {
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, target?.framebuffer ?? null);
+  }
+
+  deleteTarget(target: RenderTarget): void {
+    this.gl.deleteFramebuffer(target.framebuffer);
+    this.gl.deleteTexture(target.texture);
+  }
+
+  // Copies a screen-size target to the screen. Its rows are stored bottom-up, so the quad is drawn upside down.
+  drawTargetToScreen(target: RenderTarget): void {
+    const gl = this.gl;
+    gl.bindVertexArray(this.quadVao);
+    gl.useProgram(this.textureProgram);
+    gl.uniform2f(this.textureResolution, this.canvas.width, this.canvas.height);
+    gl.uniform4f(this.textureRect, 0, this.canvas.height, this.canvas.width, -this.canvas.height);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, target.texture);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.bindVertexArray(null);
   }
 
   // Additive draws add their colour to what is underneath, so trails glow on dark ground.
