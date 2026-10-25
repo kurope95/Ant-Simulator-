@@ -1,19 +1,17 @@
-import type { Rgba8 } from "../core/color.js";
-import { rgb } from "../core/color.js";
 import type { Vec2 } from "../core/vec2.js";
-import { nestRadius } from "../sim/colony.js";
-import { foodRadius } from "../sim/food.js";
-import { colonyHex } from "../sim/palette.js";
 import type { World } from "../sim/world.js";
 import { buildAnts } from "./ant_layer.js";
 import type { AtlasFrames } from "./atlas.js";
 import { GeometryBatch } from "./batch.js";
 import type { Camera } from "./camera.js";
+import { buildFood } from "./food_layer.js";
 import type { GlRenderer } from "./gl_renderer.js";
 import { fillHeatmapRgba } from "./heatmap.js";
 import { GaitTracker } from "./legs.js";
+import { buildNests } from "./nest_layer.js";
 import { paintSpriteAtlas } from "./sprite_atlas.js";
 import { SpriteBatch } from "./sprite_batch.js";
+import { paintTerrainTexture, terrainTextureSize, type TextureSize } from "./terrain_texture.js";
 import type { Theme } from "./theme.js";
 import { HeatmapMode, type ViewSettings } from "./view_settings.js";
 
@@ -27,66 +25,80 @@ interface AtlasResource {
 
 const kAtlasByRenderer = new WeakMap<GlRenderer, AtlasResource>();
 
+function uploadCanvas(renderer: GlRenderer, texture: WebGLTexture, canvas: HTMLCanvasElement): void {
+  const ctx = canvas.getContext("2d");
+  if (ctx === null) return;
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  renderer.updateTexture(texture, canvas.width, canvas.height, new Uint8Array(image.data.buffer));
+}
+
 function atlasFor(renderer: GlRenderer): AtlasResource {
   const existing = kAtlasByRenderer.get(renderer);
   if (existing !== undefined) return existing;
   const atlas = paintSpriteAtlas();
   const texture = renderer.createTexture();
-  if (texture !== null) {
-    const ctx = atlas.canvas.getContext("2d");
-    if (ctx !== null) {
-      const image = ctx.getImageData(0, 0, atlas.canvas.width, atlas.canvas.height);
-      renderer.updateTexture(
-        texture,
-        atlas.canvas.width,
-        atlas.canvas.height,
-        new Uint8Array(image.data.buffer),
-      );
-    }
-  }
+  if (texture !== null) uploadCanvas(renderer, texture, atlas.canvas);
   const resource = { texture, frames: atlas.frames };
   kAtlasByRenderer.set(renderer, resource);
   return resource;
 }
 
 export interface WorldRenderCache {
+  atlasTexture: WebGLTexture | null;
+  terrainTexture: WebGLTexture | null;
   heatmapTexture: WebGLTexture | null;
   heatmapPixels: Uint8Array;
-  ground: GeometryBatch;
-  actors: GeometryBatch;
-  atlasTexture: WebGLTexture | null;
   atlasFrames: AtlasFrames;
-  sprites: SpriteBatch;
+  terrain: TextureSize;
+  under: GeometryBatch;
+  back: SpriteBatch;
   legs: GeometryBatch;
+  actors: SpriteBatch;
   gait: GaitTracker;
 }
 
-export function createWorldRenderCache(renderer: GlRenderer, world: World): WorldRenderCache {
+export function createWorldRenderCache(
+  renderer: GlRenderer,
+  world: World,
+  theme: Theme,
+): WorldRenderCache {
   const atlas = atlasFor(renderer);
+  const terrain = paintTerrainTexture(world, theme);
+  const terrainTexture = renderer.createTexture();
+  if (terrainTexture !== null) uploadCanvas(renderer, terrainTexture, terrain);
   return {
+    atlasTexture: atlas.texture,
+    terrainTexture,
     heatmapTexture: renderer.createTexture(),
     heatmapPixels: new Uint8Array(world.markers.width * world.markers.height * 4),
-    ground: new GeometryBatch(),
-    actors: new GeometryBatch(),
-    atlasTexture: atlas.texture,
     atlasFrames: atlas.frames,
-    sprites: new SpriteBatch(),
+    terrain: terrainTextureSize(world.size),
+    under: new GeometryBatch(),
+    back: new SpriteBatch(),
     legs: new GeometryBatch(),
+    actors: new SpriteBatch(),
     gait: new GaitTracker(),
   };
 }
 
-export function buildGround(
+export function refreshTerrain(
+  renderer: GlRenderer,
+  cache: WorldRenderCache,
+  world: World,
+  theme: Theme,
+): void {
+  const terrain = paintTerrainTexture(world, theme);
+  cache.terrain = terrainTextureSize(world.size);
+  if (cache.terrainTexture !== null) uploadCanvas(renderer, cache.terrainTexture, terrain);
+}
+
+function buildUnder(
   batch: GeometryBatch,
   camera: Camera,
   worldSize: Vec2,
   theme: Theme,
   settings: ViewSettings,
 ): void {
-  const min = camera.worldToScreen({ x: 0, y: 0 });
-  const max = camera.worldToScreen(worldSize);
-  batch.addRect(min, max, theme.ground);
-
   if (settings.showGrid) {
     for (let x = kGridStep; x < worldSize.x; x += kGridStep) {
       batch.addLine(
@@ -106,6 +118,8 @@ export function buildGround(
     }
   }
 
+  const min = camera.worldToScreen({ x: 0, y: 0 });
+  const max = camera.worldToScreen(worldSize);
   const corners = [
     min,
     { x: max.x, y: min.y },
@@ -114,37 +128,6 @@ export function buildGround(
   ];
   for (let i = 0; i < corners.length; i++) {
     batch.addLine(corners[i], corners[(i + 1) % corners.length], kBorderWidthPx, theme.border);
-  }
-}
-
-export function buildStaticActors(
-  batch: GeometryBatch,
-  world: World,
-  camera: Camera,
-  alpha: number,
-  settings: ViewSettings,
-  theme: Theme,
-): void {
-  const scale = camera.scale();
-
-  for (const source of world.food.items) {
-    const center = camera.worldToScreen(source.pos);
-    const radius = Math.max(1, foodRadius(source, world.params) * scale);
-    batch.addCircle(center, radius, theme.food);
-    batch.addCircle(center, radius * 0.4, withAlpha(theme.food, 0.45));
-  }
-
-  for (const colony of world.colonies) {
-    const center = camera.worldToScreen(colony.nest);
-    const radius = Math.max(1, nestRadius(colony, world.params) + 2);
-    const color = rgb(colonyHex(colony.color));
-    batch.addCircle(center, radius * scale, color);
-    batch.addCircle(center, Math.max(1, nestRadius(colony, world.params) * scale), theme.ground);
-    batch.addCircle(
-      center,
-      Math.max(1, nestRadius(colony, world.params) * 0.55 * scale),
-      withAlpha(color, 0.35),
-    );
   }
 }
 
@@ -158,10 +141,14 @@ export function drawWorld(
   alpha: number,
 ): void {
   renderer.clear(theme.outside);
+  const worldRect = {
+    min: camera.worldToScreen({ x: 0, y: 0 }),
+    max: camera.worldToScreen(world.size),
+  };
 
-  cache.ground.clear();
-  buildGround(cache.ground, camera, world.size, theme, settings);
-  renderer.drawBatch(cache.ground);
+  if (cache.terrainTexture !== null) {
+    renderer.drawTexture(cache.terrainTexture, worldRect);
+  }
 
   if (settings.heatmap !== HeatmapMode.Off && cache.heatmapTexture !== null) {
     fillHeatmapRgba(world.markers, settings.heatmap, theme, cache.heatmapPixels);
@@ -171,28 +158,28 @@ export function drawWorld(
       world.markers.height,
       cache.heatmapPixels,
     );
-    renderer.drawTexture(cache.heatmapTexture, {
-      min: camera.worldToScreen({ x: 0, y: 0 }),
-      max: camera.worldToScreen(world.size),
-    });
+    renderer.drawTexture(cache.heatmapTexture, worldRect);
   }
 
-  cache.actors.clear();
-  buildStaticActors(cache.actors, world, camera, alpha, settings, theme);
-  renderer.drawBatch(cache.actors);
+  cache.under.clear();
+  buildUnder(cache.under, camera, world.size, theme, settings);
+  renderer.drawBatch(cache.under);
+
+  cache.back.clear();
+  buildNests(cache.back, world, camera, cache.atlasFrames);
+  buildFood(cache.back, world, camera, cache.atlasFrames);
+  if (cache.atlasTexture !== null) {
+    renderer.drawSprites(cache.atlasTexture, cache.back);
+  }
 
   if (settings.showAnts) {
-    cache.sprites.clear();
     cache.legs.clear();
+    cache.actors.clear();
     cache.gait.update(world);
-    buildAnts(cache.sprites, cache.legs, world, camera, alpha, cache.atlasFrames, cache.gait);
+    buildAnts(cache.actors, cache.legs, world, camera, alpha, cache.atlasFrames, cache.gait);
     renderer.drawBatch(cache.legs);
     if (cache.atlasTexture !== null) {
-      renderer.drawSprites(cache.atlasTexture, cache.sprites);
+      renderer.drawSprites(cache.atlasTexture, cache.actors);
     }
   }
-}
-
-function withAlpha(color: Rgba8, factor: number): Rgba8 {
-  return { r: color.r, g: color.g, b: color.b, a: Math.round(color.a * factor) };
 }

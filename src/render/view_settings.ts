@@ -16,7 +16,7 @@ export function defaultViewSettings(): ViewSettings {
   return {
     heatmap: HeatmapMode.DualChannel,
     showAnts: true,
-    showGrid: true,
+    showGrid: false,
     showHash: false,
     showColliders: false,
   };

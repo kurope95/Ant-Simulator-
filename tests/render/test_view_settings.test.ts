@@ -11,7 +11,7 @@ test("view settings: defaults and the heatmap cycle", () => {
   const settings = defaultViewSettings();
   assert.equal(settings.heatmap, HeatmapMode.DualChannel);
   assert.equal(settings.showAnts, true);
-  assert.equal(settings.showGrid, true);
+  assert.equal(settings.showGrid, false);
   assert.equal(settings.showHash, false);
   assert.equal(settings.showColliders, false);
   assert.equal(cycleHeatmap(HeatmapMode.Off), HeatmapMode.DualChannel);

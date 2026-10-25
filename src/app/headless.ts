@@ -42,8 +42,9 @@ export function runHeadless(
   for (let i = 0; i < ticks; i++) stepWorld(world);
 
   const settings = defaultViewSettings();
-  const cache = createWorldRenderCache(renderer, world);
-  drawWorld(renderer, cache, world, camera, settings, themeForPreset(setup.presetId), 1);
+  const theme = themeForPreset(setup.presetId);
+  const cache = createWorldRenderCache(renderer, world, theme);
+  drawWorld(renderer, cache, world, camera, settings, theme, 1);
   renderer.present();
 
   const size = renderer.sizePx();

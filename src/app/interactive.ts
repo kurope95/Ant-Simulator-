@@ -41,7 +41,7 @@ export function runInteractive(
 
   const theme = themeForPreset(setup.presetId);
   const settings = defaultViewSettings();
-  const cache = createWorldRenderCache(renderer, world);
+  const cache = createWorldRenderCache(renderer, world, theme);
   const camera = new Camera();
   const clock = new FixedStepClock(1 / world.params.simHz, 16);
 
