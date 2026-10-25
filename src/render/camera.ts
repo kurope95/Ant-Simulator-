@@ -13,6 +13,16 @@ export class Camera {
   private camScale = 1;
   private minScale: number = Camera.kMinScale;
   private maxScale: number = Camera.kMaxScale;
+  private ratio = 1; // device pixels per CSS pixel
+
+  // Sprites keep minimum sizes in CSS pixels, so they stay readable on any display.
+  setPixelRatio(ratio: number): void {
+    this.ratio = ratio > 0 ? ratio : 1;
+  }
+
+  pixelRatio(): number {
+    return this.ratio;
+  }
 
   setViewport(size: Vec2): void {
     this.viewportSize = { x: size.x, y: size.y };

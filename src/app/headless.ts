@@ -32,6 +32,7 @@ export function runHeadless(
 
   const camera = new Camera();
   camera.setViewport(renderer.sizePx());
+  camera.setPixelRatio(window.devicePixelRatio || 1);
   camera.fit(world.size);
   if (options.zoom !== 1) {
     const size = renderer.sizePx();

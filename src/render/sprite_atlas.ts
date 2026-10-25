@@ -1,14 +1,12 @@
 import { mix32 } from "../core/rng.js";
 import { colonyHex } from "../sim/palette.js";
 import { FoodKind } from "../sim/setup.js";
+import { antColors, type AntColors } from "./ant_colors.js";
 import { kAtlasHeight, kAtlasWidth, makeAtlasFrames, type AtlasFrame, type AtlasFrames } from "./atlas.js";
 
 const kUnit = 4294967296;
 const kTwoPi = Math.PI * 2;
 
-const kAntBase = "#241a14";
-const kAntOutline = "#0b0806";
-const kAntLit = "#4a382b";
 const kSeed = "#d9c48b";
 const kSeedDark = "#8a7443";
 const kBerry = "#c4475e";
@@ -65,6 +63,25 @@ function ellipse(
   ctx.ellipse(cx, cy, rx, ry, 0, 0, kTwoPi);
 }
 
+// One body segment: a filled ellipse with an outline.
+function fillSegment(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  fill: string,
+  outline: string,
+  lineWidth: number,
+): void {
+  ellipse(ctx, cx, cy, rx, ry);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = lineWidth;
+  ctx.stroke();
+}
+
 function paintAnt(
   ctx: CanvasRenderingContext2D,
   frame: AtlasFrame,
@@ -72,77 +89,37 @@ function paintAnt(
   variant: number,
   small: boolean,
 ): void {
-  const accentHex = colonyHex(colony);
-  const accent = css(accentHex);
+  const colors: AntColors = antColors(colonyHex(colony));
   const gasterWide = variant === 1 ? 1.04 : 1;
   const splay = variant === 1 ? 1.06 : 1;
+  // A small ant is one colour all over. A full-size ant has a solid gaster and a shaded waist, thorax and head.
+  const shell = small ? colors.gaster : colors.body;
+  const outline = small ? 2 : 3;
 
   ctx.save();
   ctx.translate(frame.x, frame.y);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
-  if (small) paintBakedLegs(ctx, accent);
-  else paintHipJoints(ctx, accent);
+  if (small) paintBakedLegs(ctx, colors.outline);
+  else paintHipJoints(ctx, colors.outline);
 
-  ellipse(ctx, 38, 32, 26 * gasterWide, 15);
-  ctx.fillStyle = kAntBase;
-  ctx.fill();
-  ctx.strokeStyle = kAntOutline;
-  ctx.lineWidth = 3;
-  ctx.stroke();
+  fillSegment(ctx, 38, 32, 26 * gasterWide, 15, colors.gaster, colors.outline, outline);
+  fillSegment(ctx, 66, 32, 7, 5, shell, colors.outline, outline);
+  fillSegment(ctx, 84, 32, 18, 10, shell, colors.outline, outline);
+  fillSegment(ctx, 105, 32, 12, 10, shell, colors.outline, outline);
 
-  ellipse(ctx, 66, 32, 7, 5);
-  ctx.fillStyle = kAntBase;
-  ctx.fill();
-  ctx.strokeStyle = kAntOutline;
-  ctx.lineWidth = 2.5;
-  ctx.stroke();
-
-  ellipse(ctx, 84, 32, 18, 10);
-  ctx.fillStyle = kAntBase;
-  ctx.fill();
-  ctx.strokeStyle = kAntOutline;
-  ctx.lineWidth = 3;
-  ctx.stroke();
-
-  ellipse(ctx, 105, 32, 12, 10);
-  ctx.fillStyle = kAntBase;
-  ctx.fill();
-  ctx.strokeStyle = kAntOutline;
-  ctx.lineWidth = 3;
-  ctx.stroke();
-
-  // Lit carapace on the upper-left of each big segment.
+  // A white sheen on the upper-left of each big segment.
+  ctx.fillStyle = colors.sheen;
   ellipse(ctx, 36, 27, 18 * gasterWide, 6);
-  ctx.fillStyle = css(0x4a382b, 0.8);
   ctx.fill();
   ellipse(ctx, 83, 27, 11, 4);
-  ctx.fillStyle = css(0x4a382b, 0.8);
   ctx.fill();
   ellipse(ctx, 104, 27, 7, 3.5);
-  ctx.fillStyle = css(0x4a382b, 0.7);
-  ctx.fill();
-
-  // One accent band across the gaster, clipped to its silhouette.
-  ctx.save();
-  ellipse(ctx, 38, 32, 26 * gasterWide, 15);
-  ctx.clip();
-  ctx.strokeStyle = accent;
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(31, 16);
-  ctx.quadraticCurveTo(36, 32, 31, 48);
-  ctx.stroke();
-  ctx.restore();
-
-  // Accent thorax sheen.
-  ellipse(ctx, 84, 28, 10, 3.5);
-  ctx.fillStyle = css(accentHex, 0.55);
   ctx.fill();
 
   // Mandibles.
-  ctx.strokeStyle = kAntOutline;
+  ctx.strokeStyle = colors.outline;
   ctx.lineWidth = 2.5;
   ctx.beginPath();
   ctx.moveTo(113, 27);
@@ -151,7 +128,7 @@ function paintAnt(
   ctx.lineTo(120, 42);
   ctx.stroke();
 
-  // Elbowed antennae with accent tips.
+  // Elbowed antennae with coloured tips.
   const baseTop = { x: 110, y: 26 };
   const baseBottom = { x: 110, y: 38 };
   const elbowTop = { x: 118, y: 17 };
@@ -161,7 +138,7 @@ function paintAnt(
     x: baseBottom.x + (124 - baseBottom.x) * splay,
     y: baseBottom.y + (51 - baseBottom.y) * splay,
   };
-  ctx.strokeStyle = kAntOutline;
+  ctx.strokeStyle = colors.outline;
   ctx.lineWidth = 1.6;
   ctx.beginPath();
   ctx.moveTo(baseTop.x, baseTop.y);
@@ -169,7 +146,7 @@ function paintAnt(
   ctx.moveTo(baseBottom.x, baseBottom.y);
   ctx.lineTo(elbowBottom.x, elbowBottom.y);
   ctx.stroke();
-  ctx.strokeStyle = accent;
+  ctx.strokeStyle = colors.gaster;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(elbowTop.x, elbowTop.y);
@@ -181,8 +158,9 @@ function paintAnt(
   ctx.restore();
 }
 
-function paintHipJoints(ctx: CanvasRenderingContext2D, accent: string): void {
-  ctx.fillStyle = accent;
+// Legs stay dark: the joints take the outline colour, not the colony colour.
+function paintHipJoints(ctx: CanvasRenderingContext2D, dark: string): void {
+  ctx.fillStyle = dark;
   for (const hip of [
     { x: 78, y: 28 },
     { x: 66, y: 28 },
@@ -197,7 +175,7 @@ function paintHipJoints(ctx: CanvasRenderingContext2D, accent: string): void {
   }
 }
 
-function paintBakedLegs(ctx: CanvasRenderingContext2D, accent: string): void {
+function paintBakedLegs(ctx: CanvasRenderingContext2D, dark: string): void {
   const legs = [
     [78, 28, 88, 20, 92, 14],
     [66, 28, 70, 18, 66, 12],
@@ -206,7 +184,7 @@ function paintBakedLegs(ctx: CanvasRenderingContext2D, accent: string): void {
     [66, 36, 70, 46, 66, 52],
     [54, 36, 48, 46, 40, 50],
   ];
-  ctx.strokeStyle = kAntOutline;
+  ctx.strokeStyle = dark;
   ctx.lineWidth = 1.6;
   for (const [x0, y0, x1, y1, x2, y2] of legs) {
     ctx.beginPath();
@@ -215,7 +193,7 @@ function paintBakedLegs(ctx: CanvasRenderingContext2D, accent: string): void {
     ctx.lineTo(x2, y2);
     ctx.stroke();
   }
-  ctx.fillStyle = accent;
+  ctx.fillStyle = dark;
   for (const [, , x1, y1] of legs) {
     ctx.beginPath();
     ctx.arc(x1, y1, 1.2, 0, kTwoPi);

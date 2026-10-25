@@ -112,6 +112,7 @@ smoothstep(t): number
 // core/color.ts
 interface Rgba8 { r: number; g: number; b: number; a: number }   // 0-255 each
 rgba(r, g, b, a?): Rgba8; rgb(hex: number): Rgba8
+mixHex(a: number, b: number, t: number): number   // 0xRRGGBB mix: t = 0 gives a, t = 1 gives b (M1.7)
 
 // core/rng.ts
 mix32(x: number): number                                  // 32-bit avalanche finalizer, uint32 result
@@ -375,6 +376,7 @@ class Camera {
   static readonly kMinScale = 0.05, kMaxScale = 16     // physical pixels per world unit
   static readonly kMinScaleOfFit = 0.6                 // the zoom floor after fit() is this share of the fit scale
   setViewport(sizePx: Vec2): void; viewport(): Vec2
+  setPixelRatio(ratio: number): void; pixelRatio(): number   // device pixels per CSS pixel (M1.7); minimum sprite sizes are in CSS px
   fit(worldSize: Vec2): void
   setScaleLimits(min: number, max: number): void
   clampCenter(worldSize: Vec2): void                   // keeps the centre inside the world
@@ -413,6 +415,10 @@ interface AtlasFrames { antBody(colony, variant): AtlasFrame; antSmall(colony, v
 const kAtlasWidth = 2048, kAtlasHeight = 1024
 makeAtlasFrames(): AtlasFrames
 // antBody 128x64, antSmall 128x64, food 64x64, nest 256x256; 8 colony slots, 4 food variants.
+
+// render/ant_colors.ts (M1.7)
+interface AntColors { gaster: string; body: string; outline: string; sheen: string }   // CSS colours for an ant sprite
+antColors(colonyHex: number): AntColors   // gaster = the colony colour; body = that colour 55% toward #1a120c
 
 // render/sprite_atlas.ts
 interface SpriteAtlas { canvas: HTMLCanvasElement; frames: AtlasFrames }
@@ -487,7 +493,7 @@ terrainLook(theme, worldSize, cell, time): TerrainLook; terrainUniforms(gl, prog
 
 // render/ant_layer.ts
 buildAnts(sprites: SpriteBatch, legs: GeometryBatch, shadows: SpriteBatch, world, camera, alpha,
-          frames: AtlasFrames, gait: GaitTracker): void
+          frames: AtlasFrames, gait: GaitTracker): void   // ants are never shorter than 4 CSS px (M1.7)
 
 // render/world_view.ts
 interface WorldRenderCache { atlasTexture: WebGLTexture | null; terrainTexture: WebGLTexture | null;
