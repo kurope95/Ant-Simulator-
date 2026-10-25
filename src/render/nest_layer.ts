@@ -7,6 +7,8 @@ import type { Camera } from "./camera.js";
 import type { SpriteBatch } from "./sprite_batch.js";
 
 const kSizeFactor = 2.6;
+// A nest stays readable from afar: never smaller than this many CSS pixels.
+const kMinNestCssPx = 28;
 const kCullMargin = 64;
 const kWhite = rgba(255, 255, 255, 255);
 const kExtinct = rgba(150, 145, 140, 255);
@@ -22,7 +24,7 @@ export function buildNests(
   for (const colony of world.colonies) {
     if (!contains(view, colony.nest)) continue;
     const p = camera.worldToScreen(colony.nest);
-    const size = Math.max(1, kSizeFactor * nestRadius(colony, world.params) * scale);
+    const size = Math.max(kMinNestCssPx * camera.pixelRatio(), kSizeFactor * nestRadius(colony, world.params) * scale);
     sprites.addFrame(
       frames.nest(colony.color),
       p.x,

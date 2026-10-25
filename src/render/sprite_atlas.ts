@@ -1,3 +1,4 @@
+import { mixHex } from "../core/color.js";
 import { mix32 } from "../core/rng.js";
 import { colonyHex } from "../sim/palette.js";
 import { FoodKind } from "../sim/setup.js";
@@ -13,6 +14,8 @@ const kBerry = "#c4475e";
 const kBerryDark = "#6e2133";
 const kLeaf = "#7fae5a";
 const kLeafDark = "#4c6c36";
+// The lit crest of the mound, before it is tinted toward the colony colour.
+const kCrest = 0xa07c52;
 
 export interface SpriteAtlas {
   canvas: HTMLCanvasElement;
@@ -281,7 +284,7 @@ function paintFood(
   ctx.restore();
 }
 
-// The mound radius leaves room in the 256 px frame for the soil scattered out to 1.55 r.
+// The mound radius leaves room in the 256 px frame for the glow and the soil out to 1.55 r.
 const kAnthillRadius = 80;
 
 function paintNest(ctx: CanvasRenderingContext2D, frame: AtlasFrame, colony: number): void {
@@ -291,37 +294,42 @@ function paintNest(ctx: CanvasRenderingContext2D, frame: AtlasFrame, colony: num
   ctx.rect(0, 0, frame.w, frame.h);
   ctx.clip();
   const seeded = (i: number): number => mix32(colony * 4096 + i) / kUnit;
-  paintAnthill(ctx, frame.w / 2, frame.h / 2, kAnthillRadius, css(colonyHex(colony)), seeded);
+  paintAnthill(ctx, frame.w / 2, frame.h / 2, kAnthillRadius, colonyHex(colony), seeded);
   ctx.restore();
 }
 
-// cx, cy, r in atlas pixels; colony is a CSS colour string; rnd(i) is deterministic in 0..1.
+// cx, cy, r in atlas pixels; colour is the colony's 0xRRGGBB; rnd(i) is deterministic in 0..1.
 function paintAnthill(
   ctx: CanvasRenderingContext2D,
   cx: number,
   cy: number,
   r: number,
-  colony: string,
+  colour: number,
   rnd: (i: number) => number,
 ): void {
   const TAU = Math.PI * 2;
+  const colony = css(colour);
+  let g = ctx.createRadialGradient(cx, cy, r, cx, cy, r * 1.5);                // 0. colony glow around the mound
+  g.addColorStop(0, css(colour, 0.45)); g.addColorStop(1, css(colour, 0));
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r * 1.5, 0, TAU); ctx.fill();
   for (let i = 0; i < 90; i++) {                               // 1. excavated soil scattered around
     const a = rnd(i) * TAU, d = r * (0.95 + 0.6 * Math.sqrt(rnd(i + 500)));
     ctx.fillStyle = `rgba(120, 92, 62, ${0.35 + 0.4 * rnd(i + 1300)})`;
     ctx.beginPath(); ctx.arc(cx + Math.cos(a) * d, cy + Math.sin(a) * d, r * (0.015 + 0.03 * rnd(i + 900)), 0, TAU); ctx.fill();
   }
-  let g = ctx.createRadialGradient(cx + r * 0.12, cy + r * 0.16, r * 0.2, cx + r * 0.12, cy + r * 0.16, r * 1.08);
+  g = ctx.createRadialGradient(cx + r * 0.12, cy + r * 0.16, r * 0.2, cx + r * 0.12, cy + r * 0.16, r * 1.08);
   g.addColorStop(0, "rgba(0,0,0,0.45)"); g.addColorStop(1, "rgba(0,0,0,0)");   // 2. shadow, bottom-right
   ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx + r * 0.12, cy + r * 0.16, r * 1.08, 0, TAU); ctx.fill();
+  const crest = css(mixHex(kCrest, colour, 0.2));                             // the crest, 20% toward the colony
   g = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.35, r * 0.1, cx, cy, r);  // 3. mound lit from top-left
-  g.addColorStop(0, "#a07c52"); g.addColorStop(0.55, "#7a5a3a"); g.addColorStop(1, "#4a3523");
+  g.addColorStop(0, crest); g.addColorStop(0.55, "#7a5a3a"); g.addColorStop(1, "#4a3523");
   ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.fill();
   for (let i = 0; i < 160; i++) {                              // 4. grain on the mound
     const a = rnd(i + 2000) * TAU, d = r * 0.92 * Math.sqrt(rnd(i + 2500));
     ctx.fillStyle = rnd(i + 3000) < 0.5 ? "rgba(40,28,18,0.35)" : "rgba(190,160,120,0.25)";
     ctx.fillRect(cx + Math.cos(a) * d, cy + Math.sin(a) * d, r * 0.018, r * 0.018);
   }
-  ctx.globalAlpha = 0.7; ctx.strokeStyle = colony; ctx.lineWidth = r * 0.07;   // 5. colony ring at the foot
+  ctx.globalAlpha = 0.95; ctx.strokeStyle = colony; ctx.lineWidth = r * 0.14;   // 5. colony ring at the foot
   ctx.beginPath(); ctx.arc(cx, cy, r * 0.97, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1;
   g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 0.22);                    // 6. entrance hole
   g.addColorStop(0, "#0b0705"); g.addColorStop(0.7, "#1d130c"); g.addColorStop(1, "rgba(29,19,12,0)");

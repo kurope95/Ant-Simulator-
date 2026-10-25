@@ -476,7 +476,7 @@ foodPieces(uid, pos, radius, amount, infinite): FoodPiece[]   // inner-first gol
 buildFood(sprites: SpriteBatch, shadows: SpriteBatch, world, camera, frames: AtlasFrames): void
 
 // render/nest_layer.ts
-buildNests(sprites: SpriteBatch, world, camera, frames: AtlasFrames): void
+buildNests(sprites: SpriteBatch, world, camera, frames: AtlasFrames): void   // never smaller than 28 CSS px (M1.7)
 
 // render/legs.ts
 const kGaitStride = 24
@@ -786,6 +786,7 @@ tests/render/ test_ant_layer.test.ts   [M1.5]  test_atlas.test.ts        [M1.5]
               test_layers.test.ts      [M1.5] test_legs.test.ts         [M1.5]
               test_sprite_batch.test.ts [M1.5] test_theme.test.ts       [M1.5]
               test_view_settings.test.ts
+              test_ant_colors.test.ts [M1.7]
 tests/ui/     test_builder_model.test.ts [M1.5] test_param_specs.test.ts
               test_view_models.test.ts   [M1.5]
 tests/app/    test_attract.test.ts [M1.5] test_bench.test.ts [M1.5]

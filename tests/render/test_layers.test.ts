@@ -41,6 +41,20 @@ test("food: an empty source draws nothing", () => {
   assert.equal(shadows.quadCount(), 0);
 });
 
+test("nests: never smaller than 28 CSS px, even when the world is far away", () => {
+  const { world, camera } = layerWorld();
+  world.colonies.push(makeColony(0, { x: 60, y: 60 }, 0));
+  camera.setPixelRatio(2);
+  camera.setViewport({ x: 8, y: 6 });
+  camera.fit(world.size);
+  camera.centerOn({ x: 60, y: 60 });
+  const sprites = new SpriteBatch();
+  buildNests(sprites, world, camera, makeAtlasFrames());
+  const data = sprites.vertexData();
+  const xs = [data[0], data[8], data[16], data[24]];
+  assert.ok(Math.abs(Math.max(...xs) - Math.min(...xs) - 56) < 1e-6);
+});
+
 test("nests: one sprite per colony, larger with population, extinct tinted", () => {
   const { world, camera } = layerWorld();
   world.colonies.push(makeColony(0, { x: 100, y: 100 }, 0));
