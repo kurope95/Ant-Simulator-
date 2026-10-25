@@ -23,6 +23,8 @@ test("ants: spawn appends an ant with defaults", () => {
   assert.equal(ants.colony[0], 0);
   assert.equal(ants.speed[0], 50);
   assert.equal(ants.lastMarkerCell[0], -1);
+  assert.equal(ants.homeErrX[0], 0);
+  assert.equal(ants.homeErrY[0], 0);
 });
 
 test("ants: spawn grows the arrays past their capacity", () => {

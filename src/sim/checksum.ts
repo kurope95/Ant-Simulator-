@@ -33,6 +33,8 @@ export function worldChecksum(world: World): number {
     foldFloat(ants.timeSinceAnchor[i]);
     foldFloat(ants.degradeTimer[i]);
     foldFloat(ants.wanderHeading[i]);
+    foldFloat(ants.homeErrX[i]);
+    foldFloat(ants.homeErrY[i]);
   }
 
   const markers = world.markers;

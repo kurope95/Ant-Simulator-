@@ -26,6 +26,8 @@ test("params: defaults match spec section 12", () => {
   assert.equal(p.energyMax, 100);
   assert.equal(p.energyBurn, 0.5);
   assert.equal(p.exhaustedAt, 60);
+  assert.equal(p.homingEnabled, true);
+  assert.equal(p.homingDrift, 0.04);
   assert.equal(p.tHorizon, 1.0);
   assert.equal(p.rAvoidMax, 24);
   assert.equal(p.maxNeighbours, 16);

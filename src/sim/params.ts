@@ -40,6 +40,8 @@ export interface SimParams {
   energyMax: number;
   energyBurn: number;
   exhaustedAt: number;
+  homingEnabled: boolean;
+  homingDrift: number;
   pushOnSignal: number;
   mass: number;
   massCarrying: number;
@@ -107,6 +109,8 @@ export function defaultParams(): SimParams {
     energyMax: 100,
     energyBurn: 0.5,
     exhaustedAt: 60,
+    homingEnabled: true,
+    homingDrift: 0.04,
     pushOnSignal: 0.4,
     mass: 1,
     massCarrying: 3,

@@ -154,7 +154,7 @@ const kNoOwner = -1
 enum AntState { Foraging = 0, ReturningFood = 1, ReturningExhausted = 2 }
 enum AntRole { Follower = 0, Explorer = 1 }
 enum RandStream { WanderOffset = 1, WanderInterval, StuckTurn, SpawnHeading,
-                  SpawnRole, SpeedJitter, ContactTurn }
+                  SpawnRole, SpeedJitter, ContactTurn, HomingDrift }
 
 // sim/params.ts
 interface SimParams { /* every tunable from spec §12; see defaultParams */ }
@@ -201,6 +201,7 @@ class Ants {   // SoA; every field is an array-like of the same length
   posX, posY, prevX, prevY, velX, velY, heading, speed, mass: Float32Array
   energy, timeSinceAnchor, dropX, dropY, timeSinceLastMarker, degradeTimer: Float32Array
   lastMarkerCell: Int32Array; wanderOffset, wanderHeading, wanderTimer: Float32Array
+  homeErrX, homeErrY: Float32Array   // path-integration estimate of the way home (§5.7)
   constructor(capacity?)
   size(): number
   spawn(a: AntSpawn, uid: number, speed: number, params: SimParams): number
@@ -571,7 +572,7 @@ class ColonyPanel { readonly root: HTMLElement
 // ui/settings_drawer.ts
 interface SettingsHooks { onHeatmap(mode: HeatmapMode): void; onAnts(): void; onGrid(): void;
                           onParam(key: ParamKey, value: number): void;
-                          onResetParams(): void; onFit(): void }
+                          onResetParams(): void; onHoming(): void; onFit(): void }
 class SettingsDrawer { readonly root: HTMLElement
                        constructor(root, params: SimParams, hooks: SettingsHooks)
                        update(view?: ViewSettings): void
@@ -731,13 +732,14 @@ replaced by the presentation overhaul.
 tests/core/   test_build_info.test.ts  test_fixed_step.test.ts  test_math.test.ts
               test_ring_buffer.test.ts test_rng.test.ts         test_stats.test.ts
 tests/sim/    test_ants.test.ts               test_food_colony.test.ts
-              test_marker_grid.test.ts        test_obstacles.test.ts              [M1.5]
-              test_obstacles_physics.test.ts  [M1.5]  test_params.test.ts
-              test_pipeline.test.ts           test_presets.test.ts               [M1.5]
-              test_presets_checksum.test.ts   [M1.5]  test_rand_stream.test.ts
-              test_sensing.test.ts            test_setup.test.ts                 [M1.5]
-              test_setup_apply.test.ts        [M1.5]  test_steering.test.ts
-              test_think.test.ts              test_world.test.ts
+              test_homing.test.ts     [M2]    test_marker_grid.test.ts
+              test_obstacles.test.ts          [M1.5]  test_obstacles_physics.test.ts  [M1.5]
+              test_params.test.ts             test_pipeline.test.ts
+              test_presets.test.ts    [M1.5]  test_presets_checksum.test.ts       [M1.5]
+              test_rand_stream.test.ts        test_sensing.test.ts
+              test_setup.test.ts      [M1.5]  test_setup_apply.test.ts            [M1.5]
+              test_steering.test.ts           test_think.test.ts
+              test_world.test.ts
 tests/render/ test_ant_layer.test.ts   [M1.5]  test_atlas.test.ts        [M1.5]
               test_batch.test.ts              test_camera.test.ts
               test_food_layout.test.ts [M1.5] test_heatmap.test.ts

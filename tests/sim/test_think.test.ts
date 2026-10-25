@@ -96,7 +96,8 @@ test("think: a forager deposits a home trail after the drop distance", () => {
 });
 
 test("think: exhausted ants move their drop point without depositing", () => {
-  const { world, index } = makeThinkWorld({ x: 100, y: 100 });
+  // Facing the nest, so the homing ant flies straight for the whole run.
+  const { world, index } = makeThinkWorld({ x: 100, y: 100 }, Math.atan2(10 - 100, 10 - 100));
   world.ants.state[index] = AntState.ReturningExhausted;
   const out = makeChunkEvents();
   for (let t = 0; t < 10; t++) thinkChunk(world, 0, 1, out);
@@ -108,7 +109,9 @@ test("think: a returning ant deposits food trail", () => {
   const { world, index } = makeThinkWorld({ x: 100, y: 100 });
   world.ants.state[index] = AntState.ReturningFood;
   const out = makeChunkEvents();
-  for (let t = 0; t < 10; t++) thinkChunk(world, 0, 1, out);
+  // 12 ticks, not 10: a homing ant curves toward the nest, so its straight-line
+  // distance from the drop point lags the 8 u walked until it has turned.
+  for (let t = 0; t < 12; t++) thinkChunk(world, 0, 1, out);
   assert.equal(out.deposits.length, 1);
   assert.equal(out.deposits[0].channel, MarkerChannel.ToFood);
 });

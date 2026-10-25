@@ -436,6 +436,11 @@ export class AppController {
       onResetParams: () => {
         this.resetParams();
       },
+      onHoming: () => {
+        const enabled = !this.params.homingEnabled;
+        this.params.homingEnabled = enabled;
+        if (this.runWorld !== null) this.runWorld.params.homingEnabled = enabled;
+      },
       onFit: () => {
         this.requestFit();
       },

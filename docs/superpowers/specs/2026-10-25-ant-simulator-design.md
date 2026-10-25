@@ -282,6 +282,15 @@ An ant is stuck when `time_since_last_marker > STUCK_TIMEOUT` (2.5 s), meaning i
 - At 0 the ant dies (removed in phase 5).
 - Scenarios may override the burn rate. The maze, for example, lowers it so the long route is survivable.
 
+### 5.7 Homing memory (path integration)
+A returning ant that can neither see food nor sense a trail still has a rough idea of where home is, from its own movement. Spec §1 allows the ant's own memory, and this is it: it rescues carriers that lose the trail far from the nest. `HOMING_ENABLED` (default on) gates the whole rule.
+
+- **Estimate.** Every ant keeps `home_err = (0, 0)`, reset on spawn and whenever it touches its own nest.
+- **Drift.** On each wander redraw (§5.4) the estimate accumulates the error of the leg just walked: `home_err += (rand(−1, 1), rand(−1, 1)) × HOMING_DRIFT × speed × interval`, with the pair drawn from the `HomingDrift` stream. `HOMING_DRIFT` (0.04) is the fraction of a leg's length the estimate can be off by.
+- **Use.** In §5.3's priority chain, when direct sight and markers both come up empty, an ant in `ReturningFood` or `ReturningExhausted` steers toward `nest + home_err` instead of its previous heading. The wander fallback is skipped that tick; wall steering still applies.
+
+*(Measured with 200 ants on the reach harness: a lone carrier 800 u from the nest with no trail at all delivers in about 17 s with the rule on, and never with it off.)*
+
 ---
 
 ## 6. Crowd physics
@@ -465,6 +474,7 @@ Rules:
 | `CROWD_LIMIT` | 4 | ants | within 3 × `ANT_RADIUS` |
 | `STUCK_TURN_JITTER` / `CROWD_RADIUS_FACTOR` / `ZONE_MARGIN` | 0.6 / 3 / 16 | rad / × `ANT_RADIUS` / u | the ±0.6 turn, the "3 ×" crowd radius and the nest/food zone margin from §5.5 |
 | `ENERGY_MAX` / `ENERGY_BURN` / `EXHAUSTED_AT` | 100 / 0.5 / 60 | – / per s / – | |
+| `HOMING_ENABLED` / `HOMING_DRIFT` | on / 0.04 | – / fraction of a leg | Settings switch "Homing memory"; §5.7 |
 | `PUSH_ON_SIGNAL` | 0.4 | | |
 | `MASS` / carrying | 1 / 3 | | |
 | `SPAWN_COST` | 5 | food | |

@@ -21,7 +21,20 @@ export function updateWander(world: World, ant: number, dt: number): boolean {
   // The target heading is absolute so it persists between picks without becoming
   // a constant turn toward `heading + offset` (spec §5.4).
   ants.wanderHeading[ant] = wrapAngle(ants.heading[ant] + offset);
-  ants.wanderTimer[ant] =
-    interval * randRange(world.seed, uid, world.tick, RandStream.WanderInterval, 0.5, 1.5);
+  const next = interval * randRange(world.seed, uid, world.tick, RandStream.WanderInterval, 0.5, 1.5);
+  ants.wanderTimer[ant] = next;
+  if (params.homingEnabled) {
+    // Path integration: the home estimate accumulates the error of every leg
+    // walked without vision of the nest (spec §5.7).
+    const walked = ants.speed[ant] * next;
+    ants.homeErrX[ant] +=
+      randRange(world.seed, uid, world.tick, RandStream.HomingDrift, -1, 1) *
+      params.homingDrift *
+      walked;
+    ants.homeErrY[ant] +=
+      randRange(world.seed, uid, world.tick, RandStream.HomingDrift, -1, 1) *
+      params.homingDrift *
+      walked;
+  }
   return true;
 }

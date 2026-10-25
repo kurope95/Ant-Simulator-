@@ -33,6 +33,7 @@ interface ChosenHeading {
   bestFoodSignal: number;
   fromSight: boolean;
   fromMarkers: boolean;
+  fromHoming: boolean;
 }
 
 function chooseHeading(world: World, ant: number): ChosenHeading {
@@ -45,17 +46,36 @@ function chooseHeading(world: World, ant: number): ChosenHeading {
       bestFoodSignal: state === AntState.Foraging ? 1 : 0,
       fromSight: true,
       fromMarkers: false,
+      fromHoming: false,
     };
   }
   const usesExplorerPattern =
     ants.role[ant] === AntRole.Explorer && state !== AntState.ReturningExhausted;
   const pattern = usesExplorerPattern ? explorerPattern(world.params) : followerPattern(world.params);
   const sensed = senseMarkers(world, ant, senseChannel(state), pattern);
+  if (!sensed.found && world.params.homingEnabled && state !== AntState.Foraging) {
+    // Nothing to see and no trail: a returning ant trusts its own path
+    // estimate of where the nest is (spec §5.7).
+    const colony = world.colonies[ants.colony[ant]];
+    if (colony !== undefined) {
+      return {
+        heading: Math.atan2(
+          colony.nest.y + ants.homeErrY[ant] - ants.posY[ant],
+          colony.nest.x + ants.homeErrX[ant] - ants.posX[ant],
+        ),
+        bestFoodSignal: sensed.bestFoodSignal,
+        fromSight: false,
+        fromMarkers: false,
+        fromHoming: true,
+      };
+    }
+  }
   return {
     heading: sensed.found ? sensed.targetHeading : ants.heading[ant],
     bestFoodSignal: sensed.bestFoodSignal,
     fromSight: false,
     fromMarkers: sensed.found,
+    fromHoming: false,
   };
 }
 
@@ -141,7 +161,7 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
 
     const pickedWander = updateWander(world, ant, dt);
     let clearAhead = false;
-    if (!chosen.fromSight) {
+    if (!chosen.fromSight && !chosen.fromHoming) {
       if (chosen.fromMarkers) {
         // A redraw nudges a marker-following ant; between redraws the marker wins.
         if (pickedWander) desired += ants.wanderOffset[ant];
@@ -310,6 +330,8 @@ export function applyEvents(world: World, events: readonly ChunkEvents[]): void 
       } else {
         const colony = world.colonies[contact.target];
         if (colony === undefined) continue;
+        ants.homeErrX[ant] = 0;
+        ants.homeErrY[ant] = 0;
         const state = ants.state[ant];
         if (state === AntState.ReturningFood) {
           colony.foodPool += 1;
