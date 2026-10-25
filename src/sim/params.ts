@@ -130,6 +130,10 @@ export function defaultParams(): SimParams {
   };
 }
 
+export function markerDecayFactor(params: SimParams, dt: number): number {
+  return Math.pow(2, -dt / params.markerHalfLife);
+}
+
 export function validate(params: SimParams): string | null {
   if (!(params.simHz > 0)) return "sim_hz must be positive";
   if (!(params.markerCell > 0) || !(params.obstacleCell > 0) || !(params.hashCell > 0)) {
