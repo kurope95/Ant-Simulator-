@@ -226,7 +226,7 @@ foodAt(grid, colony, cell): number
 emissionStrength(timeSinceAnchor, params): number
 deposit(grid, cell, colony, channel, strength, params): void
 degrade(grid, cell, colony, channel, factor): void     // the depositor's own layer only
-decayMarkers(grid, factor, eps): void                  // all layers, then recompute owner
+decayMarkers(grid, factor, eps, flipMargin): void     // all layers, then recompute owner with hysteresis (M1.7)
 
 // sim/food.ts
 interface FoodAmount { pos: Vec2; amount: number; infinite: boolean }
@@ -258,7 +258,7 @@ interface SensorSample { angleOffset: number; distance: number }
 followerPattern(params): readonly SensorSample[] // 25 = 5 angles x 5 distances, scaled by the sensor params
 explorerPattern(params): readonly SensorSample[] // 6 = 3 angles x 2 distances, scaled the same way; cached per params pair
 interface SenseResult { found: boolean; targetHeading: number; bestSignal: number; bestFoodSignal: number }
-senseMarkers(world, ant, channel, pattern): SenseResult
+senseMarkers(world, ant, channel, pattern): SenseResult   // score = own signal − foreignAversion × strongest rival (M1.7)
 interface FallbackChoice { heading: number; clearAhead: boolean }
 chooseFallback(world, ant): FallbackChoice   // wander heading if its look-ahead is free, else the longest free ray
 fallbackHeading(world, ant): number          // chooseFallback(...).heading
@@ -539,11 +539,12 @@ colonyRows(world): ColonyRow[]
 // ui/param_specs.ts
 type ParamKey = "antSpeed" | "turnRate" | "sensorRadius" | "sensorHalfFovDeg" | "explorerRatio"
               | "markerHalfLife" | "markerDropDist" | "emissionDecay" | "degradeTime"
+              | "foreignErasureFactor" | "foreignAversion"   // M1.7
               | "energyBurn" | "spawnCost"
 type ParamGroup = "movement" | "trails" | "colony"
 interface ParamSpec { key: ParamKey; label: string; unit: string; min: number; max: number;
                       step: number; scale: number; group: ParamGroup; digits?: number }
-paramSpecs(): readonly ParamSpec[]      // ten live rows; degradeTime typed but not shown until M5
+paramSpecs(): readonly ParamSpec[]      // twelve live rows (M1.7 adds foreignErasureFactor and foreignAversion); degradeTime typed but not shown until M5
 specValue(spec, params): number
 applySpecValue(spec, params, displayValue): number
 formatSpecValue(spec, displayValue): string

@@ -9,7 +9,7 @@ A real-time 2D ant colony / stigmergy simulator inspired by Pezzza's Work "Ant S
 **Plans:** one per milestone, in `docs/superpowers/plans/`. Carry them out task by task, and don't run ahead into the next milestone.
 
 ## Status
-- Current milestone: **M1.6 (camera and looks) built** (2026-10-25), waiting on Marek's laptop camera checklist before it counts as done. 246 tests, clean build. Bench (plugged in, meadow, 1200 ticks, 200 ants): 0.464 ms average, 0.607 ms p95, against a 0.385 ms baseline — inside the +25% budget of 0.481 ms. Terrain pass: 3.9 ms on a mixed map on camera-move and shimmer frames, accepted over the 3 ms bar for now; idle frames copy the cached terrain in 0.8 ms. M2 (navigation and foraging) is complete; its numbers are in its report. Ant-to-ant collisions stay in M4; birth tuning is unscheduled. Update this line as each milestone lands; the milestone list is in spec §15.
+- Current milestone: **M1.7 (colony identity and scent competition) built** (2026-10-26) on `claude/m1-7-colony-identity`, not merged into main yet. 258 tests, clean build. Reach contest colony B: 122 deliveries in minute 3 (guard 63). M1.7 bench runs were on battery, so none is quoted: rerun plugged in. M1.6's laptop camera checklist is still pending. Last plugged-in bench (M1.6, meadow, 1200 ticks, 200 ants): 0.464 ms average, 0.607 ms p95, against a 0.385 ms baseline — inside the +25% budget of 0.481 ms. Terrain pass: 3.9 ms on a mixed map on camera-move and shimmer frames, accepted over the 3 ms bar for now; idle frames copy the cached terrain in 0.8 ms. M2 (navigation and foraging) is complete; its numbers are in its report. Ant-to-ant collisions stay in M4; birth tuning is unscheduled. Update this line as each milestone lands; the milestone list is in spec §15.
 
 ## This machine
 - **Windows 11 ARM64.** Snapdragon X Plus, 8 equal cores, 16 GB shared RAM, Adreno X1-45 GPU.
@@ -64,4 +64,4 @@ npm run screenshot -- --preset meadow --ticks 300 --zoom 6 --focus 400,540 --out
 - Back performance claims with a `npm run bench` run, and state whether the laptop was plugged in.
 
 ## Scope
-- **Inter-colony hostilities/combat is an open topic.** Don't implement it until the user asks. In v1 the territory (foreign-marker erasure) rule is the only cross-colony interaction.
+- **Inter-colony hostilities/combat is an open topic.** Don't implement it until the user asks. In v1 the cross-colony interactions are the territory (foreign-marker erasure) rule and foreign-scent aversion (M1.7, sensing only).
