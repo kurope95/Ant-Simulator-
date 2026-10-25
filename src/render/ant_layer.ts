@@ -1,15 +1,24 @@
+import { rgb } from "../core/color.js";
 import { contains, expanded } from "../core/rect.js";
 import { fromAngle, lerpVec } from "../core/vec2.js";
+import { colonyHex } from "../sim/palette.js";
 import type { World } from "../sim/world.js";
 import type { GeometryBatch } from "./batch.js";
 import type { Camera } from "./camera.js";
-import { colonyColor, type Theme } from "./theme.js";
+import type { Theme } from "./theme.js";
 
 const kCullMargin = 32;
 const kWidthRatio = 0.45;
 const kMinLengthPx = 1.5;
 const kCarriedFoodOffset = 0.55;
 const kCarriedFoodRadius = 0.28;
+
+function colorIndexFor(world: World, colonyId: number): number {
+  for (const colony of world.colonies) {
+    if (colony.id === colonyId) return colony.color;
+  }
+  return 0;
+}
 
 export function buildAnts(
   batch: GeometryBatch,
@@ -37,7 +46,7 @@ export function buildAnts(
     const dir = fromAngle(ants.heading[i]);
     const perpX = -dir.y;
     const perpY = dir.x;
-    const color = colonyColor(ants.colony[i]);
+    const color = rgb(colonyHex(colorIndexFor(world, ants.colony[i])));
     batch.addQuad(
       { x: p.x + dir.x * halfLength, y: p.y + dir.y * halfLength },
       { x: p.x - perpX * halfWidth, y: p.y - perpY * halfWidth },

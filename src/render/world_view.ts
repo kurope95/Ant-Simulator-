@@ -1,14 +1,16 @@
 import type { Rgba8 } from "../core/color.js";
+import { rgb } from "../core/color.js";
 import type { Vec2 } from "../core/vec2.js";
 import { nestRadius } from "../sim/colony.js";
 import { foodRadius } from "../sim/food.js";
+import { colonyHex } from "../sim/palette.js";
 import type { World } from "../sim/world.js";
 import { buildAnts } from "./ant_layer.js";
 import { GeometryBatch } from "./batch.js";
 import type { Camera } from "./camera.js";
 import type { GlRenderer } from "./gl_renderer.js";
 import { fillHeatmapRgba } from "./heatmap.js";
-import { colonyColor, type Theme } from "./theme.js";
+import type { Theme } from "./theme.js";
 import { HeatmapMode, type ViewSettings } from "./view_settings.js";
 
 const kGridStep = 120;
@@ -91,7 +93,7 @@ export function buildActors(
   for (const colony of world.colonies) {
     const center = camera.worldToScreen(colony.nest);
     const radius = Math.max(1, nestRadius(colony, world.params) + 2);
-    const color = colonyColor(colony.id);
+    const color = rgb(colonyHex(colony.color));
     batch.addCircle(center, radius * scale, color);
     batch.addCircle(center, Math.max(1, nestRadius(colony, world.params) * scale), theme.ground);
     batch.addCircle(

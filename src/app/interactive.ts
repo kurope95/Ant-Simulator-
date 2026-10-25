@@ -2,7 +2,7 @@ import { FixedStepClock } from "../core/fixed_step.js";
 import type { Vec2 } from "../core/vec2.js";
 import { Camera } from "../render/camera.js";
 import { GlRenderer } from "../render/gl_renderer.js";
-import { nightTheme } from "../render/theme.js";
+import { themeForPreset } from "../render/theme.js";
 import { cycleHeatmap, defaultViewSettings } from "../render/view_settings.js";
 import { createWorldRenderCache, drawWorld } from "../render/world_view.js";
 import { defaultParams } from "../sim/params.js";
@@ -37,7 +37,7 @@ export function runInteractive(
   }
   const world = worldFromSetup(setup, defaultParams());
 
-  const theme = nightTheme();
+  const theme = themeForPreset(setup.presetId);
   const settings = defaultViewSettings();
   const cache = createWorldRenderCache(renderer, world);
   const camera = new Camera();

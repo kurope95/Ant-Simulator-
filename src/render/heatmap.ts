@@ -1,6 +1,7 @@
+import { colonyHex } from "../sim/palette.js";
 import type { MarkerGrid } from "../sim/marker_grid.js";
 import { kNoOwner } from "../sim/types.js";
-import { colonyColor, type Theme } from "./theme.js";
+import type { Theme } from "./theme.js";
 import { HeatmapMode } from "./view_settings.js";
 
 /**
@@ -13,11 +14,15 @@ export function fillHeatmapRgba(
   theme: Theme,
   rgbaOut: Uint8Array,
 ): void {
+  if (mode === HeatmapMode.Off) {
+    rgbaOut.fill(0);
+    return;
+  }
   const cells = grid.width * grid.height;
   for (let cell = 0; cell < cells; cell++) {
     const offset = cell * 4;
     const owner = grid.owner[cell];
-    if (mode === HeatmapMode.Off || owner === kNoOwner) {
+    if (owner === kNoOwner) {
       rgbaOut[offset] = 0;
       rgbaOut[offset + 1] = 0;
       rgbaOut[offset + 2] = 0;
@@ -34,14 +39,14 @@ export function fillHeatmapRgba(
       rgbaOut[offset + 2] = Math.round(
         Math.min(255, theme.heatHome.b * home + theme.heatFood.b * food),
       );
-      rgbaOut[offset + 3] = Math.round(255 * Math.min(home + food, 1));
+      rgbaOut[offset + 3] = Math.round(255 * Math.min(home + food, 1) * theme.heatAlpha);
       continue;
     }
-    const color = colonyColor(owner);
-    const k = Math.min(Math.max(home, food), 1);
-    rgbaOut[offset] = Math.round(color.r * k);
-    rgbaOut[offset + 1] = Math.round(color.g * k);
-    rgbaOut[offset + 2] = Math.round(color.b * k);
-    rgbaOut[offset + 3] = Math.round(255 * k);
+    const hex = colonyHex(owner);
+    const strength = Math.min(Math.max(home, food), 1);
+    rgbaOut[offset] = (hex >> 16) & 0xff;
+    rgbaOut[offset + 1] = (hex >> 8) & 0xff;
+    rgbaOut[offset + 2] = hex & 0xff;
+    rgbaOut[offset + 3] = Math.round(255 * strength * theme.heatAlpha);
   }
 }

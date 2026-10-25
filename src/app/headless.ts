@@ -1,6 +1,6 @@
 import { Camera } from "../render/camera.js";
 import { GlRenderer } from "../render/gl_renderer.js";
-import { nightTheme } from "../render/theme.js";
+import { themeForPreset } from "../render/theme.js";
 import { defaultViewSettings } from "../render/view_settings.js";
 import { createWorldRenderCache, drawWorld } from "../render/world_view.js";
 import { defaultParams } from "../sim/params.js";
@@ -39,7 +39,7 @@ export function runHeadless(
 
   const settings = defaultViewSettings();
   const cache = createWorldRenderCache(renderer, world);
-  drawWorld(renderer, cache, world, camera, settings, nightTheme(), 1);
+  drawWorld(renderer, cache, world, camera, settings, themeForPreset(setup.presetId), 1);
   renderer.present();
 
   const size = renderer.sizePx();

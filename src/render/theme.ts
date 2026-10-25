@@ -1,6 +1,7 @@
-import { rgb, type Rgba8 } from "../core/color.js";
+import { rgba, rgb, type Rgba8 } from "../core/color.js";
 
 export interface Theme {
+  name: string;
   outside: Rgba8;
   ground: Rgba8;
   grid: Rgba8;
@@ -8,44 +9,80 @@ export interface Theme {
   food: Rgba8;
   heatHome: Rgba8;
   heatFood: Rgba8;
+  heatAlpha: number;
+  rock: Rgba8;
+  water: Rgba8;
+  sand: Rgba8;
+  mud: Rgba8;
+  speckle: Rgba8;
 }
 
-export function sandTheme(): Theme {
+const kOutside = rgba(0x05, 0x07, 0x0a, 255);
+const kBorder = rgba(0xeb, 0xf1, 0xe5, 46);
+const kHeatHome = rgba(0x4f, 0xc3, 0xb0, 255);
+const kHeatFood = rgba(0xf0, 0xb4, 0x5e, 255);
+const kHeatAlpha = 0.62;
+const kRock = rgba(0x2c, 0x30, 0x34, 255);
+const kWater = rgba(0x0f, 0x2f, 0x3c, 255);
+const kSand = rgba(0x3a, 0x31, 0x22, 255);
+const kMud = rgba(0x25, 0x1f, 0x17, 255);
+
+function makeTheme(
+  name: string,
+  groundHex: number,
+  grid: Rgba8,
+  speckleHex: number,
+  foodHex: number,
+): Theme {
   return {
-    outside: rgb(0x2b2b2b),
-    ground: rgb(0xe8dcc2),
-    grid: rgb(0xd6c7a8),
-    border: rgb(0x8c7a5b),
-    food: rgb(0x6b8f3a),
-    heatHome: rgb(0x3a7be0),
-    heatFood: rgb(0xe04b3a),
+    name,
+    outside: kOutside,
+    ground: rgb(groundHex),
+    grid,
+    border: kBorder,
+    food: rgb(foodHex),
+    heatHome: kHeatHome,
+    heatFood: kHeatFood,
+    heatAlpha: kHeatAlpha,
+    rock: kRock,
+    water: kWater,
+    sand: kSand,
+    mud: kMud,
+    speckle: rgb(speckleHex),
   };
 }
 
-export function nightTheme(): Theme {
-  return {
-    outside: rgb(0x05070a),
-    ground: rgb(0x0b0f14),
-    grid: rgb(0x111823),
-    border: rgb(0x1c2733),
-    food: rgb(0x7fe08a),
-    heatHome: rgb(0x2f7dff),
-    heatFood: rgb(0xff8a3d),
-  };
+export function meadowTheme(): Theme {
+  return makeTheme("Meadow", 0x0b100d, rgba(0x59, 0x5f, 0x59, 15), 0x2e3d2a, 0xa8d86b);
 }
 
-const kColonyColors = [
-  0xe04b3a,
-  0xf2c12e,
-  0x3a7be0,
-  0x3daa5c,
-  0x9b59b6,
-  0xe67e22,
-  0x1abc9c,
-  0xe84393,
-];
+export function dunesTheme(): Theme {
+  return makeTheme("Dunes", 0x2a2117, rgba(0x6e, 0x6a, 0x5f, 15), 0x4a3b28, 0xc8b25a);
+}
 
-export function colonyColor(id: number): Rgba8 {
-  const index = ((id % kColonyColors.length) + kColonyColors.length) % kColonyColors.length;
-  return rgb(kColonyColors[index]);
+export function creekTheme(): Theme {
+  return makeTheme("Creek", 0x0d1412, rgba(0x5b, 0x61, 0x5c, 15), 0x23403a, 0x8fd9a8);
+}
+
+export function boulderTheme(): Theme {
+  return makeTheme("Boulder", 0x14171a, rgba(0x5f, 0x63, 0x61, 15), 0x2e353b, 0xb8c46a);
+}
+
+export function blankTheme(): Theme {
+  return makeTheme("Blank", 0x0b0e0f, rgba(0x59, 0x5d, 0x5a, 15), 0x23282a, 0x9bd48a);
+}
+
+export function themeForPreset(presetId: string): Theme {
+  switch (presetId) {
+    case "dunes":
+      return dunesTheme();
+    case "creek":
+      return creekTheme();
+    case "boulder":
+      return boulderTheme();
+    case "blank":
+      return blankTheme();
+    default:
+      return meadowTheme();
+  }
 }
