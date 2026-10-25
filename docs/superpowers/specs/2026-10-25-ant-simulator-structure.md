@@ -348,9 +348,13 @@ defaultViewSettings(): ViewSettings
 cycleHeatmap(mode): HeatmapMode        // Off -> DualChannel -> ColonyColor -> Off
 fillHeatmapRgba(grid, mode, theme, rgbaOut: Uint8Array): void          // pure, testable
 createAntSprite(gl, lengthPx): WebGLTexture
-buildAnts(batch, world, camera, alpha, theme): void
-interface WorldRenderCache { heatmapTexture; antSprite; batches }
-drawWorld(renderer, cache, world, camera, settings, theme, alpha): void
+buildAnts(batch, world, camera, alpha, theme): void                    // culled diamond quads
+buildGround(batch, camera, worldSize, theme, settings): void           // ground, grid, border
+buildActors(batch, world, camera, alpha, settings, theme): void        // food, nests, ants
+interface WorldRenderCache { heatmapTexture: WebGLTexture | null; heatmapPixels: Uint8Array;
+                             ground: GeometryBatch; actors: GeometryBatch }
+createWorldRenderCache(renderer, world): WorldRenderCache
+drawWorld(renderer, cache, world, camera, settings, theme, alpha): void // <= 3 draw calls
 // [M2] render/obstacle_layer.ts, render/overlays.ts;  [M5] shadows and legs in ant_layer
 ```
 
