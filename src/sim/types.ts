@@ -12,3 +12,13 @@ export enum AntRole {
   Follower,
   Explorer,
 }
+
+export enum RandStream {
+  WanderOffset = 1,
+  WanderInterval,
+  StuckTurn,
+  SpawnHeading,
+  SpawnRole,
+  SpeedJitter,
+  ContactTurn,
+}
