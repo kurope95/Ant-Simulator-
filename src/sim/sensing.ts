@@ -97,6 +97,8 @@ export function senseMarkers(
     const x = posX + direction.x * sample.distance;
     const y = posY + direction.y * sample.distance;
     if (isSolidAt(world.obstacles, { x, y })) continue;
+    // Cheap line of sight: a wall at the halfway point blocks the sample too.
+    if (isSolidAt(world.obstacles, { x: (posX + x) * 0.5, y: (posY + y) * 0.5 })) continue;
     const cell = world.markers.cellIndex({ x, y });
     if (cell < 0 || world.markers.owner[cell] !== colony) continue;
     const home = world.markers.toHome[cell];

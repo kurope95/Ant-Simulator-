@@ -6,6 +6,7 @@ import { themeForPreset, type Theme } from "../render/theme.js";
 import { cycleHeatmap, defaultViewSettings, type ViewSettings } from "../render/view_settings.js";
 import {
   createWorldRenderCache,
+  disposeWorldRenderCache,
   drawWorld,
   refreshTerrain,
   type WorldRenderCache,
@@ -298,6 +299,7 @@ export class AppController {
 
   private makeCache(world: World, theme: Theme): WorldRenderCache | null {
     if (this.renderer === null) return null;
+    if (this.cache !== null) disposeWorldRenderCache(this.renderer, this.cache);
     return createWorldRenderCache(this.renderer, world, theme);
   }
 

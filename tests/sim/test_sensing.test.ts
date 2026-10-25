@@ -10,7 +10,7 @@ import {
 } from "../../src/sim/sensing.js";
 import { MarkerChannel } from "../../src/sim/marker_grid.js";
 import { defaultParams } from "../../src/sim/params.js";
-import { FoodKind } from "../../src/sim/setup.js";
+import { FoodKind, ObstacleKind } from "../../src/sim/setup.js";
 import { AntState } from "../../src/sim/types.js";
 import { makeWorld, type World } from "../../src/sim/world.js";
 
@@ -79,6 +79,25 @@ test("sensing: an own-colony cell ahead is found", () => {
   near(result.bestSignal, 0.8);
   near(result.bestFoodSignal, 0.8);
   assert.ok(Math.abs(result.targetHeading) < 1e-9);
+});
+
+test("sensing: a solid halfway point blocks the sample", () => {
+  const { world, index } = makeSenseWorld();
+  const cell = world.markers.cellIndex({ x: 132, y: 100 });
+  world.markers.owner[cell] = 0;
+  world.markers.toFood[cell] = 0.8;
+  const pattern = [{ angleOffset: 0, distance: 32 }];
+  const open = senseMarkers(world, index, MarkerChannel.ToFood, pattern);
+  assert.equal(open.found, true);
+
+  const grid = world.obstacles;
+  const col = Math.floor(116 / grid.cell);
+  const row = Math.floor(100 / grid.cell);
+  grid.kind[row * grid.width + col] = ObstacleKind.Rock;
+  const blocked = senseMarkers(world, index, MarkerChannel.ToFood, pattern);
+  assert.equal(blocked.found, false);
+  assert.equal(blocked.bestSignal, 0);
+  assert.equal(blocked.bestFoodSignal, 0);
 });
 
 test("sensing: a saturated field keeps the ant heading straight", () => {

@@ -383,6 +383,7 @@ class GlRenderer {
   drawBatch(batch: GeometryBatch): void
   drawSprites(texture: WebGLTexture, batch: SpriteBatch): void
   createTexture(): WebGLTexture | null
+  deleteTexture(texture: WebGLTexture | null): void
   updateTexture(texture, width, height, rgba: Uint8Array): void   // row 0 = top
   drawTexture(texture: WebGLTexture, rect: Rect): void
   present(): void                      // no-op for WebGL; kept for symmetry
@@ -440,6 +441,7 @@ interface WorldRenderCache { atlasTexture: WebGLTexture | null; terrainTexture: 
                              under: GeometryBatch; back: SpriteBatch;
                              legs: GeometryBatch; actors: SpriteBatch; gait: GaitTracker }
 createWorldRenderCache(renderer, world, theme): WorldRenderCache
+disposeWorldRenderCache(renderer, cache): void    // deletes terrain + heatmap textures; atlas is shared
 refreshTerrain(renderer, cache, world, theme): void
 drawWorld(renderer, cache, world, camera, settings, theme, alpha): void
 ```

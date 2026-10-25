@@ -309,6 +309,11 @@ export class GlRenderer {
     return texture;
   }
 
+  deleteTexture(texture: WebGLTexture | null): void {
+    if (texture === null) return;
+    this.gl.deleteTexture(texture);
+  }
+
   updateTexture(texture: WebGLTexture, width: number, height: number, rgba: Uint8Array): void {
     const gl = this.gl;
     // GL's first data row is texture v = 0, and the quad maps v = 0 to the

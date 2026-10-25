@@ -81,6 +81,18 @@ export function createWorldRenderCache(
   };
 }
 
+// The atlas texture is shared per renderer and outlives caches; only the two
+// textures a cache creates for itself are deleted here.
+export function disposeWorldRenderCache(
+  renderer: Pick<GlRenderer, "deleteTexture">,
+  cache: Pick<WorldRenderCache, "terrainTexture" | "heatmapTexture">,
+): void {
+  renderer.deleteTexture(cache.terrainTexture);
+  renderer.deleteTexture(cache.heatmapTexture);
+  cache.terrainTexture = null;
+  cache.heatmapTexture = null;
+}
+
 export function refreshTerrain(
   renderer: GlRenderer,
   cache: WorldRenderCache,
