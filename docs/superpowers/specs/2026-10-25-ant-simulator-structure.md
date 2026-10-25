@@ -178,6 +178,7 @@ interface World {
   chunkEvents: ChunkEvents[]; nextUid: number
 }
 makeWorld(params: SimParams, seed: number, size?: Vec2): World
+applyBreach(world, rects: readonly SetupRect[]): void   // clears the obstacle kind in each rect, then rebuildBorder
 stepWorld(world: World): void
 // SpatialHash -> Think -> Events -> Collisions -> Removals -> Decay -> Stats
 
@@ -265,6 +266,11 @@ turnToward(heading, target, maxTurn): number
 updateWander(world, ant, dt): boolean        // true on the tick a new offset and wander heading are drawn
 
 // sim/tick.ts
+// Internal to tick.ts: steerAroundWalls(world, ant, desired) -> heading. An ant
+// whose desired heading is blocked turns one way only — the side its uid picks —
+// searching from its current heading in 15° steps up to half a turn, and reverses
+// if the whole half turn is solid. Searching from the current heading is what
+// makes it follow a wall instead of oscillating against it (spec §5.3).
 thinkChunk(world, begin, end, out: ChunkEvents): void
 spawnAtNest(world, colony): number
 resetChunkEvents(world): void
@@ -315,14 +321,21 @@ const kSetupObstacleCell = 4, kMinStartingAnts = 10, kMaxStartingAnts = 600,
 interface ColonySetup { id: number; nest: Vec2; color: number; startingAnts: number }
 interface FoodSetup { uid: number; pos: Vec2; amount: number; kind: FoodKind }
 interface ObstacleCells { cell: number; width: number; height: number; kind: Uint8Array }
+interface SetupRect { pos: Vec2; size: Vec2 }
 interface WorldSetup { presetId: string; seed: number; size: Vec2;
                        colonies: ColonySetup[]; food: FoodSetup[];
-                       obstacles: ObstacleCells; nextFoodUid: number }
+                       obstacles: ObstacleCells;
+                       breach: SetupRect[];                 // cleared by applyBreach when a scenario opens it
+                       paramOverrides: Partial<SimParams>;  // spread over defaultParams() by worldFromSetup
+                       nextFoodUid: number }
 makeObstacleCells(size, cell?): ObstacleCells
 makeSetup(size, seed, presetId?): WorldSetup
 cloneSetup(setup): WorldSetup
 cellKindAt(setup, p): ObstacleKind
 paintCells(setup, kind, center, radius): number          // cells changed
+paintRect(setup, kind, rect: SetupRect): number          // the same for an axis-aligned rectangle
+interface CellBounds { minCol: number; maxCol: number; minRow: number; maxRow: number }
+rectCellBounds(grid, rect): CellBounds                   // clamped to the grid; presets and breaches share it
 addColony(setup, nest, color?, startingAnts?): ColonySetup | null   // null at 8 colonies
 removeColony(setup, id): boolean
 moveColony(setup, id, nest): boolean
@@ -342,15 +355,16 @@ worldFromSetup(setup, params, options?): World   // colony ids are array indices
 
 // sim/presets.ts
 interface PresetInfo { id: string; name: string }
-const kPresetIds = ["meadow", "dunes", "creek", "boulder", "blank"] as const
+const kPresetIds = ["meadow", "dunes", "creek", "boulder", "maze", "blank"] as const
 presetNames(): readonly string[]
 presetInfo(id): PresetInfo | null
 loadPreset(id, seed): WorldSetup | null
 quickStartSetup(seed): WorldSetup          // meadow
 ```
 
-Exact preset geometry is recorded in the presentation design doc, §13. Colony colours index
-`COLONY_PALETTE`; a colony's `id` is its index in `WorldSetup.colonies`.
+Exact preset geometry is recorded in the design doc, §10. Colony colours index `COLONY_PALETTE`;
+a colony's `id` is its index in `WorldSetup.colonies`. The maze is the only preset that sets
+`breach` and `paramOverrides`.
 
 ### 4.3 `render`: drawing (WebGL2)
 
@@ -736,15 +750,16 @@ replaced by the presentation overhaul.
 ```text
 tests/core/   test_build_info.test.ts  test_fixed_step.test.ts  test_math.test.ts
               test_ring_buffer.test.ts test_rng.test.ts         test_stats.test.ts
-tests/sim/    test_ants.test.ts               test_food_colony.test.ts
-              test_homing.test.ts     [M2]    test_marker_grid.test.ts
-              test_obstacles.test.ts          [M1.5]  test_obstacles_physics.test.ts  [M1.5]
-              test_params.test.ts             test_pipeline.test.ts
-              test_presets.test.ts    [M1.5]  test_presets_checksum.test.ts       [M1.5]
-              test_rand_stream.test.ts        test_sensing.test.ts
-              test_setup.test.ts      [M1.5]  test_setup_apply.test.ts            [M1.5]
-              test_steering.test.ts           test_think.test.ts
-              test_world.test.ts
+tests/sim/    test_ants.test.ts               test_collide.test.ts    [M2]
+              test_food_colony.test.ts        test_homing.test.ts     [M2]
+              test_marker_grid.test.ts        test_obstacles.test.ts
+              test_obstacles_physics.test.ts  [M1.5]  test_params.test.ts
+              test_pipeline.test.ts           test_presets.test.ts    [M1.5]
+              test_presets_checksum.test.ts   [M1.5]  test_rand_stream.test.ts
+              test_sensing.test.ts            test_setup.test.ts      [M1.5]
+              test_setup_apply.test.ts        [M1.5]  test_spatial_hash.test.ts [M2]
+              test_steering.test.ts           test_stuck.test.ts      [M2]
+              test_think.test.ts              test_world.test.ts
 tests/render/ test_ant_layer.test.ts   [M1.5]  test_atlas.test.ts        [M1.5]
               test_batch.test.ts              test_camera.test.ts
               test_food_layout.test.ts [M1.5] test_heatmap.test.ts
@@ -761,6 +776,11 @@ tests/tools/  test_screenshot.test.ts [M1.5]   // spawns Chrome for the interact
 
 Behaviour that needs a browser is verified by `npm run screenshot` and by reading the PNG, not by
 unit tests: art, layout, focus, and the interactive flow.
+
+`test_collide.test.ts` holds `fractionTouchingSolid(world)` — the share of ants within
+`antRadius + 1` of a solid cell — sampled every 600 ticks over 7200 ticks on the boulder preset.
+It is the regression guard for wall handling and must average below 0.05; M2 took it from 0.0211
+to 0.0007.
 
 ---
 

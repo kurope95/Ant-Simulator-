@@ -243,7 +243,7 @@ The field of view is ±60°, out to `SENSOR_RADIUS` (32 u).
   - Steer along the ray with the longest free distance.
   - Ties are common in open space; they go to the ray closest to the wander heading — the heading the ant took on its last wander redraw (§5.4). *(Fix: the original rule had no tie-break, which would make ants in open space jitter.)*
   - The choice also reports whether it has `LOOK_AHEAD` of free space, so the look-ahead steering pass below can skip its probe.
-- **Look-ahead steering.** A desired heading needs `LOOK_AHEAD` (20 u) of free space. If it doesn't have it, try up to ±90° in 15° steps, biased to the side the ant was already drifting; turn around if every direction is blocked.
+- **Look-ahead steering.** A desired heading needs `LOOK_AHEAD` (20 u) of free space. If it doesn't have it, the ant turns in one direction only — its own, taken from its `uid` parity so it never flips sides — and searches from the heading it already holds, in 15° steps, up to half a turn; it reverses if nothing is free. Searching from the current heading is what makes it follow a wall; searching from `desired` makes the answer jump as the target moves, and the ant stays pressed against the wall instead of getting round it. *(Fix, 2026-10-25: the original rule rotated ±90° off `desired` with an unstable side, so a carrier in the maze never got round a long wall.)*
 - **Speed** is `ANT_SPEED`, varied per ant by up to ±`SPEED_JITTER`.
 
 ### 5.4 Wander
@@ -279,7 +279,7 @@ An ant is stuck when `time_since_last_marker > STUCK_TIMEOUT` (2.5 s), meaning i
 - Energy starts at `ENERGY_MAX` (100) and burns at `ENERGY_BURN` (0.5 per second), which gives about 200 s of autonomy.
 - It refills to 100 when the ant touches its own nest or any food source.
 - At 0 the ant dies (removed in phase 5).
-- Scenarios may override the burn rate. The maze, for example, lowers it so the long route is survivable.
+- Scenarios may override the burn rate (§10's maze sets 0.2, so an ant has 200 s to search instead of 133 s and can reach food 157 s away).
 
 ### 5.7 Homing memory (path integration)
 A returning ant that can neither see food nor sense a trail still has a rough idea of where home is, from its own movement. Spec §1 allows the ant's own memory, and this is it: it rescues carriers that lose the trail far from the nest. `HOMING_ENABLED` (default on) gates the whole rule.
@@ -404,7 +404,7 @@ This replaces the M1 control drawer; its sliders move into the settings drawer. 
 
 ## 10. Map presets
 
-A preset is a named `WorldSetup`: size, seed, colonies (nest, palette colour, starting ants), food (position, amount, kind) and painted obstacle cells. Editing happens in the builder and never mutates the preset. Five ship:
+A preset is a named `WorldSetup`: size, seed, colonies (nest, palette colour, starting ants), food (position, amount, kind), painted obstacle cells, and optionally `breach` rectangles and `paramOverrides` for the scenario's own parameters. Editing happens in the builder and never mutates the preset. Six ship:
 
 | Preset | Size | Character |
 |---|---|---|
@@ -412,18 +412,22 @@ A preset is a named `WorldSetup`: size, seed, colonies (nest, palette colour, st
 | **Dunes** | 1920×1080 | Ember and Azure, a central Leaves pile, exposed rock, a mud oasis, broad sand |
 | **Creek** | 2240×1200 | Fern and Rose, a river with two rock crossings, sandy banks, food on both banks |
 | **Boulder field** | 1920×1080 | one Gold colony, many boulder clusters, moss tufts, two food piles |
+| **Maze** | 1920×1080 | one colony at (90, 960), 20 000 food at (90, 120), three 24 u rock walls with alternating 160 u gaps, a route of about 7 800 u; `breach` holds the left ends of the outer walls; `paramOverrides` sets `energyBurn` 0.2 |
 | **Blank canvas** | 1920×1080 | no colonies, food or obstacles; the builder starts empty |
 
-The exact positions, colours, starting populations and validation are pinned in the presentation-overhaul plan (Task 5). Every non-blank preset passes `validateSetup`. The legacy `sandbox` name maps to `meadow`. The four-colony war, maze and stress scenarios move to later milestones; the M4 bench will generate its opposing-stream world.
+The maze's outer walls (y = 270 and 810) open at their right ends (x 1760–1920) and the middle wall (y = 540) at its left end (x 0–160). Opening the breach — the run HUD's "Breach shortcut" button, `?breach=<tick>` or `--breach-tick` — clears the left ends of the outer walls, leaving a straight route of about 840 u up the left side (acceptance evidence in §15).
+
+The exact positions, colours, starting populations and validation are pinned in the presentation-overhaul plan (Task 5). Every non-blank preset passes `validateSetup`. The legacy `sandbox` name maps to `meadow`. The four-colony war and stress scenarios move to later milestones; the M4 bench will generate its opposing-stream world.
 
 ---
 
 ## 11. Verification and tooling
 
-Three entry points, all started by npm scripts:
-- **`npm run serve`** opens the interactive app in Chrome. URL parameters `?preset=<id>&seed=<n>&screen=<home|builder|run>&zoom=<n>` choose what to start with; `?headless&ticks=N&size=WxH&zoom=<n>` runs without UI and renders one final frame. `?scenario=sandbox` is accepted as a deprecated alias for `meadow`.
-- **`npm run screenshot -- --preset <id> --screen <home|builder|run> --zoom <n> --ticks N --out <file.png>`** serves the page, drives Chrome headless and saves the final frame as a PNG, so Claude can look at the result.
+Four entry points, all started by npm scripts:
+- **`npm run serve`** opens the interactive app in Chrome. URL parameters `?preset=<id>&seed=<n>&screen=<home|builder|run>&zoom=<n>` choose what to start with; `?headless&ticks=N&size=WxH&zoom=<n>` runs without UI and renders one final frame. `?scenario=sandbox` is accepted as a deprecated alias for `meadow`. `?breach=<tick>` opens the preset's breach segments once the run reaches that tick.
+- **`npm run screenshot -- --preset <id> --screen <home|builder|run> --zoom <n> --ticks N [--breach-tick N] --out <file.png>`** serves the page, drives Chrome headless and saves the final frame as a PNG, so Claude can look at the result.
 - **`npm run bench -- --preset <id> --ticks N [--threads T]`** runs the simulation under Node and prints the average and 95th-percentile milliseconds per phase, plus ant updates per second. No rendering.
+- **`npm run reach`** runs the foraging-range harness under Node and prints its table: one colony at 500/1000/1500/2000 u, a contest row where two colonies see one pile from opposite sides, and the maze row with its breach at minute 10 (§15's M2 evidence).
 
 Unit tests (`node:test`, run by `npm test`) cover:
 - setup editing, clamping, validation and preset integrity;
@@ -472,7 +476,7 @@ Rules:
 | `STUCK_TIMEOUT` / `DEGRADE_TIME` / `DEGRADE_FACTOR` | 2.5 / 3.0 / 0.5 | s / s / – | |
 | `CROWD_LIMIT` | 4 | ants | within 3 × `ANT_RADIUS` |
 | `STUCK_TURN_JITTER` / `CROWD_RADIUS_FACTOR` / `ZONE_MARGIN` | 0.6 / 3 / 16 | rad / × `ANT_RADIUS` / u | the ±0.6 turn, the "3 ×" crowd radius and the nest/food zone margin from §5.5 |
-| `ENERGY_MAX` / `ENERGY_BURN` / `EXHAUSTED_AT` | 100 / 0.5 / 60 | – / per s / – | |
+| `ENERGY_MAX` / `ENERGY_BURN` / `EXHAUSTED_AT` | 100 / 0.5 / 60 | – / per s / – | the maze overrides the burn to 0.2 (§10) |
 | `HOMING_ENABLED` / `HOMING_DRIFT` | on / 0.04 | – / fraction of a leg | Settings switch "Homing memory"; §5.7 |
 | `PUSH_ON_SIGNAL` | 0.4 | | |
 | `MASS` / carrying | 1 / 3 | | |
@@ -538,7 +542,7 @@ Each milestone ends with a running app and the checks listed.
 | M1 | **Core foraging, one colony.** SoA ants in typed arrays, nest, food, marker grid, wander, energy and states, spawning, ants and dual-channel heatmap drawn, phase pipeline, night view and the control drawer | In the sandbox, a trail forms between nest and food on its own; screenshot reviewed; tests cover deposit, decay and state changes. **Done 2026-10-25** |
 | M1.5 | **Presentation & world builder.** Home/Builder/Run screens; staged setup; palette, starting populations and several colonies; Rock/Water/Sand/Mud with terrain speed and collision; five presets; food clusters; procedural ants with tripod gait; anthill art; baked terrain; sprite and trail themes; HUD, pause, reset, edit and finish | Every preset validates; a built map runs with the chosen colonies and obstacles; all acceptance screenshots pass. **Done 2026-10-25** |
 | M1.6 | Camera and looks. Map-style pan and zoom (drag, pinch, two-finger scroll, touch, keys, bounds); visible glowing trails; procedural terrain shader; anthill mounds; ant and food shadows | The camera checklist passes on the laptop; acceptance screenshots at zoom 1, 4 and 6 look sharp; terrain costs under 3 ms per frame |
-| M2 | Navigation and foraging. Wander fix; sliding along walls and edges; look-ahead steering and fallback rays; spatial hash; stuck detection with dead-end trail erasure; spawn safety; reach harness; retuned trail and energy defaults; homing memory; one trail layer per colony; maze preset with a breach control | On the boulder preset fewer than 5% of ants touch rocks (or 3x fewer than before); reach harness: at 1000 u the first delivery comes within 60 s, and at 1500 u ants deliver in minute 3; the far colony in the contest delivers; in the maze, deliveries per minute after the breach are at least 3x those before it |
+| M2 | Navigation and foraging. Wander fix; sliding along walls and edges; look-ahead steering and fallback rays; spatial hash; stuck detection with dead-end trail erasure; spawn safety; reach harness; retuned trail and energy defaults; homing memory; one trail layer per colony; maze preset with a breach control | On the boulder preset fewer than 5% of ants touch rocks (or 3x fewer than before); reach harness: at 1000 u the first delivery comes within 60 s, and at 1500 u ants deliver in minute 3; the far colony in the contest delivers; in the maze, deliveries per minute after the breach are at least 3x those before it. **Done 2026-10-25.** Evidence: boulder ants touching rock 0.0211 → 0.0007 (3.3% → 0.07%); reach first delivery 36.1 s at 1000 u, 53 deliveries in minute 3 at 1500 u; contest colony B 1 / 69 / 63 per minute (was 0); maze 6 deliveries in minutes 7–9 against 1044 in minutes 12–14 after the breach at 10:00 (ratio 174); 226 tests; bench 0.448–0.457 ms avg across runs, plugged in |
 | M3 | **Absorbed and closed.** Multi-colony setup, palette, territory and the colony heatmap shipped in M1.5. Only inter-colony hostilities (§14) remain, and they are not scheduled. | — |
 | M4 | **Crowds and scale.** PBD collisions, PBMAD avoidance, worker pool, stress scenario, bench mode | No overlapping ants; opposing streams form lanes; 20k-ant bench numbers recorded; determinism test passes with 1 and 8 workers |
 | M5 | **Inspector and telemetry.** Ant inspector with follow and names, sensor drawing, telemetry with sparklines, and the live `degradeTime` control once M2 makes degradation fire | Zoomed-in inspector screenshots look right; the inspector follows one ant through a food trip |
