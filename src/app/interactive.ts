@@ -6,8 +6,9 @@ import { nightTheme } from "../render/theme.js";
 import { cycleHeatmap, defaultViewSettings } from "../render/view_settings.js";
 import { createWorldRenderCache, drawWorld } from "../render/world_view.js";
 import { defaultParams } from "../sim/params.js";
-import { loadScenario } from "../sim/scenarios.js";
-import { makeWorld, stepWorld } from "../sim/world.js";
+import { loadPreset, quickStartSetup } from "../sim/presets.js";
+import { worldFromSetup } from "../sim/setup_apply.js";
+import { stepWorld } from "../sim/world.js";
 import { AppShell, type ShellFrame, type ShellHooks, type SpeedSetting } from "../ui/shell.js";
 import type { AppOptions } from "./options.js";
 
@@ -28,13 +29,13 @@ export function runInteractive(
   const renderer = created.renderer;
   renderer.resizeToDisplaySize();
 
-  const world = makeWorld(defaultParams(), options.seed);
-  const scenarioError = loadScenario(world, options.scenario);
-  if (scenarioError !== null) {
-    log(`error: ${scenarioError}`);
-    log("falling back to sandbox");
-    loadScenario(world, "sandbox");
+  let setup = loadPreset(options.preset, options.seed);
+  if (setup === null) {
+    log(`error: unknown preset: ${options.preset}`);
+    log("falling back to meadow");
+    setup = quickStartSetup(options.seed);
   }
+  const world = worldFromSetup(setup, defaultParams());
 
   const theme = nightTheme();
   const settings = defaultViewSettings();

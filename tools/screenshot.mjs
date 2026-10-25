@@ -11,21 +11,26 @@ const kMinSize = 16;
 const kMaxSize = 8192;
 const kMaxSeed = 0xffffffff;
 const kMaxTicks = 10_000_000;
+const kPresets = ["meadow", "dunes", "creek", "boulder", "blank"];
 
 class UsageError extends Error {}
 
 function parseArgs(argv) {
-  const args = { ticks: 30, out: "", size: kDefaultSize, seed: 1, interactive: false };
+  const args = { ticks: 30, out: "", size: kDefaultSize, seed: 1, preset: "meadow", interactive: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--ticks") args.ticks = Number(argv[++i]);
     else if (arg === "--out") args.out = argv[++i] ?? "";
     else if (arg === "--size") args.size = argv[++i] ?? "";
     else if (arg === "--seed") args.seed = Number(argv[++i]);
+    else if (arg === "--preset") args.preset = argv[++i] ?? "";
     else if (arg === "--interactive") args.interactive = true;
     else throw new UsageError(`unknown option: ${arg}`);
   }
   if (args.out === "") throw new UsageError("--out is required");
+  if (!kPresets.includes(args.preset)) {
+    throw new UsageError(`unknown preset: ${args.preset} (expected ${kPresets.join(", ")})`);
+  }
   const sizeMatch = /^(\d+)x(\d+)$/.exec(args.size);
   if (sizeMatch === null) throw new UsageError(`invalid --size: ${args.size}`);
   const width = Number(sizeMatch[1]);
@@ -83,6 +88,7 @@ async function main() {
     query.set("ticks", String(args.ticks));
     query.set("size", args.size);
     query.set("seed", String(args.seed));
+    query.set("preset", args.preset);
     const url = `${server.url}/?${query.toString()}`;
 
     const chromeArgs = [
@@ -121,7 +127,7 @@ async function main() {
 main().catch((error) => {
   console.error(`error: ${error.message}`);
   if (error instanceof UsageError) {
-    console.error("usage: node tools/screenshot.mjs --out <file.png> [--ticks N] [--size WxH] [--seed N] [--interactive]");
+    console.error("usage: node tools/screenshot.mjs --out <file.png> [--preset <id>] [--ticks N] [--size WxH] [--seed N] [--interactive]");
     process.exitCode = 2;
   } else {
     process.exitCode = 1;

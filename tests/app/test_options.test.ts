@@ -11,7 +11,7 @@ test("options: defaults", () => {
   const r = parse();
   assert.equal(r.error, "");
   assert.equal(r.options.mode, Mode.Interactive);
-  assert.equal(r.options.scenario, "sandbox");
+  assert.equal(r.options.preset, "meadow");
   assert.equal(r.options.seed, 1);
   assert.equal(r.options.threads, 0);
   assert.equal(r.options.vsync, true);
@@ -29,25 +29,31 @@ test("options: headless screenshot", () => {
 });
 
 test("options: bench", () => {
-  const r = parse("--bench", "stress", "--threads", "4");
+  const r = parse("--bench", "boulder", "--threads", "4");
   assert.equal(r.error, "");
   assert.equal(r.options.mode, Mode.Bench);
-  assert.equal(r.options.scenario, "stress");
+  assert.equal(r.options.preset, "boulder");
   assert.equal(r.options.threads, 4);
   assert.equal(effectiveTicks(r.options), 1200);
 });
 
-test("options: help, version, seed, scenario and no-vsync", () => {
+test("options: help, version, seed, preset and no-vsync", () => {
   assert.equal(parse("--help").options.mode, Mode.Help);
   assert.equal(parse("-h").options.mode, Mode.Help);
   assert.equal(parse("--version").options.mode, Mode.Version);
-  const r = parse("--seed", "4294967295", "--scenario", "maze", "--no-vsync");
+  const r = parse("--seed", "4294967295", "--scenario", "creek", "--no-vsync");
   assert.equal(r.error, "");
   assert.equal(r.options.seed, 4294967295);
-  assert.equal(r.options.scenario, "maze");
+  assert.equal(r.options.preset, "creek");
   assert.equal(r.options.vsync, false);
-  assert.ok(usageText().includes("--bench <scenario>"));
+  assert.ok(usageText().includes("--bench <preset>"));
   assert.ok(usageText().includes("--headless"));
+});
+
+test("options: --preset and the --scenario sandbox alias", () => {
+  assert.equal(parseOptions(["--preset", "dunes"]).options.preset, "dunes");
+  assert.equal(parseOptions(["--scenario", "sandbox"]).options.preset, "meadow");
+  assert.match(parseOptions(["--preset", "maze"]).error, /meadow, dunes, creek, boulder, blank/);
 });
 
 test("options: errors are specific", () => {
@@ -61,17 +67,17 @@ test("options: errors are specific", () => {
   assert.equal(parse("--size", "12x").error, "invalid value for --size: 12x (expected WxH, e.g. 1920x1080)");
   assert.equal(parse("--size", "8x8").error, "invalid value for --size: 8x8 (expected WxH, e.g. 1920x1080)");
   assert.equal(parse("--bench").error, "missing value for --bench");
-  assert.equal(parse("--headless", "--bench", "x").error, "--headless and --bench cannot be combined");
+  assert.equal(parse("--headless", "--bench", "boulder").error, "--headless and --bench cannot be combined");
 });
 
 test("options: URL query strings parse like flags", () => {
-  const r = optionsFromUrl("?headless&ticks=30&size=1280x720&seed=7&scenario=maze&no-vsync");
+  const r = optionsFromUrl("?headless&ticks=30&size=1280x720&seed=7&scenario=creek&no-vsync");
   assert.equal(r.error, "");
   assert.equal(r.options.mode, Mode.Headless);
   assert.equal(r.options.ticks, 30);
   assert.equal(r.options.width, 1280);
   assert.equal(r.options.height, 720);
   assert.equal(r.options.seed, 7);
-  assert.equal(r.options.scenario, "maze");
+  assert.equal(r.options.preset, "creek");
   assert.equal(r.options.vsync, false);
 });

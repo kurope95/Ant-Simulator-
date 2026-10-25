@@ -1,3 +1,5 @@
+import { kPresetIds } from "../sim/presets.js";
+
 export enum Mode {
   Interactive,
   Headless,
@@ -8,7 +10,7 @@ export enum Mode {
 
 export interface AppOptions {
   mode: Mode;
-  scenario: string;
+  preset: string;
   seed: number;
   ticks: number;
   screenshot: string;
@@ -31,7 +33,7 @@ const kFlagsInUrl = new Set(["headless", "no-vsync"]);
 function defaults(): AppOptions {
   return {
     mode: Mode.Interactive,
-    scenario: "sandbox",
+    preset: "meadow",
     seed: 1,
     ticks: -1,
     screenshot: "",
@@ -44,6 +46,13 @@ function defaults(): AppOptions {
 
 function isDigits(text: string): boolean {
   return /^[0-9]+$/.test(text);
+}
+
+const kPresetList = kPresetIds.join(", ");
+
+function presetValue(value: string): string | null {
+  if (value === "sandbox") return "meadow";
+  return (kPresetIds as readonly string[]).includes(value) ? value : null;
 }
 
 export function parseOptions(tokens: readonly string[]): ParseResult {
@@ -78,10 +87,16 @@ export function parseOptions(tokens: readonly string[]): ParseResult {
       case "--no-vsync":
         options.vsync = false;
         break;
+      case "--preset":
       case "--scenario": {
-        const taken = take(i, "--scenario");
+        const taken = take(i, token);
         if (taken === null) break;
-        options.scenario = taken.value;
+        const preset = presetValue(taken.value);
+        if (preset === null) {
+          error = `unknown preset: ${taken.value} (expected ${kPresetList})`;
+          break;
+        }
+        options.preset = preset;
         i = taken.next;
         break;
       }
@@ -132,9 +147,14 @@ export function parseOptions(tokens: readonly string[]): ParseResult {
       case "--bench": {
         const taken = take(i, "--bench");
         if (taken === null) break;
+        const preset = presetValue(taken.value);
+        if (preset === null) {
+          error = `unknown preset: ${taken.value} (expected ${kPresetList})`;
+          break;
+        }
         bench = true;
         options.mode = Mode.Bench;
-        options.scenario = taken.value;
+        options.preset = preset;
         i = taken.next;
         break;
       }
@@ -184,13 +204,13 @@ export function usageText(): string {
   return [
     "Usage: AntSim [options]",
     "",
-    "  --scenario <name>     starting scenario (default sandbox)",
+    "  --preset <id>         map preset: meadow, dunes, creek, boulder, blank (default meadow)",
     "  --seed <n>            random seed, 0..4294967295 (default 1)",
     "  --ticks <n>           ticks to run (default 1200 for the bench, 0 otherwise)",
     "  --headless            render once at an exact pixel size, no loop",
     "  --screenshot <file>   output PNG for tools/screenshot.mjs",
     "  --size <WxH>          pixel size for headless mode (default 1920x1080)",
-    "  --bench <scenario>    timing table (Node CLI)",
+    "  --bench <preset>      timing table (Node CLI)",
     "  --threads <n>         worker threads, 1-64 (default: all cores)",
     "  --no-vsync            uncapped frame rate (debug timing)",
     "  --help, -h            show this text",

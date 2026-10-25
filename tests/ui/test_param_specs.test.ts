@@ -2,8 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { defaultParams } from "../../src/sim/params.js";
-import { loadScenario } from "../../src/sim/scenarios.js";
-import { makeWorld, stepWorld, type World } from "../../src/sim/world.js";
+import { quickStartSetup } from "../../src/sim/presets.js";
+import { worldFromSetup } from "../../src/sim/setup_apply.js";
+import { stepWorld, type World } from "../../src/sim/world.js";
 import {
   applySpecValue,
   formatSpecValue,
@@ -71,8 +72,7 @@ test("param specs: values clamp and snap to the step", () => {
 });
 
 test("every extreme still steps the sandbox without NaN", () => {
-  const world = makeWorld(defaultParams(), 1);
-  assert.equal(loadScenario(world, "sandbox"), null);
+  const world = worldFromSetup(quickStartSetup(1), defaultParams());
   const specs = paramSpecs();
   for (const spec of specs) applySpecValue(spec, world.params, spec.min);
   for (let i = 0; i < 300; i++) stepWorld(world);

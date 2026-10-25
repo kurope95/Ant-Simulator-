@@ -42,7 +42,7 @@ if (parsed.error !== "") {
       say(`version ${buildInfo()}`);
       break;
     case Mode.Bench:
-      say("run the bench in Node: npm run bench -- --scenario sandbox --ticks 1200");
+      say("run the bench in Node: npm run bench -- --preset meadow --ticks 1200");
       break;
     case Mode.Interactive:
       runInteractive(options, canvas, uiRoot, say);

@@ -9,14 +9,14 @@ function splitLines(text: string): string[] {
 
 test("bench: report format is stable", () => {
   const r: BenchReport = {
-    scenario: "sandbox", ticks: 600, threads: 8, ants: 0,
+    preset: "meadow", ticks: 600, threads: 8, ants: 0,
     phases: Array.from({ length: 7 }, () => ({ avg: 0, p95: 0 })),
     total: { avg: 0.125, p95: 0.25 },
     ticksPerSec: 8000, antUpdatesPerSec: 0,
   };
   const lines = splitLines(formatBenchReport(r));
   assert.equal(lines.length, 12);
-  assert.equal(lines[0], "bench scenario=sandbox ticks=600 threads=8 ants=0");
+  assert.equal(lines[0], "bench preset=meadow ticks=600 threads=8 ants=0");
   assert.equal(lines[1], "phase" + " ".repeat(15) + "avg_ms" + " ".repeat(4) + "p95_ms");
   assert.equal(lines[2], "spatial_hash" + " ".repeat(9) + "0.000" + " ".repeat(5) + "0.000");
   assert.equal(lines[8], "stats" + " ".repeat(16) + "0.000" + " ".repeat(5) + "0.000");

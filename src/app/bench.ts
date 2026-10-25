@@ -2,12 +2,13 @@ import { stopwatch } from "../core/stopwatch.js";
 import { summarize, type SampleSummary } from "../core/stats.js";
 import { kPhaseCount, phaseName } from "../sim/phases.js";
 import { defaultParams } from "../sim/params.js";
-import { loadScenario } from "../sim/scenarios.js";
-import { makeWorld, stepWorld } from "../sim/world.js";
+import { loadPreset } from "../sim/presets.js";
+import { worldFromSetup } from "../sim/setup_apply.js";
+import { stepWorld } from "../sim/world.js";
 import { effectiveTicks, type AppOptions } from "./options.js";
 
 export interface BenchReport {
-  scenario: string;
+  preset: string;
   ticks: number;
   threads: number;
   ants: number;
@@ -22,7 +23,7 @@ function row(name: string, avg: string, p95: string): string {
 }
 
 export function formatBenchReport(report: BenchReport): string {
-  let text = `bench scenario=${report.scenario} ticks=${report.ticks} threads=${report.threads} ants=${report.ants}\n`;
+  let text = `bench preset=${report.preset} ticks=${report.ticks} threads=${report.threads} ants=${report.ants}\n`;
   text += "phase".padEnd(16) + "avg_ms".padStart(10) + "p95_ms".padStart(10) + "\n";
   for (let phase = 0; phase < kPhaseCount; phase++) {
     const sample = report.phases[phase];
@@ -35,12 +36,12 @@ export function formatBenchReport(report: BenchReport): string {
 }
 
 export function runBench(options: AppOptions): number {
-  const world = makeWorld(defaultParams(), options.seed);
-  const scenarioError = loadScenario(world, options.scenario);
-  if (scenarioError !== null) {
-    process.stderr.write(`${scenarioError}\n`);
+  const setup = loadPreset(options.preset, options.seed);
+  if (setup === null) {
+    process.stderr.write(`unknown preset: ${options.preset}\n`);
     return 1;
   }
+  const world = worldFromSetup(setup, defaultParams());
   for (let i = 0; i < 60; i++) stepWorld(world);
 
   const ticks = effectiveTicks(options);
@@ -57,7 +58,7 @@ export function runBench(options: AppOptions): number {
   const seconds = watch.elapsedSeconds();
 
   const report: BenchReport = {
-    scenario: options.scenario,
+    preset: options.preset,
     ticks,
     // M0 is single-threaded; the worker pool arrives in M4.
     threads: 1,

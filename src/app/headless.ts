@@ -4,8 +4,9 @@ import { nightTheme } from "../render/theme.js";
 import { defaultViewSettings } from "../render/view_settings.js";
 import { createWorldRenderCache, drawWorld } from "../render/world_view.js";
 import { defaultParams } from "../sim/params.js";
-import { loadScenario } from "../sim/scenarios.js";
-import { makeWorld, stepWorld } from "../sim/world.js";
+import { loadPreset } from "../sim/presets.js";
+import { worldFromSetup } from "../sim/setup_apply.js";
+import { stepWorld } from "../sim/world.js";
 import { effectiveTicks, type AppOptions } from "./options.js";
 
 export function runHeadless(
@@ -22,12 +23,12 @@ export function runHeadless(
   renderer.setBackingSize(options.width, options.height);
   document.body.classList.add("headless");
 
-  const world = makeWorld(defaultParams(), options.seed);
-  const scenarioError = loadScenario(world, options.scenario);
-  if (scenarioError !== null) {
-    log(`error: ${scenarioError}`);
+  const setup = loadPreset(options.preset, options.seed);
+  if (setup === null) {
+    log(`error: unknown preset: ${options.preset}`);
     return 1;
   }
+  const world = worldFromSetup(setup, defaultParams());
 
   const camera = new Camera();
   camera.setViewport(renderer.sizePx());
