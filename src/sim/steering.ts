@@ -1,4 +1,4 @@
-import { angleDiff, clamp } from "../core/math.js";
+import { angleDiff, clamp, wrapAngle } from "../core/math.js";
 import { randRange } from "../core/rng.js";
 import { AntRole, RandStream } from "./types.js";
 import type { World } from "./world.js";
@@ -16,7 +16,11 @@ export function updateWander(world: World, ant: number, dt: number): boolean {
   const angle = explorer ? params.wanderAngleExplorer : params.wanderAngleFollower;
   const interval = explorer ? params.wanderIntervalExplorer : params.wanderIntervalFollower;
   const uid = ants.uid[ant];
-  ants.wanderOffset[ant] = randRange(world.seed, uid, world.tick, RandStream.WanderOffset, -angle, angle);
+  const offset = randRange(world.seed, uid, world.tick, RandStream.WanderOffset, -angle, angle);
+  ants.wanderOffset[ant] = offset;
+  // The target heading is absolute so it persists between picks without becoming
+  // a constant turn toward `heading + offset` (spec §5.4).
+  ants.wanderHeading[ant] = wrapAngle(ants.heading[ant] + offset);
   ants.wanderTimer[ant] =
     interval * randRange(world.seed, uid, world.tick, RandStream.WanderInterval, 0.5, 1.5);
   return true;

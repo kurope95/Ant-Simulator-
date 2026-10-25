@@ -32,6 +32,7 @@ export class Ants {
   degradeTimer: Float32Array;
   lastMarkerCell: Int32Array;
   wanderOffset: Float32Array;
+  wanderHeading: Float32Array;
   wanderTimer: Float32Array;
 
   private count = 0;
@@ -61,6 +62,7 @@ export class Ants {
     this.degradeTimer = new Float32Array(capacity);
     this.lastMarkerCell = new Int32Array(capacity);
     this.wanderOffset = new Float32Array(capacity);
+    this.wanderHeading = new Float32Array(capacity);
     this.wanderTimer = new Float32Array(capacity);
   }
 
@@ -92,6 +94,7 @@ export class Ants {
     this.degradeTimer[i] = 0;
     this.lastMarkerCell[i] = -1;
     this.wanderOffset[i] = 0;
+    this.wanderHeading[i] = a.heading ?? 0;
     this.wanderTimer[i] = 0;
     this.indexByUid.set(uid, i);
     this.count += 1;
@@ -126,6 +129,7 @@ export class Ants {
       this.degradeTimer[index] = this.degradeTimer[last];
       this.lastMarkerCell[index] = this.lastMarkerCell[last];
       this.wanderOffset[index] = this.wanderOffset[last];
+      this.wanderHeading[index] = this.wanderHeading[last];
       this.wanderTimer[index] = this.wanderTimer[last];
       this.indexByUid.set(this.uid[index], index);
     }
@@ -162,6 +166,7 @@ export class Ants {
     this.degradeTimer = grow(this.degradeTimer, next);
     this.lastMarkerCell = grow(this.lastMarkerCell, next);
     this.wanderOffset = grow(this.wanderOffset, next);
+    this.wanderHeading = grow(this.wanderHeading, next);
     this.wanderTimer = grow(this.wanderTimer, next);
     this.capacity = next;
   }

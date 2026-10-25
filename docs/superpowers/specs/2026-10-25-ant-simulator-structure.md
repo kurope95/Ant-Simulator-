@@ -185,7 +185,7 @@ class Ants {   // SoA; every field is an array-like of the same length
   uid: Uint32Array; colony: Uint8Array; role: Uint8Array; state: Uint8Array
   posX, posY, prevX, prevY, velX, velY, heading, speed, mass: Float32Array
   energy, timeSinceAnchor, dropX, dropY, timeSinceLastMarker, degradeTimer: Float32Array
-  lastMarkerCell: Int32Array; wanderOffset, wanderTimer: Float32Array
+  lastMarkerCell: Int32Array; wanderOffset, wanderHeading, wanderTimer: Float32Array
   constructor(capacity?)
   size(): number
   spawn(a: AntSpawn, uid: number, speed: number, params: SimParams): number

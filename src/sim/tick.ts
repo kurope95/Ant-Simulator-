@@ -20,12 +20,24 @@ function depositChannel(state: number): MarkerChannel | null {
   return null;
 }
 
-function chooseHeading(world: World, ant: number): { heading: number; bestFoodSignal: number } {
+interface ChosenHeading {
+  heading: number;
+  bestFoodSignal: number;
+  fromSight: boolean;
+  fromMarkers: boolean;
+}
+
+function chooseHeading(world: World, ant: number): ChosenHeading {
   const ants = world.ants;
   const state = ants.state[ant];
   const sight = directSightHeading(world, ant);
   if (sight !== null) {
-    return { heading: sight, bestFoodSignal: state === AntState.Foraging ? 1 : 0 };
+    return {
+      heading: sight,
+      bestFoodSignal: state === AntState.Foraging ? 1 : 0,
+      fromSight: true,
+      fromMarkers: false,
+    };
   }
   const usesExplorerPattern =
     ants.role[ant] === AntRole.Explorer && state !== AntState.ReturningExhausted;
@@ -34,6 +46,8 @@ function chooseHeading(world: World, ant: number): { heading: number; bestFoodSi
   return {
     heading: sensed.found ? sensed.targetHeading : ants.heading[ant],
     bestFoodSignal: sensed.bestFoodSignal,
+    fromSight: false,
+    fromMarkers: sensed.found,
   };
 }
 
@@ -61,7 +75,15 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
       desired = chosen.heading;
     }
 
-    if (updateWander(world, ant, dt)) desired += ants.wanderOffset[ant];
+    const pickedWander = updateWander(world, ant, dt);
+    if (!chosen.fromSight) {
+      if (chosen.fromMarkers) {
+        // A redraw nudges a marker-following ant; between redraws the marker wins.
+        if (pickedWander) desired += ants.wanderOffset[ant];
+      } else {
+        desired = ants.wanderHeading[ant];
+      }
+    }
 
     ants.heading[ant] = turnToward(ants.heading[ant], desired, params.turnRate * dt);
     const direction = fromAngle(ants.heading[ant]);
@@ -197,6 +219,7 @@ export function applyEvents(world: World, events: readonly ChunkEvents[]): void 
           ants.mass[ant] = params.massCarrying;
           ants.energy[ant] = params.energyMax;
           ants.heading[ant] = wrapAngle(ants.heading[ant] + Math.PI);
+          ants.wanderHeading[ant] = ants.heading[ant];
           ants.timeSinceAnchor[ant] = 0;
           ants.dropX[ant] = ants.posX[ant];
           ants.dropY[ant] = ants.posY[ant];
@@ -219,6 +242,7 @@ export function applyEvents(world: World, events: readonly ChunkEvents[]): void 
         ants.timeSinceAnchor[ant] = 0;
         if (state === AntState.ReturningFood || state === AntState.ReturningExhausted) {
           ants.heading[ant] = wrapAngle(ants.heading[ant] + Math.PI);
+          ants.wanderHeading[ant] = ants.heading[ant];
           ants.dropX[ant] = ants.posX[ant];
           ants.dropY[ant] = ants.posY[ant];
           ants.timeSinceLastMarker[ant] = 0;
