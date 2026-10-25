@@ -1,6 +1,7 @@
 # Ant Colony Simulator — Design Spec
 
 - **Date:** 2026-10-25
+- **Revision 2026-10-25:** the project moved from C++/SDL3 to TypeScript/WebGL in Chrome (see §2, §3 and §16). The simulation design in §4–§6 is unchanged.
 - **Status:** Direction approved by the user ("I agree with your suggestions; we'll figure out problems as they come"). Items marked *(Claude's call)* were decided by Claude and are open to change. They are collected in §16.
 - **Origin:** A Gemini-written summary of Pezzza's Work's "Ant Simulator 2" YouTube series (Mar 2025 – Jun 2026). This spec revises it for correctness, performance and this laptop.
 - **Reference material:** The videos, and Pezzza's original open-source simulator (github.com/johnBuffer/AntSimulator, MIT, C++/SFML), which can be read for ideas. Ant Simulator 2's own code is Patreon-only and is not used.
@@ -56,15 +57,18 @@ The user saw Pezzza's videos and wants their own version on their own laptop. Su
 | Machine | ASUS Vivobook S 15 (S5507QA) laptop, Windows 11 Home **ARM64** |
 | CPU | Snapdragon X Plus X1P-42-100: 8 Oryon cores, all the same speed, no SMT |
 | Memory | 16 GB LPDDR5X, shared with the GPU |
-| GPU | Adreno X1-45 (integrated). Native **Direct3D 11/12 and Vulkan**. **No native OpenGL**, only Microsoft's OpenGL-on-D3D12 compatibility layer |
+| GPU | Adreno X1-45 (integrated), reached through Chrome's ANGLE → Direct3D 11 path |
 | Display | 2880×1620 at 120 Hz, Windows scaling 200% |
 | Power | Runs on battery. Performance figures only count when plugged in |
+| Runtime | Chrome 155 and Node 24.13 are installed; nothing else is |
+| Security | **Smart App Control is on and blocks unsigned executables.** The project never builds, installs or runs a native program |
 
 What follows from this:
-- **Build natively for ARM64 with MSVC.** Never link prebuilt x64 libraries. Every dependency is built from source through CMake FetchContent, pinned to a release tag.
-- **Draw through DirectX.** Use SDL3's renderer, which uses Direct3D 11 and falls back to Direct3D 12. Do not use OpenGL-only libraries (SFML, raylib, GLFW-based UI).
-- **Be per-monitor DPI-aware.** Render at the full 2880×1620 and scale the UI by the display scale (2.0 here).
-- **The CPU is the main performance lever.** Eight equal cores mean work can simply be split evenly. The GPU is modest, so everything is drawn in a handful of batched calls, never one call per ant or per leg.
+- **Run in the browser.** The simulator is a static site: TypeScript compiled by `tsc` into ES modules and loaded by Chrome. Nothing new ever runs as a Windows program, so Smart App Control never gets involved.
+- **WebGL2 only.** Chrome renders through ANGLE and Direct3D 11; there is no native OpenGL on this laptop.
+- **Be per-monitor DPI-aware.** The canvas backing store is sized to `devicePixelRatio` (2.0 here), so the picture is the full 2880×1620; the DOM UI scales itself.
+- **The CPU is the main performance lever.** Eight equal cores; Web Workers are added in M4. The GPU is modest, so everything is drawn in a handful of batched draw calls, never one call per ant or per leg.
+- **Build tools must be pure JavaScript.** Vite, esbuild, Rollup's native builds and TypeScript 7's Go compiler are unsigned native programs; use `tsc` 5.9.3 and Node's built-in test runner instead.
 
 ---
 
@@ -72,13 +76,14 @@ What follows from this:
 
 | Concern | Choice |
 |---|---|
-| Language | C++20, MSVC (Visual Studio Build Tools 2026), ARM64 |
-| Build | CMake 4.x and `CMakePresets.json`; generator `Visual Studio 18 2026`, `-A ARM64`. Configs: Debug, Release (for running), RelWithDebInfo (for profiling) |
-| Window, input, 2D rendering | **SDL3 `release-3.4.18`**: `SDL_Renderer`, request the `direct3d11` driver (fall back to `direct3d12`), batched `SDL_RenderGeometry` |
-| UI | **Dear ImGui `v1.93.0`** with the official `imgui_impl_sdl3` and `imgui_impl_sdlrenderer3` backends; sparklines via `ImGui::PlotLines` |
-| Unit tests | **doctest `v2.5.3`**, run through CTest |
-| PNG output for headless screenshots | **stb_image_write** (nothings/stb at commit `003501f6d7a8668ce8b6d875e34dd97ad0d5d5b5`) |
-| Threading | A small persistent worker pool (`std::jthread`) with `parallel_for` over fixed-size chunks *(Claude's call: lower per-phase overhead than `std::execution::par` and easy per-phase timing; `std::execution::par` over chunk indices is an acceptable fallback)* |
+| Language | TypeScript 5.9.3, strict, ES2022 modules |
+| Build | `tsc -p tsconfig.json` → `dist/`; npm scripts; no bundler |
+| Window, input, 2D rendering | **WebGL2** in Chrome; one shader; batched triangle vertex buffers |
+| UI | **DOM + CSS** overlay — crisp at any display scale, no dependencies |
+| Unit tests | **`node:test`** with `node:assert/strict`, run by `npm test` |
+| PNG output for headless screenshots | **Chrome headless** `--screenshot` against the served page |
+| Threading | **Web Workers** (M4) over fixed-size chunks, results combined in chunk order |
+| Dev server | `tools/serve.mjs`, a dependency-free Node static server |
 
 ---
 
@@ -214,7 +219,7 @@ The simulation uses a fixed time step: `dt = 1/60 s`. Each tick runs these phase
 7. **Stats.** Food delivered per colony goes into ring buffers for the sparklines.
 
 - **Legs** (§8) update after all of a frame's ticks, and only for visible ants.
-- **This phase structure is used from Milestone 1 on,** even before the thread pool is switched on.
+- **This phase structure is used from Milestone 1 on,** even before workers are switched on in M4.
 
 ### 5.3 Sensing and steering
 The field of view is ±60°, out to `SENSOR_RADIUS` (32 u).
@@ -304,10 +309,10 @@ Based on Weiss et al., *Position-Based Multi-Agent Dynamics for Real-Time Crowd 
 
 ## 7. Rendering
 
-Each frame draws these layers in order, using a few batched `SDL_RenderGeometry` calls in total:
+Each frame draws these layers in order, using a few batched WebGL2 draw calls in total:
 
 1. **Background** in the theme colour.
-2. **Marker heatmap**, if enabled. The CPU fills an RGBA streaming texture at marker-grid resolution, in parallel. It is drawn as one world-sized quad with linear filtering. There are three modes:
+2. **Marker heatmap**, if enabled. The CPU fills an RGBA texture at marker-grid resolution, in fixed chunks (in parallel once M4 adds workers). It is drawn as one world-sized quad with linear filtering. There are three modes:
    - **Colony colour:** the owner's colour × the stronger channel.
    - **Dual-channel:** `to_home` and `to_food` in two colours, like Pezzza's original.
    - Off.
@@ -318,7 +323,7 @@ Each frame draws these layers in order, using a few batched `SDL_RenderGeometry`
    - When an ant is only a few pixels long, draw a plain shape or a smaller sprite to avoid shimmering.
    - Legs are drawn once an ant is at least `LEGS_MIN_PX` (20) physical pixels long on screen (§8).
 7. **Debug overlays:** spatial hash grid, border colliders, and for the selected ant its sample points, rays and avoidance neighbours.
-8. **ImGui.**
+8. **The DOM UI overlay.**
 
 - **Culling and batching:** only ants inside the view (plus a margin) are drawn, and the vertex arrays are filled in parallel.
 - **Smooth motion:** the renderer draws `lerp(prev, pos, alpha)`, where `alpha` is the leftover fraction of the fixed-step accumulator. Motion stays smooth at 120 Hz with a 60 Hz simulation.
@@ -347,7 +352,7 @@ Each frame draws these layers in order, using a few batched `SDL_RenderGeometry`
 
 ## 9. UI and controls
 
-The UI is built with Dear ImGui and scaled by the display scale. **H** toggles Zen mode, which hides all UI.
+The UI is a DOM overlay (HTML/CSS) above the WebGL canvas, so text stays crisp at any display scale. **H** toggles Zen mode, which hides all UI.
 
 **Bottom toolbar**
 - Tools: Select/Pan, Wall brush, Erase brush, Food, New colony.
@@ -410,12 +415,12 @@ Scenarios can set the world size, place nests, food and walls, and override any 
 
 ## 11. Verification and tooling
 
-The same executable has command-line modes:
-- `--scenario <name> --seed <n>` choose what to start with.
-- `--headless --ticks N --screenshot <file.png>` runs without a visible window and saves the final frame as a PNG, so Claude can look at the result.
-- `--bench <scenario> --ticks N [--threads T]` prints the average and 95th-percentile milliseconds per phase, plus ant updates per second. No window.
+Three entry points, all started by npm scripts:
+- **`npm run serve`** opens the interactive app in Chrome. URL parameters `?scenario=<name>&seed=<n>` choose what to start with; `?headless&ticks=N&size=WxH` runs without UI and renders one final frame.
+- **`npm run screenshot -- --ticks N --out <file.png>`** serves the page, drives Chrome headless and saves the final frame as a PNG, so Claude can look at the result.
+- **`npm run bench -- --scenario <name> --ticks N [--threads T]`** runs the simulation under Node and prints the average and 95th-percentile milliseconds per phase, plus ant updates per second. No rendering.
 
-Unit tests (doctest, through CTest) cover:
+Unit tests (`node:test`, run by `npm test`) cover:
 - deposits, foreign-cell erasure, the ownership flip and degrading;
 - decay half-life being independent of frame rate;
 - exhausted ants never depositing `to_food`;
@@ -423,12 +428,12 @@ Unit tests (doctest, through CTest) cover:
 - the tripod invariant;
 - spatial hash neighbours matching a brute-force search;
 - the `uid → index` map staying correct through spawns and removals;
-- **determinism:** 1 thread and 8 threads giving bit-identical results.
+- **determinism:** 1 worker and 8 workers giving identical results (M4).
 
 Rules:
 - Run the tests after every change to the simulation.
 - Check behaviour by taking a headless screenshot and looking at it.
-- Performance claims only come from `--bench` runs, and must say whether the laptop was plugged in.
+- Performance claims only come from `npm run bench` runs, and must say whether the laptop was plugged in.
 
 ---
 
@@ -479,13 +484,14 @@ Rules:
 ## 13. Code layout (planned)
 
 ```
-CMakeLists.txt, CMakePresets.json
-src/app/     main loop, fixed-step accumulator, command-line options, bench/headless modes
-src/core/    vector math, counter-based RNG, thread pool + parallel_for, timers
-src/sim/     params, world grids, ants (SoA), colonies, food, tick phases, scenarios
-src/render/  camera, batch builders (ants, legs, shadows, heatmap, obstacles, overlays), sprite generation
-src/ui/      ImGui panels, tools and brushes, input mapping
-tests/       doctest unit tests
+package.json, tsconfig.json, index.html, styles.css
+src/app/     browser entry, URL/CLI options, bench CLI, headless and interactive modes
+src/core/    vector math, counter-based RNG, fixed-step clock, stats, timers
+src/sim/     params, world grids, ants (SoA in typed arrays), colonies, food, tick phases, scenarios
+src/render/  camera, geometry batches, WebGL2 renderer, theme, test pattern, world view
+src/ui/      DOM panels, tools and brushes, input mapping
+tests/       node:test unit tests
+tools/       static server and headless-Chrome screenshot driver
 docs/        specs and plans
 ```
 
@@ -514,11 +520,11 @@ Each milestone ends with a running app and the checks listed.
 
 | # | Milestone | Done when |
 |---|---|---|
-| M0 | **Skeleton.** CMake and presets, pinned dependencies, DPI-aware window at native resolution with ImGui, fixed-step loop with interpolation, camera, command-line modes, thread pool, RNG, test target | The app opens crisp at 2880×1620; the log shows the `direct3d11` renderer; a headless screenshot works; tests run |
-| M1 | **Core foraging, one colony.** SoA ants, nest, food, marker grid, wander, energy and states, spawning, ants and dual-channel heatmap drawn, phase pipeline | In the sandbox, a trail forms between nest and food on its own; screenshot reviewed; tests cover deposit, decay and state changes |
+| M0 | **Skeleton.** npm/TypeScript project and test harness, DPI-aware WebGL2 canvas at native resolution with a DOM debug panel, fixed-step loop with interpolation, camera, URL/CLI modes, RNG, headless screenshots, bench | The page opens crisp at devicePixelRatio 2; the log says `webgl2`; a headless screenshot works; tests run |
+| M1 | **Core foraging, one colony.** SoA ants in typed arrays, nest, food, marker grid, wander, energy and states, spawning, ants and dual-channel heatmap drawn, phase pipeline | In the sandbox, a trail forms between nest and food on its own; screenshot reviewed; tests cover deposit, decay and state changes |
 | M2 | **Walls and adaptation.** Obstacle grid and brushes, border flags, spatial hash (the stuck rule needs neighbour counts), wall collisions, fallback rays, stuck detection and degrading, maze scenario and breach button | Ants solve the maze; after the breach, most deliveries take the shortcut; before and after screenshots |
 | M3 | **Colonies.** Several colonies, ownership and the territory rule (toggle), New colony tool, four-colony scenario, colony-colour heatmap | Four colonies forage at once; territories are visible; erasure and flip are tested |
-| M4 | **Crowds and scale.** PBD collisions, PBMAD avoidance, multithreaded phases, stress scenario, bench mode | No overlapping ants; opposing streams form lanes; 20k-ant bench numbers recorded; determinism test passes |
+| M4 | **Crowds and scale.** PBD collisions, PBMAD avoidance, worker pool, stress scenario, bench mode | No overlapping ants; opposing streams form lanes; 20k-ant bench numbers recorded; determinism test passes with 1 and 8 workers |
 | M5 | **Looks and UI.** Legs and tripod gait, shadows, themes, inspector (follow, names, sensor drawing), telemetry and sparklines, parameter panel, Zen mode, debug overlays | Zoomed-in screenshots look right; tripod test passes |
 | M6 | **Tuning and hardening.** Tune the defaults toward the look of the videos, performance passes, edge cases (painting over nests or food, extinct colonies, ant caps) | User is happy with how it looks and feels |
 
@@ -532,6 +538,10 @@ Each milestone ends with a running app and the checks listed.
 4. Exhausted ants deposit nothing.
 5. Being stuck only triggers trail erasure away from nests and food, and outside crowds.
 6. Avoidance limited to a 24 u radius, the 16 nearest ants and a 1.0 s horizon. It is time-sliced by `uid` parity, the correction is reused on off-ticks, and head-on cases sidestep to the right.
+7. **Browser TypeScript 5.9 + WebGL2 instead of C++20 + SDL3** (2026-10-25). Smart App Control blocks unsigned Windows executables and the user will not disable it. A browser app keeps the same simulation design, reaches the GPU through ANGLE/Direct3D 11, and nothing new runs as a Windows program. The completed C++ skeleton is archived on branch `archive/cpp-m0`.
+8. **DOM UI instead of Dear ImGui**, because HTML/CSS is crisp at 200% scaling with no dependency, and panels and sliders remain easy to build.
+9. **32-bit counter-based RNG** (`mix32`) instead of the C++ 64-bit SplitMix64. JavaScript's fast integer path is 32-bit (`Math.imul`); determinism only needs repeatability, not a particular bit width.
+10. **Workers only from M4.** M0–M3 run single-threaded; the phase structure is written so that moving a phase onto workers cannot change results.
 7. Legs are locked by tripod group.
 8. Obstacle cells are 4 u, and border cells collide as boxes.
 9. The territory rule stays in v1 behind a toggle (on by default). Flipping a cell's owner applies the new deposit immediately.
