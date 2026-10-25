@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { chromePath } from "./chrome.mjs";
 import { startServer } from "./serve.mjs";
 
 const kDefaultSize = "1920x1080";
@@ -40,19 +40,6 @@ function parseArgs(argv) {
     throw new UsageError(`invalid --seed: ${args.seed} (0..${kMaxSeed})`);
   }
   return args;
-}
-
-function chromePath() {
-  const candidates = [process.env.CHROME_PATH];
-  if (process.platform === "win32") {
-    candidates.push("C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe");
-    if (process.env.LOCALAPPDATA) {
-      candidates.push(join(process.env.LOCALAPPDATA, "Google", "Chrome", "Application", "chrome.exe"));
-    }
-  }
-  const found = candidates.find((path) => path && existsSync(path));
-  if (!found) throw new Error("Chrome not found; set CHROME_PATH");
-  return found;
 }
 
 function runChrome(args, timeoutMs) {

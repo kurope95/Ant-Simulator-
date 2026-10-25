@@ -25,6 +25,8 @@ A real-time 2D ant colony / stigmergy simulator inspired by Pezzza's Work "Ant S
 - **Verified 2026-10-25:** Node 24.13 builds and runs ES modules and `node:test`; Chrome 155 is at `C:\Program Files\Google\Chrome\Application\chrome.exe`; npm can install typescript 5.9.3.
 
 ## Build and run
+Double-click **`Play Ant Simulator.bat`** (or the **Ant Simulator** Desktop shortcut) to install if needed, build, serve and open the game as a Chrome app window; the server stops when the window closes.
+
 ```powershell
 npm install            # once: typescript + @types/node, no native binaries
 npm run build          # tsc -> dist/
