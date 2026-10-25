@@ -373,8 +373,11 @@ a colony's `id` is its index in `WorldSetup.colonies`. The maze is the only pres
 // render/camera.ts
 class Camera {
   static readonly kMinScale = 0.05, kMaxScale = 16     // physical pixels per world unit
+  static readonly kMinScaleOfFit = 0.6                 // the zoom floor after fit() is this share of the fit scale
   setViewport(sizePx: Vec2): void; viewport(): Vec2
   fit(worldSize: Vec2): void
+  setScaleLimits(min: number, max: number): void
+  clampCenter(worldSize: Vec2): void                   // keeps the centre inside the world
   worldToScreen(p: Vec2): Vec2; screenToWorld(p: Vec2): Vec2
   zoomAt(screenPx: Vec2, factor: number): void; panByScreen(deltaPx: Vec2): void
   centerOn(worldPos: Vec2): void
@@ -428,14 +431,20 @@ class GlRenderer {
   createTexture(): WebGLTexture | null
   deleteTexture(texture: WebGLTexture | null): void
   updateTexture(texture, width, height, rgba: Uint8Array): void   // row 0 = top
-  drawTexture(texture: WebGLTexture, rect: Rect): void
+  drawTexture(texture: WebGLTexture, rect: Rect, options?: { additive?: boolean }): void   // additive: trails glow
+  drawTerrain(mask: WebGLTexture, rect: Rect, look: TerrainLook): void
+  updateMask(texture: WebGLTexture, width, height, rgba: Uint8Array): void   // mipmapped obstacle mask
+  maxTextureSize(): number
+  createTarget(width, height): RenderTarget | null; bindTarget(target | null): void; deleteTarget(target): void
+  drawTargetToScreen(target: RenderTarget): void       // screen-size copy of the terrain, drawn upright
   present(): void                      // no-op for WebGL; kept for symmetry
 }
 
 // render/theme.ts
 interface Theme { name: string; outside: Rgba8; ground: Rgba8; grid: Rgba8; border: Rgba8;
                   food: Rgba8; heatHome: Rgba8; heatFood: Rgba8; heatAlpha: number;
-                  rock: Rgba8; water: Rgba8; sand: Rgba8; mud: Rgba8; speckle: Rgba8 }
+                  groundA, groundB, rockDark, rockLight, waterShallow, waterDeep, sand, mud: Rgba8;
+                  speckle: Rgba8 }   // terrain colours per preset (M1.6); rock and water are two tones each
 meadowTheme(): Theme; dunesTheme(): Theme; creekTheme(): Theme; boulderTheme(): Theme; blankTheme(): Theme
 themeForPreset(presetId): Theme        // unknown ids fall back to Meadow
 // heatHome #4FC3B0, heatFood #F0B45E, heatAlpha 0.62 for every theme.
@@ -457,7 +466,7 @@ foodPieceCount(amount, infinite): number            // min(48, ceil(amount/100))
 foodPieces(uid, pos, radius, amount, infinite): FoodPiece[]   // inner-first golden-angle spiral
 
 // render/food_layer.ts
-buildFood(sprites: SpriteBatch, world, camera, frames: AtlasFrames): void
+buildFood(sprites: SpriteBatch, shadows: SpriteBatch, world, camera, frames: AtlasFrames): void
 
 // render/nest_layer.ts
 buildNests(sprites: SpriteBatch, world, camera, frames: AtlasFrames): void
@@ -468,29 +477,31 @@ class GaitTracker { update(world: World): void; phaseAt(index: number): number }
 interface LegPose { hip: Vec2; knee: Vec2; foot: Vec2 }
 legPose(phase, leg, lengthPx): LegPose
 
-// render/terrain_texture.ts
-interface TextureSize { width: number; height: number; scale: number }
-terrainTextureSize(worldSize: Vec2): TextureSize     // 2 u per texel, max 2048 px long side
-paintTerrainTexture(world: World, theme: Theme): HTMLCanvasElement
+// render/terrain_mask.ts (pure) and render/terrain_shader.ts (M1.6; terrain_texture.ts is removed)
+obstacleMaskRgba(kind: Uint8Array): Uint8Array      // R rock, G water, B sand, A mud; each 0 or 255
+terrainMask(grid, maxTextureSize): TerrainMask       // halves the grid when it exceeds the GPU limit
+kTerrainFragmentShader: string                       // ground, rocks, water, sand, mud from the mask
+terrainLook(theme, worldSize, cell, time): TerrainLook; terrainUniforms(gl, program); setTerrainUniforms(gl, u, look)
+// (the old Canvas2D bake, paintTerrainTexture and terrainTextureSize, is gone)
 
 // render/ant_layer.ts
-buildAnts(sprites: SpriteBatch, legs: GeometryBatch, world, camera, alpha,
+buildAnts(sprites: SpriteBatch, legs: GeometryBatch, shadows: SpriteBatch, world, camera, alpha,
           frames: AtlasFrames, gait: GaitTracker): void
 
 // render/world_view.ts
 interface WorldRenderCache { atlasTexture: WebGLTexture | null; terrainTexture: WebGLTexture | null;
                              heatmapTexture: WebGLTexture | null; heatmapPixels: Uint8Array;
-                             atlasFrames: AtlasFrames; terrain: TextureSize;
-                             under: GeometryBatch; back: SpriteBatch;
+                             atlasFrames: AtlasFrames; terrainCell: number; terrainWater: boolean; terrainId: number;
+                             under: GeometryBatch; back: SpriteBatch; shadows: SpriteBatch;
                              legs: GeometryBatch; actors: SpriteBatch; gait: GaitTracker }
-createWorldRenderCache(renderer, world, theme): WorldRenderCache
+createWorldRenderCache(renderer, world): WorldRenderCache
 disposeWorldRenderCache(renderer, cache): void    // deletes terrain + heatmap textures; atlas is shared
-refreshTerrain(renderer, cache, world, theme): void
+refreshTerrain(renderer, cache, world): void        // rebuilds the mask and bumps terrainId
 drawWorld(renderer, cache, world, camera, settings, theme, alpha): void
 ```
 
-**Draw order inside `drawWorld`:** terrain texture → heatmap texture → `under` grid and border →
-`back` sprites (nests, then food pieces) → `legs` batch → `actors` ant sprites. That is six draw
+**Draw order inside `drawWorld`:** terrain copy (redrawn only when stale) → heatmap texture (additive) → `under` grid and border → `shadows` (ants and food) →
+`back` sprites (nests, then food pieces) → `legs` batch → `actors` ant sprites. That is seven draw
 calls at most, every one batched; never one per ant, leg or food piece.
 
 ### 4.4 `ui`: DOM UI
@@ -695,6 +706,7 @@ runReach(): number                     // prints the foraging-range table; retur
 | `--seed <n>` / `?seed=` | random seed, 0..4294967295 (default 1) |
 | `--ticks <n>` / `?ticks=` | ticks to pre-run; `-1` selects the mode default (bench 1200, others 0) |
 | `--zoom <n>` / `?zoom=` | camera scale 0.1..16, applied once on the first fit of a fresh run |
+| `--focus <x,y>` / `?focus=` | centres the run camera on a world point after the first fit (the nest close-up) |
 | `--size WxH` / `?size=` | canvas/screenshot size, 16..8192 each (default 1920x1080) |
 | `--headless [--screenshot <file.png>]` / `?headless` | render the pre-run once, no loop. `--screenshot` is read by `tools/screenshot.mjs` |
 | `--interactive` | screenshot-only flag: use the real screens instead of headless mode |
@@ -772,6 +784,7 @@ tests/ui/     test_builder_model.test.ts [M1.5] test_param_specs.test.ts
 tests/app/    test_attract.test.ts [M1.5] test_bench.test.ts [M1.5]
               test_options.test.ts        test_reach.test.ts   [M2]
               test_session.test.ts [M1.5]
+tests/app/    test_camera_input.test.ts [M1.6]   tests/render/ test_terrain_mask.test.ts [M1.6]
 tests/tools/  test_screenshot.test.ts [M1.5]   // spawns Chrome for the interactive builder check
 ```
 
@@ -807,6 +820,6 @@ written where `--out` says and are gitignored.
 - **Obstacles, multi-colony setup and presentation moved into M1.5.** The former M2 wall work, M3 colony work and M5 look work shipped there; M3 is closed.
 - **`sim/scenarios.ts` was deleted.** Presets (`sim/presets.ts`) and the staged builder replace scenarios; `--scenario` survives only as a deprecated alias for `--preset`.
 - **The spatial hash arrives in M2** for stuck detection's crowd counts, and returns in M4 for worker-scale neighbour queries.
-- **Home and Builder refit the camera** to the world; the Run applies `--zoom` once on its first fit.
+- **Home and Builder refit the camera** to the world; the Run applies `--zoom` and `--focus` once on its first fit.
 - Bench prints both ticks per second and ant updates per second.
 - Workers (the "thread pool") remain M4; M0–M3 are single-threaded and deterministic by construction.

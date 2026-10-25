@@ -36,6 +36,7 @@ npm run bench -- --preset meadow --ticks 1200
 npm run reach          # acceptance harness: deliveries per minute at four distances, contest, maze
 npm run screenshot -- --preset creek --ticks 1800 --zoom 2 --out captures\run.png
 npm run screenshot -- --interactive --screen home --ticks 0 --out captures\home.png
+npm run screenshot -- --preset meadow --ticks 300 --zoom 6 --focus 400,540 --out captures\fp1-nest.png
 ```
 
 - `npm run serve` is a tiny Node static server (`tools/serve.mjs`), no packages.
