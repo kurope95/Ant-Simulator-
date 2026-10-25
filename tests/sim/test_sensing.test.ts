@@ -25,15 +25,47 @@ function makeSenseWorld(): { world: World; index: number } {
   return { world, index };
 }
 
-test("sensing: follower and explorer patterns have pinned shapes", () => {
-  const follower = followerPattern();
+test("sensing: follower and explorer patterns have pinned shapes at default params", () => {
+  const follower = followerPattern(defaultParams());
   assert.equal(follower.length, 25);
   assert.deepEqual(follower[0], { angleOffset: -Math.PI / 3, distance: 6.4 });
   assert.deepEqual(follower[24], { angleOffset: Math.PI / 3, distance: 32 });
-  const explorer = explorerPattern();
+  const explorer = explorerPattern(defaultParams());
   assert.equal(explorer.length, 4);
   assert.deepEqual(explorer[0], { angleOffset: -Math.PI / 3, distance: 16 });
   assert.deepEqual(explorer[3], { angleOffset: Math.PI / 3, distance: 32 });
+});
+
+test("sensing: the patterns follow the sensor params", () => {
+  const params = defaultParams();
+  params.sensorRadius = 10;
+  params.sensorHalfFovDeg = 20;
+  const follower = followerPattern(params);
+  assert.equal(follower.length, 25);
+  const halfFov = (20 * Math.PI) / 180;
+  for (const sample of follower) {
+    assert.ok(sample.distance <= 10 + 1e-9, `distance ${sample.distance}`);
+    assert.ok(Math.abs(sample.angleOffset) <= halfFov + 1e-9, `angle ${sample.angleOffset}`);
+  }
+  assert.ok(Math.abs(follower[24].distance - 10) < 1e-9);
+  const explorer = explorerPattern(params);
+  assert.equal(explorer.length, 4);
+  assert.ok(Math.abs(explorer[3].distance - 10) < 1e-9);
+});
+
+test("sensing: a narrowed cone stops sensing a far marker", () => {
+  const { world, index } = makeSenseWorld();
+  const cell = world.markers.cellIndex({ x: 120, y: 100 });
+  world.markers.owner[cell] = 0;
+  world.markers.toFood[cell] = 0.8;
+  world.params.sensorRadius = 10;
+  world.params.sensorHalfFovDeg = 20;
+  const narrowed = senseMarkers(world, index, MarkerChannel.ToFood, followerPattern(world.params));
+  assert.equal(narrowed.found, false);
+  world.params.sensorRadius = 32;
+  world.params.sensorHalfFovDeg = 60;
+  const restored = senseMarkers(world, index, MarkerChannel.ToFood, followerPattern(world.params));
+  assert.equal(restored.found, true);
 });
 
 test("sensing: an own-colony cell ahead is found", () => {
@@ -41,7 +73,7 @@ test("sensing: an own-colony cell ahead is found", () => {
   const cell = world.markers.cellIndex({ x: 120, y: 100 });
   world.markers.owner[cell] = 0;
   world.markers.toFood[cell] = 0.8;
-  const result = senseMarkers(world, index, MarkerChannel.ToFood, followerPattern());
+  const result = senseMarkers(world, index, MarkerChannel.ToFood, followerPattern(world.params));
   assert.equal(result.found, true);
   near(result.bestSignal, 0.8);
   near(result.bestFoodSignal, 0.8);
@@ -58,7 +90,7 @@ test("sensing: a saturated field keeps the ant heading straight", () => {
       world.markers.toFood[cell] = 0.8;
     }
   }
-  const result = senseMarkers(world, index, MarkerChannel.ToFood, followerPattern());
+  const result = senseMarkers(world, index, MarkerChannel.ToFood, followerPattern(world.params));
   assert.equal(result.found, true);
   near(result.bestSignal, 0.8);
   assert.ok(Math.abs(result.targetHeading) < 1e-9, `heading ${result.targetHeading}`);
@@ -69,7 +101,7 @@ test("sensing: a foreign-owned cell is ignored", () => {
   const cell = world.markers.cellIndex({ x: 120, y: 100 });
   world.markers.owner[cell] = 1;
   world.markers.toFood[cell] = 0.9;
-  const result = senseMarkers(world, index, MarkerChannel.ToFood, followerPattern());
+  const result = senseMarkers(world, index, MarkerChannel.ToFood, followerPattern(world.params));
   assert.equal(result.found, false);
   assert.equal(result.bestSignal, 0);
   assert.equal(result.bestFoodSignal, 0);
@@ -81,7 +113,7 @@ test("sensing: the food signal is reported even while following home", () => {
   world.markers.owner[cell] = 0;
   world.markers.toHome[cell] = 0.2;
   world.markers.toFood[cell] = 0.7;
-  const result = senseMarkers(world, index, MarkerChannel.ToHome, followerPattern());
+  const result = senseMarkers(world, index, MarkerChannel.ToHome, followerPattern(world.params));
   assert.equal(result.found, true);
   near(result.bestSignal, 0.2);
   near(result.bestFoodSignal, 0.7);

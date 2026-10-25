@@ -73,6 +73,32 @@ test("determinism: the same seed reproduces the sandbox after 600 ticks", () => 
   assert.equal(a.ants.size(), b.ants.size());
 });
 
+test("sandbox: 7,200 ticks keep a live colony and a trail", { timeout: 120_000 }, () => {
+  const world = makeWorld(defaultParams(), 1);
+  assert.equal(loadScenario(world, "sandbox"), null);
+  for (let i = 0; i < 7200; i++) stepWorld(world);
+  const colony = world.colonies[0];
+  assert.ok(colony.deliveredTotal >= 5, `delivered ${colony.deliveredTotal}`);
+  // Tick 7,200 is the first-generation starvation minimum (76 ants, Task 8 ruling);
+  // the full population floor is asserted at 10,800. This guard only catches collapse.
+  assert.ok(world.ants.size() >= 40, `ants ${world.ants.size()}`);
+  let homeCells = 0;
+  let foodCells = 0;
+  for (let cell = 0; cell < world.markers.owner.length; cell++) {
+    if (world.markers.owner[cell] !== 0) continue;
+    if (world.markers.toHome[cell] > 0.02) homeCells++;
+    if (world.markers.toFood[cell] > 0.02) foodCells++;
+  }
+  assert.ok(homeCells >= 20, `to_home cells ${homeCells}`);
+  assert.ok(foodCells >= 20, `to_food cells ${foodCells}`);
+  for (let i = 0; i < world.ants.size(); i++) {
+    assert.ok(Number.isFinite(world.ants.posX[i]));
+    assert.ok(Number.isFinite(world.ants.posY[i]));
+    assert.ok(Number.isFinite(world.ants.energy[i]));
+    assert.ok(Number.isFinite(world.ants.heading[i]));
+  }
+});
+
 test("sandbox: a trail forms and food is delivered within 10,800 ticks", { timeout: 120_000 }, () => {
   const world = makeWorld(defaultParams(), 1);
   assert.equal(loadScenario(world, "sandbox"), null);

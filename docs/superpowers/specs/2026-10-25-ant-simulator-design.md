@@ -226,7 +226,7 @@ The simulation uses a fixed time step: `dt = 1/60 s`. Each tick runs these phase
 The field of view is ±60°, out to `SENSOR_RADIUS` (32 u).
 
 - **Direct sight.** If the ant's current target is within the field of view and no wall sits halfway between, it steers straight at it. The target is a food source when FORAGING and its own nest when returning.
-- **Followers** sample a fixed polar pattern of 25 points in the cone: 5 angles × 5 distances.
+- **Followers** sample a polar pattern of 25 points in the cone: 5 angles × 5 distances, spanning the live `SENSOR_FOV` and `SENSOR_RADIUS` (the pattern is scaled from these parameters, so the sliders change the marker sense itself).
   - Points inside walls are skipped, and so are points whose halfway point to the ant is solid (a cheap line-of-sight check).
   - A point's score is the followed channel, counted only in cells owned by the ant's colony.
   - The followed channel is `to_food` when FORAGING, and `to_home` when RETURNING_FOOD or RETURNING_EXHAUSTED.
@@ -235,13 +235,16 @@ The field of view is ±60°, out to `SENSOR_RADIUS` (32 u).
   - An exhausted Explorer uses the Follower pattern, because it just wants to get home.
 - **No marker found: fall back to open space.** Cast `FALLBACK_RAYS` (12) rays across the field of view, each up to `FALLBACK_RANGE` (48 u), through the obstacle grid.
   - Steer along the ray with the longest free distance.
-  - Ties are common in open space; they go to the ray closest to the current wander heading. *(Fix: the original rule had no tie-break, which would make ants in open space jitter.)*
+  - Ties are common in open space; they go to the ray closest to the current wander heading — the heading the ant took on its last wander redraw (§5.4). *(Fix: the original rule had no tie-break, which would make ants in open space jitter.)*
 - **Speed** is `ANT_SPEED`, varied per ant by up to ±`SPEED_JITTER`.
 
 ### 5.4 Wander
-Each ant has a smooth random wander offset:
-- Every `WANDER_INTERVAL` (randomised by ±50%), pick a new offset within ±`WANDER_ANGLE`.
-- Add the offset to the desired heading.
+Each ant redraws a random wander offset every `WANDER_INTERVAL` (randomised by ±50%):
+- On the tick the offset is redrawn, it is added to the desired heading; the ant turns toward that heading under `TURN_RATE`, and the chosen heading then persists until the next redraw.
+- Between redraws, wander does not steer. A redraw nudges the path by at most ±`WANDER_ANGLE` over a few ticks.
+- The **wander heading** is the heading an ant is turning toward after its last redraw; §5.3's fallback tie-break compares against it.
+
+*(Fix, 2026-10-25: adding the persistent offset on every tick made `desired = heading + offset` a constant turn whenever the offset survived the turn limit, so ants circled at radius `v / ω ≈ 8` u and delivered nothing. Applying it only on the redraw tick keeps the wander and lets paths persist.)*
 
 Starting values are below. Tune them so Explorers leave an established highway roughly **10× more often** than Followers.
 
@@ -355,7 +358,7 @@ Each frame draws these layers in order, using a few batched WebGL2 draw calls in
 
 The UI is a DOM overlay (HTML/CSS) above the WebGL canvas, so text stays crisp at any display scale. **H** toggles Zen mode, which hides all UI.
 
-**The M1 control drawer (shipped 2026-10-25).** A glass top bar holds the brand, four live chips (tick, ants, delivered, FPS), pause and step, the speed pills (1×, 2×, 4×, Max), the heatmap cycle and the drawer toggle. The drawer holds collapsible Movement, Trails and Colony sections with live sliders, Ants and Grid switches, a Fit-world button, the key legend and Reset parameters. The palette is dark with an amber accent and a blue secondary; every control is custom-styled, and layout and motion follow the CSS contract in the M1 plan (Task 11). Screenshots of both the trail and the UI are part of the M1 acceptance.
+**The M1 control drawer (shipped 2026-10-25).** A glass top bar holds the brand, four live chips (tick, ants, delivered, FPS), pause and step, the speed pills (1×, 2×, 4×, Max), the heatmap cycle and the drawer toggle. The drawer holds collapsible Movement, Trails and Colony sections with live sliders, Ants and Grid switches, a Fit-world button, the key legend and Reset parameters. The palette is dark with an amber accent and a blue secondary; every control is custom-styled, and layout and motion follow the CSS contract in the M1 plan (Task 11). Screenshots of both the trail and the UI are part of the M1 acceptance. The **Degrade after** slider is withheld until M2: stuck detection is what starts the degrade timer, so in M1 the slider could not change anything. `DEGRADE_TIME` stays in the simulation parameters; the control returns with the M2 stuck rule.
 
 **Bottom toolbar** *(full version arrives with the editing tools, M2)*
 - Tools: Select/Pan, Wall brush, Erase brush, Food, New colony.
@@ -558,6 +561,7 @@ Each milestone ends with a running app and the checks listed.
 17. **Night is the interactive app's default theme** (2026-10-25). The user asked for a high-end dark UI ("dark background … no lazy shit"); Sand stays in code and returns as a theme switch with the M5 work. This supersedes item 12 for M1.
 18. **The control drawer ships in M1** (2026-10-25), not M5. It was part of the user's M1 UI request; the full toolbar, inspector, telemetry and parameter panel remain M5.
 19. **Ants are flat batched diamonds in M1** (2026-10-25). Sprites, shadows and legs arrive in M5; the M1 renderer keeps one draw call per layer.
+20. **The sandbox long-run acceptance runs 10,800 ticks** (2026-10-25). Tick 7,200 is the first-generation starvation minimum (76 of 200 ants, measured with seed 1); the suite pins the full thresholds (≥100 ants, ≥5 deliveries, both trail channels) at 10,800, and a 7,200 guard (≥40 ants, live trail, finite state) catches a collapse that never recovers.
 
 ## Glossary
 

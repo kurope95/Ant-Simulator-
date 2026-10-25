@@ -197,6 +197,7 @@ interface MarkerGrid { width: number; height: number; cell: number;
                        owner: Int8Array; toHome: Float32Array; toFood: Float32Array;
                        resize(worldSize: Vec2, cellSize: number): void;
                        cellIndex(pos: Vec2): number }              // -1 outside the world
+makeMarkerGrid(worldSize, cellSize): MarkerGrid
 emissionStrength(timeSinceAnchor, params): number
 deposit(grid, cell, colony, channel, strength, params): void
 degrade(grid, cell, colony, channel, factor): void
@@ -206,8 +207,10 @@ clearMarkersInCircle(grid, center, radius): void                       // [M2]
 // sim/food.ts, sim/colony.ts                                        [M1]; multiple colonies [M3]
 interface FoodSource { pos: Vec2; amount: number; infinite: boolean }
 foodRadius(source, params): number
+makeFoodSources(): FoodSources
 interface FoodSources { items: FoodSource[]; findTouching(pos, radius, params): number;
                         takeOne(index): boolean; removeEmpty(): void }
+makeColony(id, nest, historyCapacity?): Colony     // historyCapacity = 120
 interface Colony { id: ColonyId; nest: Vec2; foodPool: number; population: number;
                    deliveredTotal: number; deliveredLastSample: number;
                    deliveredPerSecond: RingBuffer<number>; extinct: boolean }
@@ -220,11 +223,12 @@ interface DegradeEvent { cell: number; colony: ColonyId; channel: MarkerChannel 
 enum ContactKind { Food, Nest }
 interface ContactEvent { antIndex: number; kind: ContactKind; target: number }
 interface ChunkEvents { deposits: DepositEvent[]; degrades: DegradeEvent[]; contacts: ContactEvent[] }
+makeChunkEvents(): ChunkEvents
 
 // sim/sensing.ts, sim/steering.ts                                   [M1]; walls in sensing [M2]
 interface SensorSample { angleOffset: number; distance: number }
-followerPattern(): readonly SensorSample[]      // 25 = 5 angles x 5 distances
-explorerPattern(): readonly SensorSample[]      // 4
+followerPattern(params): readonly SensorSample[] // 25 = 5 angles x 5 distances, scaled by the sensor params
+explorerPattern(params): readonly SensorSample[] // 4, scaled the same way; cached per params pair
 interface SenseResult { found: boolean; targetHeading: number; bestSignal: number; bestFoodSignal: number }
 senseMarkers(world, ant, channel, pattern): SenseResult
 directSightHeading(world, ant): number | null
@@ -237,6 +241,7 @@ thinkChunk(world, begin, end, out: ChunkEvents): void
 spawnAtNest(world, colony): number
 resetChunkEvents(world): void
 applyEvents(world, events: ChunkEvents[]): void
+clampToWorld(world): void
 removeDead(world): void
 updateStats(world): void
 
@@ -390,12 +395,20 @@ type ParamKey = "antSpeed" | "turnRate" | "sensorRadius" | "sensorHalfFovDeg" | 
 type ParamGroup = "movement" | "trails" | "colony"
 interface ParamSpec { key: ParamKey; label: string; unit: string; min: number; max: number;
                       step: number; scale: number; group: ParamGroup }
-paramSpecs(): readonly ParamSpec[]
+paramSpecs(): readonly ParamSpec[]      // nine M1 rows; degradeTime is typed but has no row until M2
 specValue(spec, params): number                 // slider value = params[key] * scale
 applySpecValue(spec, params, displayValue): number   // clamp, snap, store, return stored
 formatSpecValue(spec, displayValue): string
 type SpeedSetting = 1 | 2 | 4 | "max"
-interface ShellHooks { pause, step, speed, heatmap, ants, grid, resetParams, resetCamera, param }
+interface ShellHooks {
+  onPause(): void; onStep(): void; onSpeed(speed: SpeedSetting): void
+  onHeatmap(): void; onAnts(): void; onGrid(): void
+  onResetParams(): void; onResetCamera(): void
+  onParam(key: ParamKey, value: number): void
+}
+interface ShellFrame { fps: number; frameMs: number; tick: number; ants: number; delivered: number;
+                       paused: boolean; speed: SpeedSetting; heatmap: HeatmapMode;
+                       showAnts: boolean; showGrid: boolean; stepsThisFrame: number }
 class AppShell {
   constructor(root: HTMLElement, params: SimParams, hooks: ShellHooks)
   update(frame: ShellFrame): void

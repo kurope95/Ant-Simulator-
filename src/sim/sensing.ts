@@ -1,6 +1,7 @@
 import { angleDiff } from "../core/math.js";
 import { angleOf, fromAngle } from "../core/vec2.js";
 import { MarkerChannel } from "./marker_grid.js";
+import type { SimParams } from "./params.js";
 import { AntState } from "./types.js";
 import type { World } from "./world.js";
 
@@ -9,30 +10,61 @@ export interface SensorSample {
   distance: number;
 }
 
-const kFollowerAngles = [-Math.PI / 3, -Math.PI / 6, 0, Math.PI / 6, Math.PI / 3];
-const kFollowerDistances = [6.4, 12.8, 19.2, 25.6, 32];
+// Patterns are fractions of the live sensor params, so the sliders govern the
+// marker sense itself; at the defaults they reproduce the original pinned grids.
+const kFollowerAngleFractions = [-1, -0.5, 0, 0.5, 1];
+const kFollowerDistanceFractions = [0.2, 0.4, 0.6, 0.8, 1];
+const kExplorerAngleFractions = [-1, 1];
+const kExplorerDistanceFractions = [0.5, 1];
 
-const kFollowerPattern: readonly SensorSample[] = Object.freeze(
-  kFollowerDistances.flatMap((distance) =>
-    kFollowerAngles.map((angleOffset) => Object.freeze({ angleOffset, distance })),
-  ),
-);
-
-const kExplorerAngles = [-Math.PI / 3, Math.PI / 3];
-const kExplorerDistances = [16, 32];
-
-const kExplorerPattern: readonly SensorSample[] = Object.freeze(
-  kExplorerDistances.flatMap((distance) =>
-    kExplorerAngles.map((angleOffset) => Object.freeze({ angleOffset, distance })),
-  ),
-);
-
-export function followerPattern(): readonly SensorSample[] {
-  return kFollowerPattern;
+interface PatternKey {
+  radius: number;
+  halfFovDeg: number;
 }
 
-export function explorerPattern(): readonly SensorSample[] {
-  return kExplorerPattern;
+let cachedKey: PatternKey | null = null;
+let cachedFollower: readonly SensorSample[] = [];
+let cachedExplorer: readonly SensorSample[] = [];
+
+function buildPattern(
+  params: SimParams,
+  distanceFractions: readonly number[],
+  angleFractions: readonly number[],
+): readonly SensorSample[] {
+  const halfFov = (params.sensorHalfFovDeg * Math.PI) / 180;
+  return Object.freeze(
+    distanceFractions.flatMap((fraction) =>
+      angleFractions.map((angleFraction) =>
+        Object.freeze({
+          angleOffset: halfFov * angleFraction,
+          distance: params.sensorRadius * fraction,
+        }),
+      ),
+    ),
+  );
+}
+
+function patternsFor(params: SimParams): void {
+  if (
+    cachedKey !== null &&
+    cachedKey.radius === params.sensorRadius &&
+    cachedKey.halfFovDeg === params.sensorHalfFovDeg
+  ) {
+    return;
+  }
+  cachedKey = { radius: params.sensorRadius, halfFovDeg: params.sensorHalfFovDeg };
+  cachedFollower = buildPattern(params, kFollowerDistanceFractions, kFollowerAngleFractions);
+  cachedExplorer = buildPattern(params, kExplorerDistanceFractions, kExplorerAngleFractions);
+}
+
+export function followerPattern(params: SimParams): readonly SensorSample[] {
+  patternsFor(params);
+  return cachedFollower;
+}
+
+export function explorerPattern(params: SimParams): readonly SensorSample[] {
+  patternsFor(params);
+  return cachedExplorer;
 }
 
 export interface SenseResult {

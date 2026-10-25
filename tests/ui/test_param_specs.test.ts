@@ -30,10 +30,12 @@ function assertFiniteWorld(world: World): void {
   }
 }
 
-test("param specs: ten unique controls with valid ranges and defaults", () => {
+test("param specs: nine live controls with valid ranges and defaults", () => {
   const specs = paramSpecs();
-  assert.equal(specs.length, 10);
-  assert.equal(new Set(specs.map((spec) => spec.key)).size, 10);
+  assert.equal(specs.length, 9);
+  assert.equal(new Set(specs.map((spec) => spec.key)).size, 9);
+  // No stuck detection in M1, so no degrade event can fire: the control waits for M2.
+  assert.equal(specs.some((spec) => spec.key === "degradeTime"), false);
   const defaults = defaultParams();
   for (const spec of specs) {
     assert.ok(["movement", "trails", "colony"].includes(spec.group), spec.key);

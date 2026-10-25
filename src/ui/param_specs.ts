@@ -33,7 +33,8 @@ const kSpecs: readonly ParamSpec[] = [
   { key: "explorerRatio", label: "Explorers", unit: "%", min: 0, max: 100, step: 1, scale: 100, group: "movement" },
   { key: "markerHalfLife", label: "Trail half-life", unit: "s", min: 1, max: 30, step: 0.1, scale: 1, group: "trails" },
   { key: "markerDropDist", label: "Mark every", unit: "u", min: 2, max: 24, step: 1, scale: 1, group: "trails" },
-  { key: "degradeTime", label: "Degrade after", unit: "s", min: 0.5, max: 10, step: 0.5, scale: 1, group: "trails" },
+  // degradeTime stays in SimParams but has no live control in M1: no stuck
+  // detection exists yet, so no degrade event can fire. The control returns with M2.
   { key: "energyBurn", label: "Energy burn", unit: "/s", min: 0.1, max: 5, step: 0.1, scale: 1, group: "colony" },
   { key: "spawnCost", label: "Spawn cost", unit: "food", min: 1, max: 20, step: 1, scale: 1, group: "colony" },
 ];

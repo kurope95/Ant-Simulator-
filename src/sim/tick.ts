@@ -28,7 +28,7 @@ function chooseHeading(world: World, ant: number): { heading: number; bestFoodSi
   }
   const usesExplorerPattern =
     ants.role[ant] === AntRole.Explorer && state !== AntState.ReturningExhausted;
-  const pattern = usesExplorerPattern ? explorerPattern() : followerPattern();
+  const pattern = usesExplorerPattern ? explorerPattern(world.params) : followerPattern(world.params);
   const sensed = senseMarkers(world, ant, senseChannel(state), pattern);
   return {
     heading: sensed.found ? sensed.targetHeading : ants.heading[ant],
