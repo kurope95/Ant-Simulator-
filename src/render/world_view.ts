@@ -170,7 +170,7 @@ export function drawWorld(
       world.markers.height,
       cache.heatmapPixels,
     );
-    renderer.drawTexture(cache.heatmapTexture, worldRect);
+    renderer.drawTexture(cache.heatmapTexture, worldRect, { additive: true });
   }
 
   cache.under.clear();

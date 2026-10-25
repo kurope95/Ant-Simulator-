@@ -16,14 +16,23 @@ test("heatmap: trails are teal home, amber food, at 62% alpha", () => {
   assert.deepEqual([...out], [0x4f, 0xc3, 0xb0, 158]);
 });
 
-test("heatmap: dual-channel sums both channels and clamps them to 255", () => {
+test("heatmap: a faint trail keeps its hue and gets a visible alpha", () => {
+  const grid = makeMarkerGrid({ x: 8, y: 8 }, 8);
+  grid.owner[0] = 0;
+  grid.toHome[0] = 0.04;
+  const out = new Uint8Array(4);
+  fillHeatmapRgba(grid, HeatmapMode.DualChannel, meadowTheme(), out);
+  assert.deepEqual([...out], [0x4f, 0xc3, 0xb0, 32]);
+});
+
+test("heatmap: dual-channel mixes the pure hues by food share, alpha from the total", () => {
   const grid = makeMarkerGrid({ x: 8, y: 8 }, 8);
   grid.owner[0] = 0;
   grid.toHome[0] = 1;
   grid.toFood[0] = 1;
   const out = new Uint8Array(4);
   fillHeatmapRgba(grid, HeatmapMode.DualChannel, meadowTheme(), out);
-  assert.deepEqual([...out], [255, 255, 255, 158]);
+  assert.deepEqual([...out], [160, 188, 135, 158]);
 });
 
 test("heatmap: dual-channel sums the same channel over colonies", () => {
@@ -32,7 +41,7 @@ test("heatmap: dual-channel sums the same channel over colonies", () => {
   grid.toHome[1] = 0.4;
   const out = new Uint8Array(4);
   fillHeatmapRgba(grid, HeatmapMode.DualChannel, meadowTheme(), out);
-  assert.deepEqual([...out], [71, 176, 158, 142]);
+  assert.deepEqual([...out], [0x4f, 0xc3, 0xb0, 150]);
 });
 
 test("heatmap: off writes transparent pixels", () => {
@@ -51,7 +60,7 @@ test("heatmap: colonies mode uses the palette colour and the stronger channel", 
   grid.toHome[2] = 0;
   const out = new Uint8Array(4);
   fillHeatmapRgba(grid, HeatmapMode.ColonyColor, meadowTheme(), out);
-  assert.deepEqual([...out], [0x4c, 0x8d, 0xde, 79]);
+  assert.deepEqual([...out], [0x4c, 0x8d, 0xde, 112]);
 });
 
 test("heatmap: unowned cells stay transparent in both coloured modes", () => {

@@ -325,7 +325,8 @@ export class GlRenderer {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
   }
 
-  drawTexture(texture: WebGLTexture, rect: Rect): void {
+  // Additive draws add their colour to what is underneath, so trails glow on dark ground.
+  drawTexture(texture: WebGLTexture, rect: Rect, options: { additive?: boolean } = {}): void {
     const width = rect.max.x - rect.min.x;
     const height = rect.max.y - rect.min.y;
     if (width <= 0 || height <= 0) return;
@@ -336,7 +337,9 @@ export class GlRenderer {
     gl.uniform4f(this.textureRect, rect.min.x, rect.min.y, width, height);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.blendFunc(gl.SRC_ALPHA, options.additive === true ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.bindVertexArray(null);
   }
 
