@@ -366,9 +366,6 @@ export class AppController {
       onPause: () => {
         this.session = togglePause(this.session);
       },
-      onStep: () => {
-        if (this.session.paused) this.stepRequests += 1;
-      },
       onSpeed: (value: SpeedSetting) => {
         this.session = { ...this.session, speed: value };
       },
@@ -403,6 +400,9 @@ export class AppController {
     return {
       onResume: () => {
         this.resume();
+      },
+      onStep: () => {
+        if (this.session.paused) this.stepRequests += 1;
       },
       onRestart: () => {
         this.restartCurrent();
@@ -891,6 +891,13 @@ export class AppController {
         } else {
           this.resume();
         }
+      } else if (
+        event.code === "Space" &&
+        this.pauseMenu?.isOpen() === true &&
+        this.session.paused
+      ) {
+        event.preventDefault();
+        this.stepRequests += 1;
       }
       return;
     }

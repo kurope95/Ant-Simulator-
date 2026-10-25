@@ -2,6 +2,7 @@ import { button, el } from "./dom.js";
 
 export interface PauseMenuHooks {
   onResume(): void;
+  onStep(): void;
   onRestart(): void;
   onEdit(): void;
   onFinish(): void;
@@ -49,6 +50,13 @@ export class PauseMenu {
     const actions = el("div", "pause-menu__actions");
     actions.append(
       this.resumeButton,
+      button({
+        label: "Step",
+        icon: "step",
+        variant: "secondary",
+        title: "Step one tick (Space)",
+        onClick: () => hooks.onStep(),
+      }),
       button({
         label: "Restart",
         icon: "reset",

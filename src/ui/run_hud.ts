@@ -24,7 +24,6 @@ export interface HudState {
 
 export interface RunHudHooks {
   onPause(): void;
-  onStep(): void;
   onSpeed(speed: SpeedSetting): void;
   onReset(): void;
   onEdit(): void;
@@ -81,7 +80,6 @@ export class RunHud {
   private readonly chipFps: HTMLSpanElement;
   private readonly pauseButton: HTMLButtonElement;
   private readonly pauseLabel: HTMLSpanElement;
-  private readonly stepButton: HTMLButtonElement;
   private readonly speedButtons: SpeedOption[] = [];
   private readonly coloniesButton: HTMLButtonElement;
   private readonly settingsButton: HTMLButtonElement;
@@ -150,15 +148,6 @@ export class RunHud {
     this.pauseButton.append(this.pauseLabel);
     this.pauseButton.setAttribute("aria-pressed", "false");
 
-    this.stepButton = button({
-      label: "",
-      icon: "step",
-      variant: "icon",
-      title: "Step one tick (Space)",
-      onClick: () => hooks.onStep(),
-    });
-    this.stepButton.disabled = true;
-
     const speeds = el("div", "segmented");
     speeds.setAttribute("role", "group");
     speeds.setAttribute("aria-label", "Simulation speed");
@@ -201,7 +190,6 @@ export class RunHud {
       this.legend,
       makeDivider(),
       this.pauseButton,
-      this.stepButton,
       speeds,
       makeDivider(),
       reset,
@@ -235,7 +223,6 @@ export class RunHud {
     this.root.dataset.paused = String(state.paused);
     setText(this.pauseLabel, state.paused ? "Play" : "Pause");
     this.pauseButton.setAttribute("aria-pressed", String(state.paused));
-    this.stepButton.disabled = !state.paused;
 
     for (const option of this.speedButtons) {
       option.node.setAttribute("aria-pressed", String(option.value === state.speed));

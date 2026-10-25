@@ -151,7 +151,9 @@ export class BuilderModel {
   }
 
   setTool(tool: BuilderTool): void {
+    if (tool === this.currentTool) return;
     this.currentTool = tool;
+    this.currentSelection = null;
   }
 
   clearSelection(): void {

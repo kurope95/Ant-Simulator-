@@ -937,9 +937,6 @@ textarea {
   width: 100%;
 }
 
-.pause-menu__actions .button--danger {
-  grid-column: 1 / -1;
-}
 
 .modal--finish .modal__card {
   width: min(500px, 100%);
@@ -1010,10 +1007,6 @@ textarea {
 
   .pause-menu__actions {
     grid-template-columns: 1fr;
-  }
-
-  .pause-menu__actions .button--danger {
-    grid-column: auto;
   }
 }
 

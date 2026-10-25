@@ -35,6 +35,19 @@ test("builder: deleting the selection clears it", () => {
   assert.equal(m.setup.colonies.length, 1);
 });
 
+test("builder: switching tools clears the selection", () => {
+  const m = model();
+  addColony(m.setup, { x: 100, y: 100 });
+  m.selectAt({ x: 100, y: 100 }, 24);
+  assert.deepEqual(m.selection, { kind: "colony", id: 0 });
+  m.setTool(BuilderTool.Food);
+  assert.equal(m.selection === null, true);
+  m.applyAt({ x: 200, y: 150 });
+  assert.equal(m.selection?.kind, "food");
+  m.setTool(BuilderTool.Rock);
+  assert.equal(m.selection === null, true);
+});
+
 test("builder: deleting a selection clears a pending preset confirm", () => {
   const m = model();
   m.setTool(BuilderTool.Colony);
