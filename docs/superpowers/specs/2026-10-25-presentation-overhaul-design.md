@@ -1,6 +1,6 @@
 # Ant Simulator — Presentation Overhaul & World Builder (Design)
 
-**Status:** approved, in implementation · 2026-10-25
+**Status:** implemented · 2026-10-25
 **Implementation plan:** [2026-10-25-presentation-overhaul.md](../plans/2026-10-25-presentation-overhaul.md)
 **Amends:** the main design spec, effectively replacing §7, §8, §9 and §10, and adding a milestone between M1 and M2.
 
@@ -76,7 +76,7 @@ Home ──New world──▶ Builder ──Start──▶ Run ──Pause──
   food inspectors. Start is disabled until the map passes validation, with the reason shown.
 - **Run** — the live world with a compact HUD: top bar, bottom control dock, optional colony panel
   and settings drawer.
-- **Paused** — a modal over the dimmed run: Resume, Restart, Edit world, Finish run.
+- **Paused** — a modal over the dimmed run: Resume, Step, Restart, Edit world, Finish run.
 - **Finish** — confirmation with the run's numbers; then Home with a "Last run" card.
 
 Editing from a paused run opens the builder with the current map. Starting again discards the
@@ -179,8 +179,10 @@ unused colour. Colour is an accent on a dark, realistic body — never a flat re
 
 - **Kinds:** Seeds (`#D9C48B`, teardrop with a dark hilum), Berries (`#C4475E`, round with a
   highlight), Leaves (`#7FAE5A`, veined teardrop). Four sprite variants each.
-- **Amount ↔ pieces:** one piece per 100 food units, 1–48 pieces; an infinite source always shows
-  48. A pile of 6,000 therefore starts full at 48 and loses its outermost piece every 100 units.
+- **Amount ↔ pieces:** one piece per 100 food units, capped at 48; an infinite source always shows
+  48. The count is `min(48, ceil(amount / 100))`, so a 6,000 pile starts full at 48 and keeps all
+  48 until 1,200 units have been removed; below 4,800 it sheds one outermost piece per 100 units
+  consumed.
 - **Layout:** a deterministic golden-angle spiral inside `foodRadius`, jittered by a visual hash of
   the source uid and piece index. Piece positions never move; the list is inner-first, so piece
   count shrinking removes only the outer ones. This is rendering state, not simulation randomness.
@@ -261,7 +263,7 @@ Starting ants are clamped to 10–600; food amount to 500–20,000; brush radius
 ## 8. The run
 
 **Top bar:** wordmark, preset name and seed, live chips (ants, delivered, elapsed sim time, FPS),
-then colony-panel and settings buttons. **Bottom dock:** Pause/Play, Step, 1×/2×/4×/Max, a divider,
+then colony-panel and settings buttons. **Bottom dock:** Pause/Play, 1×/2×/4×/Max, a divider,
 Reset, Edit, Finish. Reset rebuilds the same setup with the same seed; Edit opens the builder;
 Finish opens the confirmation.
 
@@ -273,8 +275,10 @@ that nest. Multiple colonies are visible at once.
 Colony sections, plus Ants/Grid switches, the trails mode cycle, Fit world, Reset parameters and
 the shortcut legend. Restyled to the design system; no behaviour change to the sliders.
 
-**Pause overlay:** dim + blur the run; a card with Resume, Restart, Edit world and Finish run.
-Esc opens it; Esc again resumes. H hides all run UI (Zen); Esc leaves Zen.
+**Pause overlay:** dim + blur the run; a card with Resume, Step, Restart, Edit world and Finish
+run. Step advances one tick and leaves the card open, as does Space; the dock is covered by the
+overlay, so single-stepping lives in the card rather than behind it. Esc opens it; Esc again
+resumes. H hides all run UI (Zen); Esc leaves Zen.
 
 **Finish:** a confirmation card showing elapsed time, ants, delivered and colony count, with Keep
 watching / Finish & home. Finishing returns to Home with the finished world as a dimmed backdrop
@@ -345,12 +349,13 @@ unchanged; piece layout is derived for rendering only.
 | `meadow` | Meadow | 1920×1080 | Ember 200 | Seeds 6,000; Berries 3,000 | moss, 5 rock clusters, sand drift, mud |
 | `dunes` | Dunes | 1920×1080 | Ember 180; Azure 180 | Leaves 8,000 | warm sand drifts, 3 rocks, muddy oasis |
 | `creek` | Creek | 2240×1200 | Fern 200; Rose 200 | Seeds 5,000; Berries 5,000 (opposite banks) | river with two rock crossings, sand banks |
-| `boulder` | Boulder field | 1920×1080 | Gold 220 | Seeds 7,000; Berries 4,000 | dense boulder clusters, moss, mud |
-| `blank` | Blank canvas | 1920×1080 | none | none | empty neutral soil |
+| `boulder` | Boulder | 1920×1080 | Gold 220 | Seeds 7,000; Berries 4,000 | dense boulder clusters, moss, mud |
+| `blank` | Blank | 1920×1080 | none | none | empty neutral soil |
 
 The presets are data, generated deterministically. Quick start uses `meadow` with a fresh seed.
 "Creek" is a showcase, not a pathfinding challenge: two crossings exist, but no maze-solving is
-promised in this milestone.
+promised in this milestone. The exact shipped geometry — every colony, pile and brush disc — is
+recorded in §13 rather than in this table.
 
 ## 11. Roadmap changes
 
@@ -362,22 +367,28 @@ A new milestone, **M1.5 — Presentation & world builder**, lands before M2. It 
 
 What remains in later milestones:
 
-- **M2** — stuck detection and degrading, fallback rays, the maze scenario and breach button,
-  wall-following quality.
-- **M3** — colony balance, territory tuning, the four-colony scenario, colony-colour analysis.
+- **M2** — stuck detection and degrading wired to `StuckTurn`, fallback rays, the maze preset and
+  breach control, wall-following and dead-end recovery.
+- **M3** — absorbed and closed by M1.5: multi-colony setup, palette, territory and the colony
+  heatmap shipped. Only inter-colony hostilities remains, and it is unscheduled.
 - **M4** — PBD/PBMAD, workers, stress scenario, 20k bench.
-- **M5** — ant inspector (names, follow, sensor drawing), telemetry and sparklines, advanced
-  parameters.
-- **M6** — tuning and hardening, including the deferred mechanics project.
+- **M5** — ant inspector (names, follow, sensor drawing), telemetry and sparklines, the live
+  `degradeTime` control.
+- **M6** — tuning and hardening.
+
+The separate mechanics project — pathfinding, collisions, starvation and births — is not M2 and is
+not scheduled here.
 
 ## 12. Acceptance
 
 1. `npm test` green, `npm run build` clean.
 2. `npm run bench -- --preset meadow --ticks 1200` recorded while plugged in.
-3. Screenshots read and judged: home, builder (two presets), run at fit zoom, close-up ants
-   (zoom ≥ 3×), a food pile at two depletion levels.
+3. Screenshots read and judged: home, builder, run at fit zoom, close-up ants (zoom ≥ 3×), and a
+   food pile at two depletion levels. Preset piles cannot show depletion quickly — a 6,000 pile
+   keeps 48 pieces until 1,200 units are gone — so depletion is judged on a 1,000-unit pile built
+   in the builder and watched until it sheds pieces.
 4. Home → New world → edit (colonies, colour, starting ants, food, each obstacle type, preset,
-   seed) → Start → pause → edit → restart → finish → home all work by hand.
+   seed) → Start → pause → step → edit → restart → finish → home all work by hand.
 5. Two colonies visibly forage with distinct colours and separate trails; no red-ant/red-trail
    clash; food pieces visibly decrease as food is delivered; legs animate when zoomed in.
 6. `src/core` and `src/sim` still import no DOM, WebGL or Chrome APIs.
@@ -389,3 +400,51 @@ the sprite art, the noise recipe for terrain, exact CSS spacing at widths below 
 copy punctuation, and micro-timing inside the stated motion ranges. The values for palette,
 sizes, obstacle effects, validation messages, preset contents, food piece math and draw order are
 fixed here and in the plan. Simulation tuning is explicitly out of scope.
+
+### Implementation calls (2026-10-25)
+
+- **Final preset geometry** (`src/sim/presets.ts`): `meadow` 1920×1080, Ember 200 @ (400,540),
+  Seeds 6,000 @ (1000,720), Berries 3,000 @ (1480,400), rock r40 (650,250) / r55 (1250,250) /
+  r45 (1650,800) / r35 (900,880) / r30 (300,880), sand r64 @ (1500,200) (1540,200) (1580,200),
+  mud r60 (700,760).
+- `dunes` 1920×1080, Ember 180 @ (420,540), Azure 180 @ (1500,540), Leaves 8,000 @ (960,540),
+  sand r64 @ (300,320) (700,260) (1150,300) (1600,320) (250,760) (700,800) (1250,780) (1700,780),
+  mud r60 @ (900,900) (960,900) (1020,900), rock r50 (960,200) / r60 (500,850) / r50 (1400,850).
+- `creek` 2240×1200, Fern 200 @ (320,600), Rose 200 @ (1920,600), Seeds 5,000 @ (640,600),
+  Berries 5,000 @ (1600,600), water r60 at x=1120 every 40 u in y except the two gaps y 280–360
+  and 840–920, sand r60 @ (1000,600) (1240,600), rock r40 @ (1160,320) (1160,880).
+- `boulder` 1920×1080, Gold 220 @ (300,540), Seeds 7,000 @ (1400,400), Berries 4,000 @
+  (1400,760), rock r60 (700,250) / r60 (760,800) / r45 (1100,200) / r55 (1100,880) /
+  r50 (1750,200) / r55 (1750,760), mud r50 (500,850); `blank` is the same 1920×1080 with nothing.
+- **Food pieces:** `kFoodPerPiece = 100`, `kMaxFoodPieces = 48`, count `min(48, ceil(amount/100))`,
+  golden-angle inner-first layout in 0.92r, piece size `clamp(0.22r, 4, 12) × scale`, shadow
+  +2/+3 px at alpha 64, white tint over the kind's atlas frame.
+- **Ant art:** body length from `antLength` with a 1.5 px floor; legs drawn only when the on-screen
+  body length reaches `legsMinPx` (20 px); gait phase advances by distance travelled with
+  `kGaitStride = 24`; shadow +2/+3 px at alpha 71.
+- **Anthill:** 256 px atlas frame per colony at 3.2× nest radius, growing with population; colony
+  colour only in the crater rim and a faint outer glow.
+- **Themes:** the five grid colours are preset-specific grey-greens at alpha 15; speckles are
+  moss, sand-grain, wet-moss, stone and neutral; food tints green, amber, fern, lichen, soft green;
+  heat stays teal `#4FC3B0` / amber `#F0B45E` at alpha 0.62.
+- **Obstacle highlight:** each painted cell gets a radius-r highlight at 0.12× alpha instead of a
+  smaller offset disc, because the offset discs left dark seams through large rock and water areas.
+- **Grid defaults:** `showGrid` is off in the run and on in the builder, with `G` toggling it in
+  either; a run-grid toggle carries into the next run, and Reset keeps the current setting.
+- **Responsive contract:** at ≤1100 px the builder rail collapses to 58 px icons, the FPS chip
+  hides, and the run dock caps at 760 px and wraps; the settings drawer is 360 px with a two-column
+  range grid that becomes one column below 780 px.
+- **Focus and layering:** each screen change focuses its primary action; Escape exits Zen before it
+  opens pause; Finish pauses the run and focuses Keep watching; the finish dialog, not the pause
+  menu, owns Escape while open.
+- **Single-step placement:** the pause overlay covers the dock, so a dock Step button could never be
+  clicked while it was enabled. Step moved into the pause card (Resume, Step | Restart, Edit world |
+  Finish run) and Space steps whenever the run is paused with that card open; the menu stays open so
+  the tick can be inspected.
+- **Tool switching:** choosing a builder tool clears the current selection, so switching from a
+  selected colony to Food exposes the new pile's kind and amount instead of the colony's inspector.
+- **Camera:** `--zoom` is applied once, on the first fit of a fresh run; Reset refits without
+  reapplying it, and `focusColony` centres the nest.
+- **Depletion evidence:** the acceptance run used a builder-made 1,000-unit pile at ~4× zoom and
+  counted 10 → 10 → 9 pieces at 0, 22 and 150 deliveries; preset piles keep their 48 pieces far
+  longer by design, so the 7,200-tick screenshot shows a full pile rather than a regression.
