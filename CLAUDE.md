@@ -9,7 +9,7 @@ A real-time 2D ant colony / stigmergy simulator inspired by Pezzza's Work "Ant S
 **Plans:** one per milestone, in `docs/superpowers/plans/`. Carry them out task by task, and don't run ahead into the next milestone.
 
 ## Status
-- Current milestone: **M2 (walls and adaptation), not started.** M1 (core foraging + control UI) complete 2026-10-25: 112 tests pass, `npm run build`, `npm run bench -- --scenario sandbox`, both acceptance screenshots and the interactive page all run. Update this line as each milestone lands. The milestone list is in spec §15.
+- Current milestone: **M1.5 (presentation overhaul), in progress.** M1 complete 2026-10-25: 112 tests pass, `npm run build`, `npm run bench -- --scenario sandbox`, both acceptance screenshots and the interactive page all run. Update this line as each milestone lands. The milestone list is in spec §15.
 
 ## This machine
 - **Windows 11 ARM64.** Snapdragon X Plus, 8 equal cores, 16 GB shared RAM, Adreno X1-45 GPU.

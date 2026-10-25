@@ -6,6 +6,7 @@
 - **Status of the signatures:**
   - Milestone 0 signatures are final; the M0 plan builds exactly these.
   - Signatures for M1–M6 are the intended shape. Each milestone's own plan finalizes them and updates this file.
+  - **M1.5 (presentation & world builder)** was inserted between M1 and M2 on 2026-10-25. Its plan adds `sim/palette.ts`, `sim/setup.ts`, `sim/setup_apply.ts`, `sim/obstacles.ts`, `sim/presets.ts`, the render sprite/terrain/leg/layer modules and the `app`/`ui` screen modules. Task 17 of that plan replaces this file's milestone tags with the final tree.
 
 ---
 

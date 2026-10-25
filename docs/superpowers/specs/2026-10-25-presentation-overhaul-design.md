@@ -1,6 +1,6 @@
 # Ant Simulator — Presentation Overhaul & World Builder (Design)
 
-**Status:** proposed, awaiting approval · 2026-10-25
+**Status:** approved, in implementation · 2026-10-25
 **Implementation plan:** [2026-10-25-presentation-overhaul.md](../plans/2026-10-25-presentation-overhaul.md)
 **Amends:** the main design spec, effectively replacing §7, §8, §9 and §10, and adding a milestone between M1 and M2.
 

@@ -78,7 +78,7 @@ What follows from this:
 |---|---|
 | Language | TypeScript 5.9.3, strict, ES2022 modules |
 | Build | `tsc -p tsconfig.json` → `dist/`; npm scripts; no bundler |
-| Window, input, 2D rendering | **WebGL2** in Chrome; one shader; batched triangle vertex buffers |
+| Window, input, 2D rendering | **WebGL2** in Chrome; colour, texture and sprite shaders; batched triangle vertex buffers |
 | UI | **DOM + CSS** overlay — crisp at any display scale, no dependencies |
 | Unit tests | **`node:test`** with `node:assert/strict`, run by `npm test` |
 | PNG output for headless screenshots | **Chrome headless** `--screenshot` against the served page |
@@ -139,26 +139,32 @@ Exhausted ants still move their drop point, because stuck detection (§5.5) reli
    - if both reach 0, set `c.owner = k` and immediately apply rule 1 *(Claude's call)*.
 3. Otherwise (the territory rule is off): leave the cell alone.
 
+This rule is implemented in `src/sim/marker_grid.ts` (`deposit`) and applies from M1.5. Until then, `deposit` ignores foreign cells; the presentation-overhaul plan closes that gap.
+
 **Erasing dead-end trails.** While an ant's `degrade_timer > 0`, each time it enters a new marker cell owned by its own colony, it multiplies the channel it is *following* by `DEGRADE_FACTOR` (0.5). It follows `to_food` while FORAGING and `to_home` otherwise.
 
 All writes to the marker grid happen in the serial event phase (§5.2), in a fixed order.
 
 ### 4.3 Obstacles
-- A `solid` bitmap at 4 u cells, painted or erased with a circular brush, or set up by a scenario.
-- **Only border cells are collidable.** A border cell is solid and has at least one non-solid neighbour among its 4 direct neighbours. Interior cells are never tested, which keeps the original "hollow collider" optimisation.
-  - Border flags are recomputed only in the area around each brush stroke.
+- A 4 u grid with one byte per cell: `0` empty, `1` Rock, `2` Water, `3` Sand, `4` Mud. The builder paints or erases cells with a circular brush; presets seed the grid.
+- **Rock and Water are solid.** Only their border cells are collidable: a border cell is Rock/Water and has at least one of its four direct neighbours out of bounds or not Rock/Water. Interior cells are never tested, which keeps the original "hollow collider" optimisation. Border flags are rebuilt only in the area around an edit.
   - The collision shape is the cell's box (circle-against-box test) *(Claude's call: a circle per cell makes walls bumpy)*.
-- **Painting over ants:** each trapped ant moves to the nearest free cell (a breadth-first search up to 16 cells away). If there is none, the ant dies.
-- Painting a wall clears the marker cells under it. Food under a wall stays, but can't be reached.
+- **Sand and Mud are walkable terrain.** They do not collide; they scale walking speed: Sand ×0.60, Mud ×0.45.
+- **Sight and scent.** Rock and Water block line of sight and the marker sense. A sensor sample inside a Rock/Water cell is skipped, as is a sample whose halfway point to the ant is solid.
+- **Editing only in the builder.** A run's obstacle grid is immutable. Start and Reset build a fresh world from the setup; nothing mutates a running world. `validateSetup` rejects a nest or food source whose centre or edge ring lies in Rock/Water, so no run begins with an unreachable nest or pile.
+- Painting a solid cell clears the marker cells under it. The builder does not allow food under Rock/Water at setup time.
 
 ### 4.4 Food sources
-- Food sources are discrete circles with a position and an `amount` in units, or are flagged `infinite` for stress tests.
+- Food sources are discrete circles with a position, an `amount` in units, a stable `uid` and a `kind` (Seeds, Berries or Leaves); they may be flagged `infinite` for stress tests.
 - Radius = `FOOD_BASE_R × sqrt(amount / FOOD_REF_AMOUNT)`, with a minimum.
-- They are placed with the Food tool, whose capacity is set by a slider. An empty source disappears.
+- They are placed with the Food tool, whose capacity and kind are chosen in the builder. An empty source disappears.
 - All colonies share all food sources.
+- **Visible pieces:** one piece per 100 units, 1–48 pieces; an infinite source always shows 48. Pieces sit on a deterministic golden-angle spiral, inner-first, so each 100 units consumed removes only the outer pieces. This is rendering state; it uses a visual hash, never `randU32`.
 
 ### 4.5 Colonies and nests
-- Each colony has: an id, a colour, a nest position, `food_pool`, population and stats. Up to `MAX_COLONIES` (8) colonies; the first four colours are Red, Yellow, Blue and Green.
+- Each colony has: an id, a nest position, a palette colour (0–7), `food_pool`, population and stats. Up to `MAX_COLONIES` (8) colonies. The palette is Ember, Gold, Azure, Fern, Orchid, Rose, Lagoon and Chalk; Ember, Gold, Azure and Fern stand in for the original Red, Yellow, Blue and Green. Duplicate colours are allowed.
+- The builder sets each colony's colour and starting ants (10–600, default 200). All starting ants spawn at the nest edge before tick 0.
+- A run may have one or many colonies. `quickStartSetup` seeds a single Ember colony with 200 ants for tests and the bench.
 - Nest radius = `NEST_BASE_R + NEST_GROWTH × sqrt(population)`, so the nest grows as the colony grows.
 - **Spawning.** While `food_pool ≥ SPAWN_COST`:
   - subtract `SPAWN_COST` from `food_pool`,
@@ -183,7 +189,7 @@ Each field is one contiguous array, indexed by ant index `i`:
 | Trail | `drop_x/y`, `time_since_last_marker`, `degrade_timer`, `last_marker_cell` |
 | Wander | `wander_offset`, `wander_timer` |
 | Avoidance | `avoid_x/y` (last avoidance correction, reused on the tick it isn't recomputed) |
-| Legs (6 per ant, arrays sized N×6) | `foot_x/y`, `step_from_x/y`, `step_to_x/y`, `step_t`; per ant: `stepping_mask` (u8), `legs_valid` (u8) |
+| Legs | none in the simulation; the tripod gait is render-only and lives in `src/render/legs.ts` (§8) |
 
 - **Stable ids.** A `uid → index` map is kept in sync on every spawn and removal. Anything that refers to an ant across frames (the inspector, follow mode) stores its `uid`.
 - **Removal** is swap-and-pop at the end of the tick, in descending index order so it's deterministic.
@@ -219,7 +225,7 @@ The simulation uses a fixed time step: `dt = 1/60 s`. Each tick runs these phase
 6. **Marker decay.** Runs in parallel over grid rows.
 7. **Stats.** Food delivered per colony goes into ring buffers for the sparklines.
 
-- **Legs** (§8) update after all of a frame's ticks, and only for visible ants.
+- **Gait** (§8) is render-only. After a frame's last tick, the renderer advances each visible ant's visual tripod phase from its interpolated distance travelled. No simulation state or randomness is involved.
 - **This phase structure is used from Milestone 1 on,** even before workers are switched on in M4.
 
 ### 5.3 Sensing and steering
@@ -313,68 +319,55 @@ Based on Weiss et al., *Position-Based Multi-Agent Dynamics for Real-Time Crowd 
 
 ## 7. Rendering
 
-Each frame draws these layers in order, using a few batched WebGL2 draw calls in total:
+Each frame draws these layers in order, with one draw call per layer:
 
-1. **Background** in the theme colour.
-2. **Marker heatmap**, if enabled. The CPU fills an RGBA texture at marker-grid resolution, in fixed chunks (in parallel once M4 adds workers). It is drawn as one world-sized quad with linear filtering. There are three modes:
-   - **Colony colour:** the owner's colour × the stronger channel.
-   - **Dual-channel:** `to_home` and `to_food` in two colours, like Pezzza's original.
-   - Off.
-3. **Obstacles:** a texture at obstacle-grid resolution, updated only when edited.
-4. **Food sources and nests:** circles. Each nest is in its colony's colour, and grows with the population.
-5. **Shadows**, drawn with a multiply blend: each ant's body silhouette offset by `SHADOW_OFFSET` (2, 3) u. When legs are drawn, hips and knees are offset too, but feet are not, so they stay planted.
-6. **Ants:** textured quads with a sprite generated at startup (head, thorax, abdomen), tinted by colony. Carried food is a small dot at the head.
-   - When an ant is only a few pixels long, draw a plain shape or a smaller sprite to avoid shimmering.
-   - Legs are drawn once an ant is at least `LEGS_MIN_PX` (20) physical pixels long on screen (§8).
-7. **Debug overlays:** spatial hash grid, border colliders, and for the selected ant its sample points, rays and avoidance neighbours.
+1. **Terrain.** One baked texture per world at half world resolution (2 u per texel, at most 2048 px on the long side). It replaces the flat background fill and the separate obstacle draw. The painter bakes ground speckles, tufts, broad tonal drift and all four obstacle kinds with softened edges. It is rebuilt only when the map changes.
+2. **Marker heatmap**, if enabled, at marker-grid resolution: one world-sized quad with linear filtering.
+   - **Trails (default):** `to_home` teal `#4FC3B0`, `to_food` amber `#F0B45E`, alpha `0.62 × min(home + food, 1)`. The run HUD names both channels.
+   - **Colonies:** the owner's palette colour × the stronger channel.
+   - **Off.**
+3. **Food and nests.** Food shows 1–48 sprite pieces (Seeds, Berries or Leaves). Each colony's anthill is a 256 px sprite drawn at `3.2 × nest radius`, rotated deterministically per colony id, and tinted grey when extinct.
+4. **Ant shadows.** Each body sprite offset 2 px right and 3 px down, black at 28% alpha, in the same sprite batch before every body.
+5. **Ants.** A procedural 2048×1024 atlas: a brown-black body with the colony colour as an accent on the thorax sheen, one gaster band, the antenna tips and the leg joints. Two variants per colony, body facing +x, drawn as screen-aligned quads at interpolated positions. Carried food is a seed sprite at the mandibles.
+6. **Legs.** Screen-space two-segment legs, six per ant, animated when the ant is at least `LEGS_MIN_PX` (18) physical pixels long; below that a baked-leg frame is used (§8).
+7. **Debug overlays:** for the selected ant its sample points, rays and avoidance neighbours; spatial hash and border colliders in developer mode.
 8. **The DOM UI overlay.**
 
-- **Culling and batching:** only ants inside the view (plus a margin) are drawn, and the vertex arrays are filled in parallel.
+- **No image assets.** The atlas and every terrain texture are generated from code at startup or on map change.
+- **Batching and culling:** one vertex buffer and one `drawElements` per layer. Only ants and pieces inside the view plus a margin are emitted; there is never a draw call per ant or per leg.
 - **Smooth motion:** the renderer draws `lerp(prev, pos, alpha)`, where `alpha` is the leftover fraction of the fixed-step accumulator. Motion stays smooth at 120 Hz with a 60 Hz simulation.
 - **Speed controls:** pause, single step, and 1×, 2× and 4× speed run more ticks per frame. **Max** runs as many ticks as fit in the frame, capped so the app can never spiral into lag.
-- **Themes:**
-  - **Night (the app's default since M1, 2026-10-25):** a dark background with glowing markers, like Pezzza's original. Shadows are subtle here. The user asked for a high-end dark UI, so the interactive app ships Night.
-  - **Sand:** light terrain where shadows show *(Claude's call)*. It remains available in code and returns as a switch with the M5 theme work.
-- **Camera:** the mouse wheel zooms at the cursor, right- or middle-drag pans, and follow mode keeps the selected ant centred. The camera starts with the whole world fitted to the window.
+- **Themes** are the five map presets (§10), not a settings toggle. Each preset owns its ground, outside, grid, border, food and heat colours plus four obstacle colours.
+- **Camera:** the wheel zooms at the cursor, right- or middle-drag pans, and follow mode keeps the selected ant centred. The camera starts with the whole world fitted to the window.
 
 ---
 
-## 8. Procedural legs (tripod gait)
+## 8. Visual tripod gait
 
+- **Render-only.** The simulation stores no leg state. For each visible ant the renderer keeps a phase advanced by distance travelled (`stride = 24 u`), seeded from the ant's uid when it first appears. No simulation state, no randomness.
 - **Numbering.** Left front, middle and hind legs are 0, 1, 2; right front, middle and hind are 3, 4, 5.
-- **Tripods.** **Tripod A = {0, 4, 2}** (left-front, right-middle, left-hind). **Tripod B = {3, 1, 5}**.
-- Each leg has a rest point in body space, projected into the world on every update.
-- **When a tripod steps.** A tripod starts a step when **any** of its legs is farther than `STEP_THRESHOLD` from its rest point **and no leg of the other tripod is stepping**. All three legs of that tripod then step together.
-
-  *(Fix: the original rule stopped two legs on the same side from stepping at once, but a tripod needs front and hind legs on the same side to move together, so it could never happen.)*
-- **A step** moves the foot from where it is to `rest_world + velocity × STEP_LEAD` (0.1 s), over `STEP_DURATION` (0.08 s), with smoothstep easing.
-- **Knee:** two-bone inverse kinematics (law of cosines) between hip and foot, bending outward.
-- **Which ants get legs.** Legs are simulated only for ants that are on screen and at least `LEGS_MIN_PX` long *(Claude's call: a pixel size instead of the original "zoom > 1.8×", so the threshold works for any world size and screen DPI; on the default world it is about the same zoom)*. When an ant enters that set, its feet start at their rest points.
-- **Invariant (unit-tested):** legs of tripod A and tripod B never step at the same time.
+- **Tripods.** **A = {0, 2, 4}**, **B = {1, 3, 5}**. `wave = sin(2π × phase + (tripod A ? 0 : π))`; the tripod whose wave is positive swings, the other stays planted with `lift = 0`.
+- **Geometry.** Six legs, each two screen-space segments (hip→knee, knee→foot). Body-local rest positions, hips and foot sweep are fixed fractions of ant length; the swing displaces the foot ±0.22 body lengths along the heading. The knee sits between hip and foot, offset outward by 0.12 body lengths. The body-local pose is rotated by the ant's screen-space heading.
+- **Which ants get legs.** Only ants at least `LEGS_MIN_PX` (18) physical pixels long on screen. Smaller ants use the baked-leg sprite frame, so detail never shimmers. This is a pixel threshold rather than a zoom factor so it holds for any world size and DPI.
+- **Invariant (unit-tested):** the swing intervals of tripods A and B never overlap.
+- **Shadows.** The body shadow carries the hips and knees; feet are not offset, so they stay planted.
 
 ---
 
 ## 9. UI and controls
 
-The UI is a DOM overlay (HTML/CSS) above the WebGL canvas, so text stays crisp at any display scale. **H** toggles Zen mode, which hides all UI.
+The UI is a DOM overlay (HTML/CSS) above the WebGL canvas, crisp at any display scale. **H** toggles Zen, which hides the HUD.
 
-**The M1 control drawer (shipped 2026-10-25).** A glass top bar holds the brand, four live chips (tick, ants, delivered, FPS), pause and step, the speed pills (1×, 2×, 4×, Max), the heatmap cycle and the drawer toggle. The drawer holds collapsible Movement, Trails and Colony sections with live sliders, Ants and Grid switches, a Fit-world button, the key legend and Reset parameters. The palette is dark with an amber accent and a blue secondary; every control is custom-styled, and layout and motion follow the CSS contract in the M1 plan (Task 11). Screenshots of both the trail and the UI are part of the M1 acceptance. The **Degrade after** slider is withheld until M2: stuck detection is what starts the degrade timer, so in M1 the slider could not change anything. `DEGRADE_TIME` stays in the simulation parameters; the control returns with the M2 stuck rule.
+**Screens.** A pure session state machine owns three screens:
 
-**Bottom toolbar** *(full version arrives with the editing tools, M2)*
-- Tools: Select/Pan, Wall brush, Erase brush, Food, New colony.
-- Brush radius and food capacity sliders.
-- Pause, step and speed (1×, 2×, 4×, Max).
-- Scenario menu and overlay menu.
+- **Home.** Wordmark, a serif headline over a dimmed live meadow, **Quick start** and **New world**, and a Last run card (preset, elapsed time, delivered, ants, colonies).
+- **Builder.** A left tool rail (Select, Colony, Food, Rock, Water, Sand, Mud, Erase), a glass left panel (five preset cards, seed with roll, selected colony's palette colour and starting ants, selected food kind and amount, brush radius), the canvas with a 6% 120 u grid and a brush ring, a top bar with Back and Start, and a validation line naming the first problem. Start is disabled while `validateSetup` fails. The builder edits a `WorldSetup`; no simulation runs.
+- **Run.** A glass top bar (wordmark, preset and seed, tick/ants/delivered/FPS chips, Colonies and Settings) and a bottom dock (Pause/Play, Step, 1×/2×/4×/Max, Reset, Edit, Finish), with a legend naming the Home (teal) and Food (amber) trails. Overlays: a pause menu (Resume, Step, Edit world, Finish, Home), a colony panel (per colony: swatch, population, delivered, food pool, extinct), a settings drawer (live sliders and switches, Fit, Reset parameters) and a finish dialog (Confirm Finish returns Home).
+- **Stopping.** Finish ends the run and stores its summary; Reset rebuilds the same setup from tick 0; Edit pauses and returns to the Builder. A running world is never mutated in place — Start and Reset build a fresh world from the setup.
 
-**Right panel**
-- **Inspector.** Click an ant to select it (the nearest one within a few pixels, found through the spatial hash). It shows a follow toggle, name and uid, colony, role, state, an energy bar, whether it's carrying food, and time since anchor. It also draws that ant's sample points and rays.
-- **Colonies.** Per colony: population, food pool, total food delivered, and a sparkline of the collection rate over the last 120 s.
-- **Telemetry.** FPS, frame time, simulation milliseconds per phase (hash, think and avoid, events, collisions, decay, legs), render milliseconds and the ant count.
-- **Parameters.** Live sliders for Explorer ratio %, Marker half-life and PBMAD horizon. An "Advanced" section holds every tunable from §12, with "Reset to defaults".
+**Camera:** the wheel zooms at the cursor, right- or middle-drag pans, and Fit frames the whole world. A screen fits the camera on entry; `--zoom` applies the close-up on Run.
 
-**New colony tool.** Click to place a nest with `NEW_COLONY_ANTS` ants.
-
-**Names.** Each ant gets a female first name, since worker ants are all female. The name is picked deterministically from its uid, out of an embedded list.
+**Speed:** pause, single step, 1×, 2×, 4× and Max (as many ticks as fit, capped).
 
 **Keys:**
 
@@ -383,58 +376,57 @@ The UI is a DOM overlay (HTML/CSS) above the WebGL canvas, so text stays crisp a
 | P | pause |
 | Space | step one tick (while paused) |
 | H | Zen mode |
-| M | cycle marker overlay |
+| M | cycle the marker overlay |
 | A | toggle ants |
-| S | Max speed |
-| F | follow the selected ant |
-| W | wall tool |
-| E | erase tool |
-| Esc | deselect |
-| Home | fit the whole world in view |
+| G | toggle the grid |
+| Home | fit the whole world |
+| Esc | deselect or cancel a pending preset |
+| Delete / Backspace | remove the selected colony or food (builder) |
+| 1–8 | choose a builder tool (Select, Colony, Food, Rock, Water, Sand, Mud, Erase) |
 
-**Mouse:** left button uses the current tool, right or middle drag pans, the wheel zooms.
+**Mouse:** left uses the current builder tool, right or middle drag pans, the wheel zooms.
+
+This replaces the M1 control drawer; its sliders move into the settings drawer. The **Degrade after** slider returns with M2, when stuck detection exists. The inspector, telemetry and sparklines remain M5 work.
 
 ---
 
-## 10. Scenarios
+## 10. Map presets
 
-Scenarios can set the world size, place nests, food and walls, and override any parameter from §12.
+A preset is a named `WorldSetup`: size, seed, colonies (nest, palette colour, starting ants), food (position, amount, kind) and painted obstacle cells. Editing happens in the builder and never mutates the preset. Five ship:
 
-1. **Four-colony resource war.**
-   - A roughly 1600×1600 u world with a nest in each corner (Red, Yellow, Blue, Green).
-   - Symmetric food: one large central pile plus four edge piles.
-   - 400 ants per colony, with the territory rule on.
-2. **Winding maze with a shortcut.**
-   - A serpentine maze of about 6 lanes, with the nest at the start and the food at the end.
-   - The walls include marked "breach" segments which, once removed, open a direct route from nest to food.
-   - The **"Breach shortcut"** button removes them mid-run.
-   - Energy burn is lowered so the long route can be survived.
-   - Success: after the breach, most deliveries take the shortcut within a few minutes of simulated time.
-3. **Stress test: 20,000 ants in opposing streams.**
-   - A wide world (about 3840×1080 u) with the nest on the left and an `infinite` food pile on the right.
-   - 20,000 ants are spawned up front, half of them already carrying food.
-   - Energy burn and spawning are off, so the count stays fixed.
-   - This is the scenario bench mode measures.
-4. **Sandbox.** An open world with one nest (`NEW_COLONY_ANTS` ants) and one food source. The user adds the rest.
+| Preset | Size | Character |
+|---|---|---|
+| **Meadow** | 1920×1080 | one Ember colony, Seeds and Berries, rock clusters, a sand drift, a mud patch |
+| **Dunes** | 1920×1080 | Ember and Azure, a central Leaves pile, exposed rock, a mud oasis, broad sand |
+| **Creek** | 2240×1200 | Fern and Rose, a river with two rock crossings, sandy banks, food on both banks |
+| **Boulder field** | 1920×1080 | one Gold colony, many boulder clusters, moss tufts, two food piles |
+| **Blank canvas** | 1920×1080 | no colonies, food or obstacles; the builder starts empty |
+
+The exact positions, colours, starting populations and validation are pinned in the presentation-overhaul plan (Task 5). Every non-blank preset passes `validateSetup`. The legacy `sandbox` name maps to `meadow`. The four-colony war, maze and stress scenarios move to later milestones; the M4 bench will generate its opposing-stream world.
 
 ---
 
 ## 11. Verification and tooling
 
 Three entry points, all started by npm scripts:
-- **`npm run serve`** opens the interactive app in Chrome. URL parameters `?scenario=<name>&seed=<n>` choose what to start with; `?headless&ticks=N&size=WxH` runs without UI and renders one final frame.
-- **`npm run screenshot -- --ticks N --out <file.png>`** serves the page, drives Chrome headless and saves the final frame as a PNG, so Claude can look at the result.
-- **`npm run bench -- --scenario <name> --ticks N [--threads T]`** runs the simulation under Node and prints the average and 95th-percentile milliseconds per phase, plus ant updates per second. No rendering.
+- **`npm run serve`** opens the interactive app in Chrome. URL parameters `?preset=<id>&seed=<n>&screen=<home|builder|run>&zoom=<n>` choose what to start with; `?headless&ticks=N&size=WxH&zoom=<n>` runs without UI and renders one final frame. `?scenario=sandbox` is accepted as a deprecated alias for `meadow`.
+- **`npm run screenshot -- --preset <id> --screen <home|builder|run> --zoom <n> --ticks N --out <file.png>`** serves the page, drives Chrome headless and saves the final frame as a PNG, so Claude can look at the result.
+- **`npm run bench -- --preset <id> --ticks N [--threads T]`** runs the simulation under Node and prints the average and 95th-percentile milliseconds per phase, plus ant updates per second. No rendering.
 
 Unit tests (`node:test`, run by `npm test`) cover:
+- setup editing, clamping, validation and preset integrity;
+- world construction from setup, colony colours and stable identity;
+- obstacle solidity, border flags, terrain speed factors and line of sight;
 - deposits, foreign-cell erasure, the ownership flip and degrading;
 - decay half-life being independent of frame rate;
 - exhausted ants never depositing `to_food`;
+- food piece layout and consumption order;
 - the stuck rule, including the crowd exemption;
-- the tripod invariant;
+- the tripod invariant and gait phase;
 - spatial hash neighbours matching a brute-force search;
 - the `uid → index` map staying correct through spawns and removals;
-- **determinism:** 1 worker and 8 workers giving identical results (M4).
+- sessions, options, view models and the atlas layout;
+- **determinism:** the same seed and inputs give the same checksum, and 1 worker and 8 workers agree (M4).
 
 Rules:
 - Run the tests after every change to the simulation.
@@ -450,7 +442,7 @@ Rules:
 | `SIM_HZ` | 60 | Hz | fixed step |
 | `WORLD_W × WORLD_H` | 1920 × 1080 | u | scenarios override |
 | `MARKER_CELL` / `OBSTACLE_CELL` / `HASH_CELL` | 8 / 4 / 6 | u | hash cell ≥ 2 × `ANT_RADIUS` |
-| `ANT_RADIUS` / `ANT_LENGTH` | 2.5 / 8 | u | collision circle / sprite length |
+| `ANT_RADIUS` / `ANT_LENGTH` | 2.5 / 10 | u | collision circle / sprite length |
 | `ANT_SPEED` / `SPEED_JITTER` | 50 / 10 | u/s / % | |
 | `TURN_RATE` | 6 | rad/s | |
 | `SENSOR_RADIUS` / half-FOV | 32 / 60 | u / ° | |
@@ -480,9 +472,11 @@ Rules:
 | `R_AVOID_MAX` / `MAX_NEIGHBOURS` | 24 / 16 | u / – | |
 | `AVOID_MAX_SPEED` | 0.5 × `ANT_SPEED` | u/s | |
 | `PBD_ITERATIONS` | 2 | | |
-| `LEGS_MIN_PX` | 20 | px | on-screen ant length |
-| `STEP_THRESHOLD` / `STEP_DURATION` / `STEP_LEAD` | 3.0 / 0.08 / 0.1 | u / s / s | |
-| `SHADOW_OFFSET` | (2, 3) | u | |
+| `LEGS_MIN_PX` | 18 | px | on-screen ant length |
+| `GAIT_STRIDE` / `GAIT_SWING` / `GAIT_KNEE` | 24 / 0.22 / 0.12 | u / × length / × length | visual only |
+| `SAND_SPEED` / `MUD_SPEED` | 0.60 / 0.45 | × | terrain speed |
+| `FOOD_PIECE_UNITS` / `MAX_FOOD_PIECES` | 100 / 48 | units / pieces | visual mapping |
+| `SHADOW_OFFSET` | (2, 3) | px | screen space |
 | `CHUNK_SIZE` | 1024 | ants | |
 
 ---
@@ -528,11 +522,14 @@ Each milestone ends with a running app and the checks listed.
 |---|---|---|
 | M0 | **Skeleton.** npm/TypeScript project and test harness, DPI-aware WebGL2 canvas at native resolution with a DOM debug panel, fixed-step loop with interpolation, camera, URL/CLI modes, RNG, headless screenshots, bench | The page opens crisp at devicePixelRatio 2; the log says `webgl2`; a headless screenshot works; tests run |
 | M1 | **Core foraging, one colony.** SoA ants in typed arrays, nest, food, marker grid, wander, energy and states, spawning, ants and dual-channel heatmap drawn, phase pipeline, night view and the control drawer | In the sandbox, a trail forms between nest and food on its own; screenshot reviewed; tests cover deposit, decay and state changes. **Done 2026-10-25** |
-| M2 | **Walls and adaptation.** Obstacle grid and brushes, border flags, spatial hash (the stuck rule needs neighbour counts), wall collisions, fallback rays, stuck detection and degrading, maze scenario and breach button | Ants solve the maze; after the breach, most deliveries take the shortcut; before and after screenshots |
-| M3 | **Colonies.** Several colonies, ownership and the territory rule (toggle), New colony tool, four-colony scenario, colony-colour heatmap | Four colonies forage at once; territories are visible; erasure and flip are tested |
+| M1.5 | **Presentation & world builder.** Home/Builder/Run screens; staged setup; palette, starting populations and several colonies; Rock/Water/Sand/Mud with terrain speed and collision; five presets; food clusters; procedural ants with tripod gait; anthill art; baked terrain; sprite and trail themes; HUD, pause, reset, edit and finish | Every preset validates; a built map runs with the chosen colonies and obstacles; all acceptance screenshots pass. **In progress 2026-10-25** |
+| M2 | **Adaptation.** Stuck detection and trail degrading, a maze preset with a breach control, and tuning so ants recover from dead ends | Ants solve the maze; after the breach, most deliveries take the shortcut; before and after screenshots |
+| M3 | **Absorbed into M1.5** for multi-colony, palette, territory and the colony heatmap. Only the open hostilities topic (§14) remains, and it is not scheduled. | — |
 | M4 | **Crowds and scale.** PBD collisions, PBMAD avoidance, worker pool, stress scenario, bench mode | No overlapping ants; opposing streams form lanes; 20k-ant bench numbers recorded; determinism test passes with 1 and 8 workers |
-| M5 | **Looks and UI.** Legs and tripod gait, shadows, themes, inspector (follow, names, sensor drawing), telemetry and sparklines, parameter panel, Zen mode, debug overlays | Zoomed-in screenshots look right; tripod test passes |
+| M5 | **Inspector and telemetry.** Ant inspector with follow and names, sensor drawing, telemetry, sparklines, debug overlays, remaining parameter polish | Zoomed-in inspector screenshots look right; debug overlays toggle |
 | M6 | **Tuning and hardening.** Tune the defaults toward the look of the videos, performance passes, edge cases (painting over nests or food, extinct colonies, ant caps) | User is happy with how it looks and feels |
+
+M1.5 absorbs the obstacle editing, multi-colony setup and visual work previously listed under M2, M3 and M5. The separate mechanics project — pathfinding, collision tuning, starvation and births — follows M1.5 and is not part of this milestone list.
 
 ---
 
@@ -562,6 +559,10 @@ Each milestone ends with a running app and the checks listed.
 18. **The control drawer ships in M1** (2026-10-25), not M5. It was part of the user's M1 UI request; the full toolbar, inspector, telemetry and parameter panel remain M5.
 19. **Ants are flat batched diamonds in M1** (2026-10-25). Sprites, shadows and legs arrive in M5; the M1 renderer keeps one draw call per layer.
 20. **The sandbox long-run acceptance runs 10,800 ticks** (2026-10-25). Tick 7,200 is the first-generation starvation minimum (76 of 200 ants, measured with seed 1); the suite pins the full thresholds (≥100 ants, ≥5 deliveries, both trail channels) at 10,800, and a 7,200 guard (≥40 ants, live trail, finite state) catches a collapse that never recovers.
+21. **M1.5 ships before M2** (2026-10-25). Presentation and the world builder were a separate user request; mechanics tuning waits until the app looks and reads as intended.
+22. **Staged setup, rebuilt on Start and Reset** (2026-10-25). The builder edits a pure `WorldSetup` — size, seed, colonies with palette colour and starting ants, food with uid and kind, obstacle cells. Start/Reset builds a fresh world; a running world is never mutated. This keeps runs deterministic and gives Stop/Reset/Edit a single, simple story.
+23. **A procedural sprite atlas, no image assets** (2026-10-25). Ants, food, nests, the anthill and the terrain are painted from code into a 2048×1024 atlas and per-map textures. The app stays dependency-free and every pixel is reproducible.
+24. **Visual-only legs, obstacle-blocked senses** (2026-10-25). The tripod gait is screen-space rendering driven by distance; the simulation stores no leg state. Rock and Water block sight and scent; Sand and Mud scale speed; collisions remain a serial phase.
 
 ## Glossary
 
