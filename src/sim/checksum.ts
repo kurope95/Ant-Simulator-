@@ -41,10 +41,26 @@ export function worldChecksum(world: World): number {
     foldFloat(markers.toFood[cell]);
   }
 
+  const obstacles = world.obstacles;
+  foldInt(obstacles.kind.length);
+  for (let cell = 0; cell < obstacles.kind.length; cell++) foldInt(obstacles.kind[cell]);
+
   for (const colony of world.colonies) {
+    foldFloat(colony.nest.x);
+    foldFloat(colony.nest.y);
+    foldInt(colony.color);
     foldInt(colony.foodPool);
     foldInt(colony.population);
     foldInt(colony.deliveredTotal);
+  }
+
+  foldInt(world.food.items.length);
+  for (const source of world.food.items) {
+    foldInt(source.uid);
+    foldFloat(source.pos.x);
+    foldFloat(source.pos.y);
+    foldInt(source.amount);
+    foldInt(source.kind);
   }
 
   return hash;

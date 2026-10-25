@@ -59,9 +59,16 @@ export function deposit(
   colony: number,
   channel: MarkerChannel,
   strength: number,
-  _params: SimParams,
+  params: SimParams,
 ): void {
-  if (grid.owner[cell] !== colony && grid.owner[cell] !== kNoOwner) return;
+  const owner = grid.owner[cell];
+  if (owner !== colony && owner !== kNoOwner) {
+    if (!params.territoryRule) return;
+    const erasure = strength * params.foreignErasureFactor;
+    grid.toHome[cell] = Math.max(0, grid.toHome[cell] - erasure);
+    grid.toFood[cell] = Math.max(0, grid.toFood[cell] - erasure);
+    if (grid.toHome[cell] > 0 || grid.toFood[cell] > 0) return;
+  }
   grid.owner[cell] = colony;
   const values = channel === MarkerChannel.ToHome ? grid.toHome : grid.toFood;
   values[cell] = Math.max(values[cell], strength);

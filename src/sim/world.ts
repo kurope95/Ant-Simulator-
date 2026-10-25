@@ -5,6 +5,7 @@ import type { Colony } from "./colony.js";
 import type { ChunkEvents } from "./events.js";
 import { makeFoodSources, type FoodSources } from "./food.js";
 import { makeMarkerGrid, decayMarkers, type MarkerGrid } from "./marker_grid.js";
+import { makeObstacleGrid, type ObstacleGrid } from "./obstacles.js";
 import { emptyPhaseTimings, Phase, type PhaseTimings } from "./phases.js";
 import { markerDecayFactor, type SimParams } from "./params.js";
 import {
@@ -24,22 +25,25 @@ export interface World {
   timings: PhaseTimings;
   ants: Ants;
   markers: MarkerGrid;
+  obstacles: ObstacleGrid;
   colonies: Colony[];
   food: FoodSources;
   chunkEvents: ChunkEvents[];
   nextUid: number;
 }
 
-export function makeWorld(params: SimParams, seed: number): World {
-  const size = { x: params.worldW, y: params.worldH };
+export function makeWorld(params: SimParams, seed: number, size?: Vec2): World {
+  const worldSize = size === undefined ? { x: params.worldW, y: params.worldH } : { x: size.x, y: size.y };
+  const worldParams = { ...params, worldW: worldSize.x, worldH: worldSize.y };
   return {
-    params: { ...params },
+    params: worldParams,
     seed,
     tick: 0,
-    size,
+    size: worldSize,
     timings: emptyPhaseTimings(),
     ants: new Ants(),
-    markers: makeMarkerGrid(size, params.markerCell),
+    markers: makeMarkerGrid(worldSize, worldParams.markerCell),
+    obstacles: makeObstacleGrid(worldSize, worldParams.obstacleCell),
     colonies: [],
     food: makeFoodSources(),
     chunkEvents: [],

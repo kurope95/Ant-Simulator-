@@ -1,19 +1,26 @@
 import type { Vec2 } from "../core/vec2.js";
 import type { SimParams } from "./params.js";
+import { FoodKind } from "./setup.js";
 
-export interface FoodSource {
+export interface FoodAmount {
   pos: Vec2;
   amount: number;
   infinite: boolean;
 }
 
-export function foodRadius(source: FoodSource, params: SimParams): number {
+export interface FoodSource extends FoodAmount {
+  uid: number;
+  kind: FoodKind;
+}
+
+export function foodRadius(source: FoodAmount, params: SimParams): number {
   if (source.infinite) return params.foodBaseR * 2;
   return Math.max(params.foodMinR, params.foodBaseR * Math.sqrt(source.amount / params.foodRefAmount));
 }
 
 export interface FoodSources {
   items: FoodSource[];
+  nextUid: number;
   findTouching(pos: Vec2, radius: number, params: SimParams): number;
   takeOne(index: number): boolean;
   removeEmpty(): void;
@@ -22,6 +29,7 @@ export interface FoodSources {
 export function makeFoodSources(): FoodSources {
   const sources: FoodSources = {
     items: [],
+    nextUid: 1,
     findTouching(pos: Vec2, radius: number, params: SimParams): number {
       let best = -1;
       let bestDistSq = Infinity;
@@ -53,7 +61,13 @@ export function makeFoodSources(): FoodSources {
   return sources;
 }
 
-export function addFoodSource(sources: FoodSources, pos: Vec2, amount: number, infinite = false): number {
-  sources.items.push({ pos, amount, infinite });
+export function addFoodSource(
+  sources: FoodSources,
+  pos: Vec2,
+  amount: number,
+  infinite = false,
+  kind: FoodKind = FoodKind.Seeds,
+): number {
+  sources.items.push({ uid: sources.nextUid++, pos, amount, infinite, kind });
   return sources.items.length - 1;
 }

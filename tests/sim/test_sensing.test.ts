@@ -10,6 +10,7 @@ import {
 } from "../../src/sim/sensing.js";
 import { MarkerChannel } from "../../src/sim/marker_grid.js";
 import { defaultParams } from "../../src/sim/params.js";
+import { FoodKind } from "../../src/sim/setup.js";
 import { AntState } from "../../src/sim/types.js";
 import { makeWorld, type World } from "../../src/sim/world.js";
 
@@ -121,7 +122,7 @@ test("sensing: the food signal is reported even while following home", () => {
 
 test("sensing: direct sight needs range, facing and the right target", () => {
   const { world, index } = makeSenseWorld();
-  world.food.items.push({ pos: { x: 120, y: 110 }, amount: 500, infinite: false });
+  world.food.items.push({ uid: 1, pos: { x: 120, y: 110 }, amount: 500, infinite: false, kind: FoodKind.Seeds });
   const heading = directSightHeading(world, index);
   assert.notEqual(heading, null);
   assert.ok(Math.abs(heading! - Math.atan2(10, 20)) < 1e-9);
@@ -138,6 +139,6 @@ test("sensing: direct sight needs range, facing and the right target", () => {
   assert.ok(Math.abs(nestHeading! - Math.PI) < 1e-9);
 
   const far = makeSenseWorld();
-  far.world.food.items.push({ pos: { x: 300, y: 100 }, amount: 500, infinite: false });
+  far.world.food.items.push({ uid: 1, pos: { x: 300, y: 100 }, amount: 500, infinite: false, kind: FoodKind.Seeds });
   assert.equal(directSightHeading(far.world, far.index), null);
 });

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { addFoodSource, foodRadius, makeFoodSources } from "../../src/sim/food.js";
 import { makeColony, nestRadius } from "../../src/sim/colony.js";
 import { defaultParams } from "../../src/sim/params.js";
+import { FoodKind } from "../../src/sim/setup.js";
 
 test("food: radius follows the amount, clamped to the minimum", () => {
   const params = defaultParams();
@@ -62,6 +63,16 @@ test("colony: starts empty and holds a 120-sample delivery history", () => {
   for (let i = 0; i < 130; i++) colony.deliveredPerSecond.push(i);
   assert.equal(colony.deliveredPerSecond.size(), 120);
   assert.equal(colony.deliveredPerSecond.get(0), 10);
+});
+
+test("food: addFoodSource assigns monotonic uids and keeps the kind", () => {
+  const sources = makeFoodSources();
+  addFoodSource(sources, { x: 0, y: 0 }, 100, false, FoodKind.Leaves);
+  addFoodSource(sources, { x: 10, y: 0 }, 200, false);
+  assert.deepEqual(sources.items.map((s) => [s.uid, s.kind]), [[1, FoodKind.Leaves], [2, FoodKind.Seeds]]);
+  sources.items.shift();
+  addFoodSource(sources, { x: 20, y: 0 }, 300);
+  assert.equal(sources.items.at(-1)!.uid, 3);
 });
 
 test("colony: nest radius grows with the square root of the population", () => {

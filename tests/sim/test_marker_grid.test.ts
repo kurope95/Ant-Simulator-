@@ -43,13 +43,13 @@ test("markers: deposit claims free cells and keeps the strongest value", () => {
   assert.equal(grid.toFood[5], 0);
 });
 
-test("markers: deposit leaves a foreign cell alone in M1", () => {
+test("markers: a foreign deposit erodes the owner's trail without flipping it", () => {
   const grid = makeMarkerGrid({ x: 64, y: 32 }, 8);
   const params = defaultParams();
   deposit(grid, 5, 1, MarkerChannel.ToFood, 0.8, params);
   deposit(grid, 5, 0, MarkerChannel.ToFood, 0.8, params);
   assert.equal(grid.owner[5], 1);
-  near(grid.toFood[5], 0.8);
+  near(grid.toFood[5], 0.4);
 });
 
 test("markers: degrade halves only the ant's own channel", () => {
@@ -76,6 +76,37 @@ test("markers: decay scales both channels and resets empty owners", () => {
   assert.equal(grid.owner[0], 0);
   assert.equal(grid.toFood[1], 0);
   assert.equal(grid.owner[1], kNoOwner);
+});
+
+test("territory: a foreign deposit erodes both channels, then flips on zero", () => {
+  const params = defaultParams();
+  params.territoryRule = true;
+  params.foreignErasureFactor = 0.5;
+  const grid = makeMarkerGrid({ x: 48, y: 48 }, 8);
+  const cell = grid.cellIndex({ x: 4, y: 4 });
+  grid.owner[cell] = 0;
+  grid.toHome[cell] = 0.4;
+  grid.toFood[cell] = 0.4;
+  deposit(grid, cell, 1, MarkerChannel.ToHome, 0.2, params);
+  assert.equal(grid.owner[cell], 0);
+  assert.ok(Math.abs(grid.toHome[cell] - 0.3) < 1e-6);
+  assert.ok(Math.abs(grid.toFood[cell] - 0.3) < 1e-6);
+  deposit(grid, cell, 1, MarkerChannel.ToHome, 0.8, params);
+  assert.equal(grid.owner[cell], 1);
+  assert.ok(Math.abs(grid.toHome[cell] - 0.8) < 1e-6);
+  assert.equal(grid.toFood[cell], 0);
+});
+
+test("territory: with the rule off a foreign deposit changes nothing", () => {
+  const params = defaultParams();
+  params.territoryRule = false;
+  const grid = makeMarkerGrid({ x: 48, y: 48 }, 8);
+  const cell = grid.cellIndex({ x: 4, y: 4 });
+  grid.owner[cell] = 0;
+  grid.toHome[cell] = 0.4;
+  deposit(grid, cell, 1, MarkerChannel.ToHome, 0.8, params);
+  assert.equal(grid.owner[cell], 0);
+  assert.ok(Math.abs(grid.toHome[cell] - 0.4) < 1e-6);
 });
 
 test("markers: the decay factor matches 0.9985 per tick and is frame-rate independent", () => {

@@ -6,6 +6,7 @@ import { makeColony } from "../../src/sim/colony.js";
 import { ContactKind, makeChunkEvents, type ChunkEvents } from "../../src/sim/events.js";
 import { MarkerChannel } from "../../src/sim/marker_grid.js";
 import { defaultParams, type SimParams } from "../../src/sim/params.js";
+import { FoodKind } from "../../src/sim/setup.js";
 import { thinkChunk } from "../../src/sim/tick.js";
 import { AntRole, AntState } from "../../src/sim/types.js";
 import { makeWorld, type World } from "../../src/sim/world.js";
@@ -49,9 +50,11 @@ test("think: a visible target turns the ant at most turnRate * dt", () => {
   const { world, index, params } = makeThinkWorld({ x: 100, y: 100 });
   const target = 0.5;
   world.food.items.push({
+    uid: 1,
     pos: { x: 100 + Math.cos(target) * 20, y: 100 + Math.sin(target) * 20 },
     amount: 500,
     infinite: false,
+    kind: FoodKind.Seeds,
   });
   thinkOnce(world);
   assert.ok(Math.abs(world.ants.heading[index] - params.turnRate / 60) < 1e-5);
@@ -126,7 +129,7 @@ test("think: a degrading ant erases each new own cell once", () => {
 
 test("think: contacts fire for food and the ant's own nest only", () => {
   const foodWorld = makeThinkWorld({ x: 100, y: 100 });
-  foodWorld.world.food.items.push({ pos: { x: 100, y: 100 }, amount: 500, infinite: false });
+  foodWorld.world.food.items.push({ uid: 1, pos: { x: 100, y: 100 }, amount: 500, infinite: false, kind: FoodKind.Seeds });
   const foodOut = thinkOnce(foodWorld.world);
   assert.equal(foodOut.contacts.some((c) => c.kind === ContactKind.Food && c.target === 0), true);
 

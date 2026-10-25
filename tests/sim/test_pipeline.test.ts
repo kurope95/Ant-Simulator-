@@ -6,6 +6,7 @@ import { fromAngle, type Vec2 } from "../../src/core/vec2.js";
 import { makeColony, nestRadius } from "../../src/sim/colony.js";
 import { kPhaseCount } from "../../src/sim/phases.js";
 import { defaultParams, markerDecayFactor, type SimParams } from "../../src/sim/params.js";
+import { FoodKind } from "../../src/sim/setup.js";
 import { AntRole, AntState, RandStream } from "../../src/sim/types.js";
 import { makeWorld, stepWorld, type World } from "../../src/sim/world.js";
 
@@ -45,7 +46,7 @@ test("events: a food pickup flips heading, state and mass", () => {
   const { world, params } = makePipelineWorld();
   const index = spawnAnt(world, { x: 100, y: 100 });
   world.ants.energy[index] = 50;
-  world.food.items.push({ pos: { x: 100, y: 100 }, amount: 5, infinite: false });
+  world.food.items.push({ uid: 1, pos: { x: 100, y: 100 }, amount: 5, infinite: false, kind: FoodKind.Seeds });
   stepWorld(world);
   assert.equal(world.ants.state[index], AntState.ReturningFood);
   assert.equal(world.ants.mass[index], params.massCarrying);
@@ -60,7 +61,7 @@ test("events: a carrying ant only refills energy at food", () => {
   const index = spawnAnt(world, { x: 100, y: 100 });
   world.ants.state[index] = AntState.ReturningFood;
   world.ants.energy[index] = 50;
-  world.food.items.push({ pos: { x: 100, y: 100 }, amount: 5, infinite: false });
+  world.food.items.push({ uid: 1, pos: { x: 100, y: 100 }, amount: 5, infinite: false, kind: FoodKind.Seeds });
   stepWorld(world);
   assert.equal(world.ants.state[index], AntState.ReturningFood);
   assert.equal(world.ants.energy[index], world.params.energyMax);
@@ -137,7 +138,7 @@ test("events: the last unit goes to the earlier chunk", () => {
   world.params.chunkSize = 1;
   const first = spawnAnt(world, { x: 100, y: 100 });
   const second = spawnAnt(world, { x: 101, y: 100 });
-  world.food.items.push({ pos: { x: 100, y: 100 }, amount: 1, infinite: false });
+  world.food.items.push({ uid: 1, pos: { x: 100, y: 100 }, amount: 1, infinite: false, kind: FoodKind.Seeds });
   stepWorld(world);
   assert.equal(world.ants.state[first], AntState.ReturningFood);
   assert.equal(world.ants.state[second], AntState.Foraging);
