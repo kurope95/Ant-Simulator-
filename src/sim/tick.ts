@@ -1,6 +1,7 @@
 import { wrapAngle } from "../core/math.js";
 import { randRange, randUnit } from "../core/rng.js";
 import { fromAngle } from "../core/vec2.js";
+import { slideHeadingAlongNormal } from "./collide.js";
 import { nestRadius, type Colony } from "./colony.js";
 import { ContactKind, makeChunkEvents, type ChunkEvents } from "./events.js";
 import { degrade, deposit, emissionStrength, MarkerChannel } from "./marker_grid.js";
@@ -266,10 +267,20 @@ export function clampToWorld(world: World): void {
   const maxX = world.size.x - radius;
   const maxY = world.size.y - radius;
   for (let index = 0; index < ants.size(); index++) {
-    if (ants.posX[index] < radius) ants.posX[index] = radius;
-    else if (ants.posX[index] > maxX) ants.posX[index] = maxX;
-    if (ants.posY[index] < radius) ants.posY[index] = radius;
-    else if (ants.posY[index] > maxY) ants.posY[index] = maxY;
+    if (ants.posX[index] < radius) {
+      ants.posX[index] = radius;
+      slideHeadingAlongNormal(ants, index, 1, 0);
+    } else if (ants.posX[index] > maxX) {
+      ants.posX[index] = maxX;
+      slideHeadingAlongNormal(ants, index, -1, 0);
+    }
+    if (ants.posY[index] < radius) {
+      ants.posY[index] = radius;
+      slideHeadingAlongNormal(ants, index, 0, 1);
+    } else if (ants.posY[index] > maxY) {
+      ants.posY[index] = maxY;
+      slideHeadingAlongNormal(ants, index, 0, -1);
+    }
   }
 }
 

@@ -11,6 +11,7 @@ export interface ObstacleGrid {
   size: Vec2;
   kind: Uint8Array;
   border: Uint8Array;
+  nearSolid: Uint8Array;
 }
 
 function solidKind(kind: number): boolean {
@@ -34,6 +35,7 @@ export function makeObstacleGrid(size: Vec2, cell: number): ObstacleGrid {
     size: gridSize(width, height, scale),
     kind: new Uint8Array(width * height),
     border: new Uint8Array(width * height),
+    nearSolid: new Uint8Array(width * height),
   };
 }
 
@@ -47,16 +49,27 @@ export function obstacleGridFromCells(cells: ObstacleCells): ObstacleGrid {
     size: gridSize(width, height, cells.cell),
     kind: new Uint8Array(cells.kind),
     border: new Uint8Array(width * height),
+    nearSolid: new Uint8Array(width * height),
   };
   rebuildBorder(grid);
   return grid;
 }
 
 export function rebuildBorder(grid: ObstacleGrid): void {
-  const { width, height, kind, border } = grid;
+  const { width, height, kind, border, nearSolid } = grid;
   for (let row = 0; row < height; row++) {
     for (let col = 0; col < width; col++) {
       const index = row * width + col;
+      let near = 0;
+      for (let r = Math.max(0, row - 1); r <= Math.min(height - 1, row + 1) && near === 0; r++) {
+        for (let c = Math.max(0, col - 1); c <= Math.min(width - 1, col + 1); c++) {
+          if (solidKind(kind[r * width + c])) {
+            near = 1;
+            break;
+          }
+        }
+      }
+      nearSolid[index] = near;
       if (!solidKind(kind[index])) {
         border[index] = 0;
         continue;

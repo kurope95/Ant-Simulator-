@@ -257,7 +257,7 @@ const kSandSpeedFactor = 0.6
 const kMudSpeedFactor = 0.45
 // ObstacleKind and FoodKind live in sim/setup.ts; kind is one ObstacleKind per cell.
 interface ObstacleGrid { cell: number; width: number; height: number; size: Vec2;
-                         kind: Uint8Array; border: Uint8Array }
+                         kind: Uint8Array; border: Uint8Array; nearSolid: Uint8Array }
 makeObstacleGrid(size: Vec2, cell: number): ObstacleGrid
 obstacleGridFromCells(cells: ObstacleCells): ObstacleGrid
 rebuildBorder(grid: ObstacleGrid): void
@@ -268,6 +268,7 @@ lineOfSight(grid, a, b): boolean           // Amanatides-Woo DDA through solid c
 
 // sim/collide.ts
 resolveObstacles(world): void              // pushes ants out of Rock/Water, both axes
+slideHeadingAlongNormal(ants, index, nx, ny): void  // removes the into-wall part of a heading
 
 // sim/palette.ts
 interface ColonyPaletteEntry { name: string; hex: number }
