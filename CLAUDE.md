@@ -9,7 +9,7 @@ A real-time 2D ant colony / stigmergy simulator inspired by Pezzza's Work "Ant S
 **Plans:** one per milestone, in `docs/superpowers/plans/`. Carry them out task by task, and don't run ahead into the next milestone.
 
 ## Status
-- Current milestone: **M1.5 (presentation overhaul) complete** (2026-10-25). **M2 (walls and adaptation) next, not started.** M1 was complete 2026-10-25. M1.5 has 192 passing tests, a clean `npm run build`, the six acceptance screenshots in `captures/`, and the interactive page runs. Bench baseline (plugged in, meadow preset, 1200 ticks, 200 ants): 2,674 ticks/s, 534,872 ant-updates/s, 0.373 ms average step, 0.465 ms p95. Pathfinding, collisions, starvation and birth tuning are a **separate later project**, not M2. Update this line as each milestone lands; the milestone list is in spec §15.
+- Current milestone: **M2 (navigation and foraging), in progress.** Plan: [docs/superpowers/plans/2026-10-25-m2-navigation-foraging.md](docs/superpowers/plans/2026-10-25-m2-navigation-foraging.md). **M1.6 (camera and looks) is planned next.** Ant-to-ant collisions stay in M4; birth tuning is unscheduled. Update this line as each milestone lands; the milestone list is in spec §15.
 
 ## This machine
 - **Windows 11 ARM64.** Snapdragon X Plus, 8 equal cores, 16 GB shared RAM, Adreno X1-45 GPU.

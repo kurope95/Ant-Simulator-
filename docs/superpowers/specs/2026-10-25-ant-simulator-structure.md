@@ -676,14 +676,15 @@ a phase may write only its own ants' slots, and anything cross-ant goes through 
 | M0 Skeleton **(done)** | npm/tsc project; `core/{vec2,rect,math,color,rng,fixed_step,stopwatch,stats,build_info}`; `sim/{types,params,phases,world}`; `render/{camera,batch,gl_renderer}`; `ui/debug_panel`; `app/*`; `tools/{serve,chrome,launch,screenshot}` | [plans/2026-10-25-m0-skeleton.md](../plans/2026-10-25-m0-skeleton.md) |
 | M1 Core foraging **(done 2026-10-25)** | `core/ring_buffer`; `sim/{ants,marker_grid,food,colony,events,sensing,steering,tick,checksum}`; `render/{view_settings,heatmap,ant_layer,world_view}`; `ui/param_specs` | [plans/2026-10-25-m1-core-foraging.md](../plans/2026-10-25-m1-core-foraging.md) |
 | M1.5 Presentation & world builder **(done 2026-10-25)** | `sim/{setup,setup_apply,obstacles,presets,palette,collide}`; `render/{atlas,sprite_atlas,sprite_batch,legs,theme(rewrite),terrain_texture,food_layout,food_layer,nest_layer,world_view(rewrite)}`; `ui/{dom,view_models,builder_model,builder_screen,home_screen,run_hud,colony_panel,settings_drawer,pause_menu,finish_dialog}`; `app/{session,controller,attract}`; `options`/`screenshot` flags; `styles.css` overhaul | [plans/2026-10-25-presentation-overhaul.md](../plans/2026-10-25-presentation-overhaul.md) |
-| M2 Walls and adaptation | `sim/{spatial_hash,stuck,edits}`; stuck detection wired to `StuckTurn` and `degradeTime`; fallback rays in `sensing`; a maze preset and breach edit; wall-following tuning | later |
+| M1.6 Camera and looks | `app/camera_input`; `render/{terrain_mask,terrain_shader}`; map-style pan and zoom; glowing trails; procedural terrain; anthill mounds; ant and food shadows | [plans/2026-10-25-m1.6-camera-looks.md](../plans/2026-10-25-m1.6-camera-looks.md) |
+| M2 Navigation and foraging | `sim/{spatial_hash,stuck}`; `app/{reach,reach_cli}`; wander fix; wall sliding; look-ahead and fallback rays; stuck detection and degrading; spawn safety; retuned defaults; homing memory; per-colony trail layers; maze preset and breach | [plans/2026-10-25-m2-navigation-foraging.md](../plans/2026-10-25-m2-navigation-foraging.md) |
 | M3 Colonies | **closed** — multi-colony setup, palette, territory and the colony heatmap shipped in M1.5. Only the open hostilities topic (main spec §14) remains, unscheduled | — |
 | M4 Crowds and scale | `core/worker_pool`; ant-to-ant PBD in `collide`; `sim/avoidance`; stress preset; determinism test with 1 and N workers; the spatial-hash phase | later |
 | M5 Inspector | `sim/{picking,names}`; ant inspector with follow; sensor drawing; telemetry sparklines; live `degradeTime` control | later |
 | M6 Tuning and hardening | parameter tuning, performance passes, edge cases, README | later |
 
-The separate mechanics project — pathfinding, collisions, starvation and births — is not a
-milestone here and follows M1.5.
+Navigation and foraging range, formerly part of a separate mechanics project, are now M2. Ant-to-ant
+collisions stay in M4. Birth and population tuning remain unscheduled.
 
 ---
 
@@ -742,7 +743,7 @@ written where `--out` says and are gitignored.
 - **The project is a browser TypeScript app** (2026-10-25 pivot). The C++/SDL3/ImGui version is archived on branch `archive/cpp-m0`; no native programs are built or run because Smart App Control blocks unsigned executables.
 - **Obstacles, multi-colony setup and presentation moved into M1.5.** The former M2 wall work, M3 colony work and M5 look work shipped there; M3 is closed.
 - **`sim/scenarios.ts` was deleted.** Presets (`sim/presets.ts`) and the staged builder replace scenarios; `--scenario` survives only as a deprecated alias for `--preset`.
-- **The spatial hash moves to M4**, because M1.5's obstacle checks use the 4 u obstacle grid and no phase needs neighbour counts yet.
+- **The spatial hash arrives in M2** for stuck detection's crowd counts, and returns in M4 for worker-scale neighbour queries.
 - **Home and Builder refit the camera** to the world; the Run applies `--zoom` once on its first fit.
 - Bench prints both ticks per second and ant updates per second.
 - Workers (the "thread pool") remain M4; M0–M3 are single-threaded and deterministic by construction.
