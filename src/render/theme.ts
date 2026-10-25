@@ -5,6 +5,9 @@ export interface Theme {
   ground: Rgba8;
   grid: Rgba8;
   border: Rgba8;
+  food: Rgba8;
+  heatHome: Rgba8;
+  heatFood: Rgba8;
 }
 
 export function sandTheme(): Theme {
@@ -13,6 +16,21 @@ export function sandTheme(): Theme {
     ground: rgb(0xe8dcc2),
     grid: rgb(0xd6c7a8),
     border: rgb(0x8c7a5b),
+    food: rgb(0x6b8f3a),
+    heatHome: rgb(0x3a7be0),
+    heatFood: rgb(0xe04b3a),
+  };
+}
+
+export function nightTheme(): Theme {
+  return {
+    outside: rgb(0x05070a),
+    ground: rgb(0x0b0f14),
+    grid: rgb(0x111823),
+    border: rgb(0x1c2733),
+    food: rgb(0x7fe08a),
+    heatHome: rgb(0x2f7dff),
+    heatFood: rgb(0xff8a3d),
   };
 }
 

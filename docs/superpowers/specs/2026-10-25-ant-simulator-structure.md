@@ -303,9 +303,11 @@ class Camera {
   scale(): number; center(): Vec2; visibleWorldRect(): Rect
 }
 
-// render/theme.ts                                                   [M0]; nightTheme [M5]
-interface Theme { outside: Rgba8; ground: Rgba8; grid: Rgba8; border: Rgba8 }
+// render/theme.ts                                                   [M0]; night fields [M1]
+interface Theme { outside: Rgba8; ground: Rgba8; grid: Rgba8; border: Rgba8;
+                  food: Rgba8; heatHome: Rgba8; heatFood: Rgba8 }
 sandTheme(): Theme
+nightTheme(): Theme                    // dark ground, blue-to-home / orange-to-food heat
 colonyColor(id: ColonyId): Rgba8      // Red, Yellow, Blue, Green, Purple, Orange, Teal, Pink
 
 // render/batch.ts                                                   [M0]
@@ -328,6 +330,9 @@ class GlRenderer {
   sizePx(): Vec2
   clear(color: Rgba8): void
   drawBatch(batch: GeometryBatch): void
+  createTexture(): WebGLTexture | null
+  updateTexture(texture, width, height, rgba: Uint8Array): void   // row 0 = top of the rect
+  drawTexture(texture: WebGLTexture, rect: Rect): void
   present(): void                      // no-op for WebGL; kept for symmetry
 }
 
@@ -339,6 +344,8 @@ testPatternDot(worldSize, simSeconds): Vec2
 enum HeatmapMode { Off, DualChannel, ColonyColor }                     // ColonyColor [M3]
 interface ViewSettings { heatmap: HeatmapMode; showAnts: boolean; showGrid: boolean;
                          showHash: boolean; showColliders: boolean }
+defaultViewSettings(): ViewSettings
+cycleHeatmap(mode): HeatmapMode        // Off -> DualChannel -> ColonyColor -> Off
 fillHeatmapRgba(grid, mode, theme, rgbaOut: Uint8Array): void          // pure, testable
 createAntSprite(gl, lengthPx): WebGLTexture
 buildAnts(batch, world, camera, alpha, theme): void
