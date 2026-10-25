@@ -284,9 +284,10 @@ speedFactorAt(grid, p): number             // 1, 0.6 (sand) or 0.45 (mud)
 lineOfSight(grid, a, b): boolean           // Amanatides-Woo DDA through solid cells
 freeDistance(grid, origin, angle, maxDist): number // DDA: distance to the first solid cell
 freeDistanceDir(grid, origin, unitX, unitY, maxDist): number // the same walk for a unit direction already in hand
+nearestFreePoint(grid, pos, maxCells): Vec2 | null // BFS from the cell holding pos to the closest open cell centre; null once maxCells solid cells are expanded
 
 // sim/collide.ts
-resolveObstacles(world): void              // pushes ants out of Rock/Water, both axes
+resolveObstacles(world): void              // pushes ants out of Rock/Water, both axes; teleports ants buried in a solid interior to the nearest open cell (energy 0 when none is found)
 slideHeadingAlongNormal(ants, index, nx, ny): void  // removes the into-wall part of a heading
 
 // sim/palette.ts

@@ -1,4 +1,5 @@
 import type { Ants } from "./ants.js";
+import { nearestFreePoint } from "./obstacles.js";
 import { ObstacleKind } from "./setup.js";
 import type { World } from "./world.js";
 
@@ -36,6 +37,25 @@ export function resolveObstacles(world: World): void {
   const cell = grid.cell;
   const radius = world.params.antRadius;
   const radiusSq = radius * radius;
+
+  // An ant whose centre sits in the interior of a solid blob is never touched
+  // by the border-only push below. Move it to the closest open cell; if the
+  // blob is larger than the search, it has nowhere legal to go and is left to
+  // die rather than teleported across the map.
+  for (let index = 0; index < ants.size(); index++) {
+    const col = Math.floor(ants.posX[index] / cell);
+    const row = Math.floor(ants.posY[index] / cell);
+    if (col < 0 || row < 0 || col >= grid.width || row >= grid.height) continue;
+    const own = row * grid.width + col;
+    if (!solid(grid.kind[own]) || grid.border[own] === 1) continue;
+    const free = nearestFreePoint(grid, { x: ants.posX[index], y: ants.posY[index] }, 16);
+    if (free === null) {
+      ants.energy[index] = 0;
+    } else {
+      ants.posX[index] = free.x;
+      ants.posY[index] = free.y;
+    }
+  }
 
   for (let pass = 0; pass < 2; pass++) {
     for (let index = 0; index < ants.size(); index++) {

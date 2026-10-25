@@ -149,6 +149,7 @@ All writes to the marker grid happen in the serial event phase (§5.2), in a fix
 - A 4 u grid with one byte per cell: `0` empty, `1` Rock, `2` Water, `3` Sand, `4` Mud. The builder paints or erases cells with a circular brush; presets seed the grid.
 - **Rock and Water are solid.** Only their border cells are collidable: a border cell is Rock/Water and has at least one of its four direct neighbours out of bounds or not Rock/Water. Interior cells are never tested, which keeps the original "hollow collider" optimisation. Border flags are rebuilt only in the area around an edit.
   - The collision shape is the cell's box (circle-against-box test) *(Claude's call: a circle per cell makes walls bumpy)*.
+  - **Buried-ant recovery.** An ant whose centre sits in a solid *interior* cell is invisible to the border push, so `resolveObstacles` teleports it to the nearest open cell centre found by a breadth-first search (at most 16 solid cells). If the search finds nothing, its energy is set to 0 and it is removed. A centre inside a solid cell also moves at full speed for that tick, so collision can carry it out instead of it standing frozen.
 - **Sand and Mud are walkable terrain.** They do not collide; they scale walking speed: Sand ×0.60, Mud ×0.45.
 - **Sight and scent.** Rock and Water block line of sight and the marker sense. A sensor sample inside a Rock/Water cell is skipped, as is a sample whose halfway point to the ant is solid.
 - **Editing only in the builder.** A run's obstacle grid is immutable. Start and Reset build a fresh world from the setup; nothing mutates a running world. `validateSetup` rejects a nest or food source whose centre or edge ring lies in Rock/Water, so no run begins with an unreachable nest or pile.
@@ -168,7 +169,7 @@ All writes to the marker grid happen in the serial event phase (§5.2), in a fix
 - Nest radius = `NEST_BASE_R + NEST_GROWTH × sqrt(population)`, so the nest grows as the colony grows.
 - **Spawning.** While `food_pool ≥ SPAWN_COST`:
   - subtract `SPAWN_COST` from `food_pool`,
-  - spawn one ant at the nest edge facing outward,
+  - spawn one ant at the nest edge facing outward. The ring position is sampled in golden-angle steps `a + k × 2.39996` (`k = 0..15`) and the first non-solid sample wins, so a rock overlapping the nest cannot swallow the ant; if all 16 are solid it spawns at the nest centre,
   - make it an Explorer with probability `EXPLORER_RATIO`, otherwise a Follower.
 - Spawning pauses while the total ant count is at `MAX_ANTS_TOTAL`.
 - A colony with no ants and too little food to spawn is extinct. Its nest is drawn greyed out.

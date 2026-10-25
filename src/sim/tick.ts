@@ -5,7 +5,7 @@ import { slideHeadingAlongNormal } from "./collide.js";
 import { nestRadius, type Colony } from "./colony.js";
 import { ContactKind, makeChunkEvents, type ChunkEvents } from "./events.js";
 import { degrade, deposit, emissionStrength, MarkerChannel } from "./marker_grid.js";
-import { speedFactorAt, freeDistance } from "./obstacles.js";
+import { isSolidAt, speedFactorAt, freeDistance } from "./obstacles.js";
 import {
   chooseFallback,
   directSightHeading,
@@ -161,7 +161,10 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
     ants.velY[ant] = ants.speed[ant] * direction.y;
     ants.prevX[ant] = ants.posX[ant];
     ants.prevY[ant] = ants.posY[ant];
-    const terrain = speedFactorAt(world.obstacles, { x: ants.posX[ant], y: ants.posY[ant] });
+    // A centre inside a solid cell must still be able to move, or the ant
+    // freezes there forever; collision resolution handles the walls.
+    const factor = speedFactorAt(world.obstacles, { x: ants.posX[ant], y: ants.posY[ant] });
+    const terrain = factor === 0 ? 1 : factor;
     ants.posX[ant] += ants.velX[ant] * dt * terrain;
     ants.posY[ant] += ants.velY[ant] * dt * terrain;
 
@@ -233,13 +236,22 @@ export function spawnAtNest(world: World, colony: Colony): number {
       1 + params.speedJitter,
     );
   const radius = nestRadius(colony, params);
-  const direction = fromAngle(angle);
+  // Walk the spawn ring in golden-angle steps: a boulder or pond overlapping
+  // the nest blocks some directions, and the samples that follow visit the
+  // rest of the ring evenly. If all 16 are solid, use the nest centre.
+  let pos = { x: colony.nest.x, y: colony.nest.y };
+  for (let k = 0; k < 16; k++) {
+    const a = angle + k * 2.39996;
+    const x = colony.nest.x + Math.cos(a) * radius;
+    const y = colony.nest.y + Math.sin(a) * radius;
+    if (!isSolidAt(world.obstacles, { x, y })) {
+      pos = { x, y };
+      break;
+    }
+  }
   const index = world.ants.spawn(
     {
-      pos: {
-        x: colony.nest.x + direction.x * radius,
-        y: colony.nest.y + direction.y * radius,
-      },
+      pos,
       heading: angle,
       colony: colony.id,
       role,

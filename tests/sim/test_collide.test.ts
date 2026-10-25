@@ -10,6 +10,7 @@ import { defaultParams, type SimParams } from "../../src/sim/params.js";
 import { loadPreset } from "../../src/sim/presets.js";
 import { addColony, FoodKind, addFood, makeSetup, ObstacleKind, paintCells } from "../../src/sim/setup.js";
 import { worldFromSetup } from "../../src/sim/setup_apply.js";
+import { spawnAtNest } from "../../src/sim/tick.js";
 import { stepWorld, type World } from "../../src/sim/world.js";
 
 function wallWorld(edit?: (setup: ReturnType<typeof makeSetup>) => void): {
@@ -72,6 +73,53 @@ test("collide: ants slide along map edges", () => {
     `ant slid to y=${world.ants.posY[index]}`,
   );
   assert.ok(pathLength / 60 > 0.5, `ant moved ${pathLength / 60} u/tick on average`);
+});
+
+test("spawn: never inside rock", () => {
+  // Nest at the map centre; a rock disc centred 30 u to its right overlaps the
+  // spawn ring at some radii, so a naive single-angle spawn lands inside it.
+  const params = defaultParams();
+  params.worldW = 400;
+  params.worldH = 300;
+  const setup = makeSetup({ x: 400, y: 300 }, 3, "test");
+  addColony(setup, { x: 200, y: 150 }, 0, 0);
+  paintCells(setup, ObstacleKind.Rock, { x: 230, y: 150 }, 12);
+  const world = worldFromSetup(setup, params);
+  const colony = world.colonies[0];
+  assert.ok(colony !== undefined);
+  for (let k = 0; k < 300; k++) {
+    const index = spawnAtNest(world, colony);
+    const x = world.ants.posX[index];
+    const y = world.ants.posY[index];
+    assert.equal(isSolidAt(world.obstacles, { x, y }), false, `spawn ${k} at ${x},${y}`);
+  }
+});
+
+test("collide: an ant inside a rock is moved out", () => {
+  // A solid rectangle whose interior cells have no border side. An ant in one
+  // of those cells is invisible to the border-only push, so it has to be
+  // teleported to the nearest open cell.
+  const { world } = wallWorld((setup) => {
+    for (let row = 10; row <= 19; row++) {
+      for (let col = 20; col <= 27; col++) {
+        setup.obstacles.kind[row * setup.obstacles.width + col] = ObstacleKind.Rock;
+      }
+    }
+  });
+  const cell = world.obstacles.cell;
+  const col = 26;
+  const row = 12;
+  const index = spawn(world, (col + 0.5) * cell, (row + 0.5) * cell);
+  const uid = world.ants.uid[index];
+  assert.equal(isSolidAt(world.obstacles, { x: world.ants.posX[index], y: world.ants.posY[index] }), true);
+  stepWorld(world);
+  const moved = world.ants.indexOf(uid);
+  assert.notEqual(moved, null, "ant was removed instead of moved");
+  assert.equal(
+    isSolidAt(world.obstacles, { x: world.ants.posX[moved!], y: world.ants.posY[moved!] }),
+    false,
+    `ant still inside a solid cell at ${world.ants.posX[moved!]},${world.ants.posY[moved!]}`,
+  );
 });
 
 test("collide: nearSolid flags match a brute-force check", () => {

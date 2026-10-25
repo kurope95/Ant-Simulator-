@@ -164,6 +164,44 @@ export function freeDistanceDir(
   }
 }
 
+// Nearest cell centre that is not rock or water, searched breadth-first from
+// the cell holding `pos`. Returns null once `maxCells` solid cells have been
+// expanded without reaching open ground, so callers can decide what an ant
+// buried deeper than the search deserves.
+export function nearestFreePoint(grid: ObstacleGrid, pos: Vec2, maxCells: number): Vec2 | null {
+  const col0 = Math.floor(pos.x / grid.cell);
+  const row0 = Math.floor(pos.y / grid.cell);
+  if (col0 < 0 || row0 < 0 || col0 >= grid.width || row0 >= grid.height) return null;
+  if (!isSolidCell(grid, col0, row0)) return { x: pos.x, y: pos.y };
+
+  const visited = new Uint8Array(grid.width * grid.height);
+  const start = row0 * grid.width + col0;
+  visited[start] = 1;
+  const queue = [start];
+  let head = 0;
+  let expanded = 0;
+  while (head < queue.length && expanded < maxCells) {
+    const cellIndex = queue[head];
+    head += 1;
+    expanded += 1;
+    const col = cellIndex % grid.width;
+    const row = (cellIndex - col) / grid.width;
+    for (let dir = 0; dir < 4; dir++) {
+      const nextCol = col + (dir === 0 ? 1 : dir === 2 ? -1 : 0);
+      const nextRow = row + (dir === 1 ? 1 : dir === 3 ? -1 : 0);
+      if (nextCol < 0 || nextRow < 0 || nextCol >= grid.width || nextRow >= grid.height) continue;
+      const next = nextRow * grid.width + nextCol;
+      if (visited[next] !== 0) continue;
+      visited[next] = 1;
+      if (!solidKind(grid.kind[next])) {
+        return { x: (nextCol + 0.5) * grid.cell, y: (nextRow + 0.5) * grid.cell };
+      }
+      queue.push(next);
+    }
+  }
+  return null;
+}
+
 export function lineOfSight(grid: ObstacleGrid, a: Vec2, b: Vec2): boolean {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
