@@ -13,6 +13,7 @@ test("params: defaults match spec section 12", () => {
   assert.equal(p.obstacleCell, 4);
   assert.equal(p.hashCell, 6);
   assert.equal(p.antRadius, 2.5);
+  assert.equal(p.antLength, 10);
   assert.equal(p.antSpeed, 50);
   assert.equal(p.sensorRadius, 32);
   assert.equal(p.followerSamples, 25);
@@ -29,7 +30,7 @@ test("params: defaults match spec section 12", () => {
   assert.equal(p.maxNeighbours, 16);
   assert.equal(p.maxAntsTotal, 50000);
   assert.equal(p.chunkSize, 1024);
-  assert.equal(p.legsMinPx, 20);
+  assert.equal(p.legsMinPx, 18);
 });
 
 test("params: validate accepts defaults and explains rejections", () => {

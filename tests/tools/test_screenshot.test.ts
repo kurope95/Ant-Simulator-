@@ -42,6 +42,19 @@ test("screenshot: rejects a seed above 2^32-1", { timeout: 30_000 }, async () =>
   }
 });
 
+test("screenshot: rejects a zoom outside 0.1..16", { timeout: 30_000 }, async () => {
+  const dir = await mkdtemp(join(tmpdir(), "antsim zoom "));
+  const out = join(dir, "zoom.png");
+  try {
+    const { code, stderr } = await runTool(["--zoom", "20", "--out", out]);
+    assert.equal(code, 2);
+    assert.match(stderr, /0\.1/);
+    await assert.rejects(readFile(out));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("screenshot: Chrome headless writes a PNG of the requested size", { timeout: 120_000 }, async () => {
   const dir = await mkdtemp(join(tmpdir(), "antsim shot "));
   const out = join(dir, "shot ü 1.png");

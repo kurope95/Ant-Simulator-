@@ -6,29 +6,73 @@ import { foodRadius } from "../sim/food.js";
 import { colonyHex } from "../sim/palette.js";
 import type { World } from "../sim/world.js";
 import { buildAnts } from "./ant_layer.js";
+import type { AtlasFrames } from "./atlas.js";
 import { GeometryBatch } from "./batch.js";
 import type { Camera } from "./camera.js";
 import type { GlRenderer } from "./gl_renderer.js";
 import { fillHeatmapRgba } from "./heatmap.js";
+import { GaitTracker } from "./legs.js";
+import { paintSpriteAtlas } from "./sprite_atlas.js";
+import { SpriteBatch } from "./sprite_batch.js";
 import type { Theme } from "./theme.js";
 import { HeatmapMode, type ViewSettings } from "./view_settings.js";
 
 const kGridStep = 120;
 const kBorderWidthPx = 2;
 
+interface AtlasResource {
+  texture: WebGLTexture | null;
+  frames: AtlasFrames;
+}
+
+const kAtlasByRenderer = new WeakMap<GlRenderer, AtlasResource>();
+
+function atlasFor(renderer: GlRenderer): AtlasResource {
+  const existing = kAtlasByRenderer.get(renderer);
+  if (existing !== undefined) return existing;
+  const atlas = paintSpriteAtlas();
+  const texture = renderer.createTexture();
+  if (texture !== null) {
+    const ctx = atlas.canvas.getContext("2d");
+    if (ctx !== null) {
+      const image = ctx.getImageData(0, 0, atlas.canvas.width, atlas.canvas.height);
+      renderer.updateTexture(
+        texture,
+        atlas.canvas.width,
+        atlas.canvas.height,
+        new Uint8Array(image.data.buffer),
+      );
+    }
+  }
+  const resource = { texture, frames: atlas.frames };
+  kAtlasByRenderer.set(renderer, resource);
+  return resource;
+}
+
 export interface WorldRenderCache {
   heatmapTexture: WebGLTexture | null;
   heatmapPixels: Uint8Array;
   ground: GeometryBatch;
   actors: GeometryBatch;
+  atlasTexture: WebGLTexture | null;
+  atlasFrames: AtlasFrames;
+  sprites: SpriteBatch;
+  legs: GeometryBatch;
+  gait: GaitTracker;
 }
 
 export function createWorldRenderCache(renderer: GlRenderer, world: World): WorldRenderCache {
+  const atlas = atlasFor(renderer);
   return {
     heatmapTexture: renderer.createTexture(),
     heatmapPixels: new Uint8Array(world.markers.width * world.markers.height * 4),
     ground: new GeometryBatch(),
     actors: new GeometryBatch(),
+    atlasTexture: atlas.texture,
+    atlasFrames: atlas.frames,
+    sprites: new SpriteBatch(),
+    legs: new GeometryBatch(),
+    gait: new GaitTracker(),
   };
 }
 
@@ -73,7 +117,7 @@ export function buildGround(
   }
 }
 
-export function buildActors(
+export function buildStaticActors(
   batch: GeometryBatch,
   world: World,
   camera: Camera,
@@ -102,8 +146,6 @@ export function buildActors(
       withAlpha(color, 0.35),
     );
   }
-
-  if (settings.showAnts) buildAnts(batch, world, camera, alpha, theme);
 }
 
 export function drawWorld(
@@ -136,8 +178,19 @@ export function drawWorld(
   }
 
   cache.actors.clear();
-  buildActors(cache.actors, world, camera, alpha, settings, theme);
+  buildStaticActors(cache.actors, world, camera, alpha, settings, theme);
   renderer.drawBatch(cache.actors);
+
+  if (settings.showAnts) {
+    cache.sprites.clear();
+    cache.legs.clear();
+    cache.gait.update(world);
+    buildAnts(cache.sprites, cache.legs, world, camera, alpha, cache.atlasFrames, cache.gait);
+    renderer.drawBatch(cache.legs);
+    if (cache.atlasTexture !== null) {
+      renderer.drawSprites(cache.atlasTexture, cache.sprites);
+    }
+  }
 }
 
 function withAlpha(color: Rgba8, factor: number): Rgba8 {

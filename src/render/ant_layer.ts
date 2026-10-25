@@ -1,17 +1,23 @@
-import { rgb } from "../core/color.js";
+import { rgba } from "../core/color.js";
 import { contains, expanded } from "../core/rect.js";
 import { fromAngle, lerpVec } from "../core/vec2.js";
 import { colonyHex } from "../sim/palette.js";
+import { FoodKind } from "../sim/setup.js";
 import type { World } from "../sim/world.js";
+import type { AtlasFrame, AtlasFrames } from "./atlas.js";
 import type { GeometryBatch } from "./batch.js";
 import type { Camera } from "./camera.js";
-import type { Theme } from "./theme.js";
+import { legPose, type GaitTracker } from "./legs.js";
+import type { SpriteBatch } from "./sprite_batch.js";
 
 const kCullMargin = 32;
-const kWidthRatio = 0.45;
 const kMinLengthPx = 1.5;
 const kCarriedFoodOffset = 0.55;
-const kCarriedFoodRadius = 0.28;
+const kCarriedFoodSize = 0.45;
+const kLegWidthPx = 1.5;
+const kShadowTint = rgba(0, 0, 0, 71);
+const kWhite = rgba(255, 255, 255, 255);
+const kLegColor = rgba(36, 27, 20, 255);
 
 function colorIndexFor(world: World, colonyId: number): number {
   for (const colony of world.colonies) {
@@ -20,19 +26,33 @@ function colorIndexFor(world: World, colonyId: number): number {
   return 0;
 }
 
+function bodyFrame(
+  frames: AtlasFrames,
+  world: World,
+  colonyId: number,
+  variant: number,
+  animated: boolean,
+): AtlasFrame {
+  const color = colorIndexFor(world, colonyId);
+  return animated ? frames.antBody(color, variant) : frames.antSmall(color, variant);
+}
+
 export function buildAnts(
-  batch: GeometryBatch,
+  sprites: SpriteBatch,
+  legs: GeometryBatch,
   world: World,
   camera: Camera,
   alpha: number,
-  theme: Theme,
+  frames: AtlasFrames,
+  gait: GaitTracker,
 ): void {
   const view = expanded(camera.visibleWorldRect(), kCullMargin);
   const ants = world.ants;
   const params = world.params;
   const lengthPx = Math.max(params.antLength * camera.scale(), kMinLengthPx);
-  const halfLength = lengthPx / 2;
-  const halfWidth = (lengthPx * kWidthRatio) / 2;
+  const widthPx = Math.max(1.25 * lengthPx, 1);
+  const heightPx = Math.max(0.6 * lengthPx, 1);
+  const animated = lengthPx >= params.legsMinPx;
 
   for (let i = 0; i < ants.size(); i++) {
     const worldP = lerpVec(
@@ -41,30 +61,65 @@ export function buildAnts(
       alpha,
     );
     if (!contains(view, worldP)) continue;
-
     const p = camera.worldToScreen(worldP);
-    const dir = fromAngle(ants.heading[i]);
-    const perpX = -dir.y;
-    const perpY = dir.x;
-    const color = rgb(colonyHex(colorIndexFor(world, ants.colony[i])));
-    batch.addQuad(
-      { x: p.x + dir.x * halfLength, y: p.y + dir.y * halfLength },
-      { x: p.x - perpX * halfWidth, y: p.y - perpY * halfWidth },
-      { x: p.x - dir.x * halfLength, y: p.y - dir.y * halfLength },
-      { x: p.x + perpX * halfWidth, y: p.y + perpY * halfWidth },
-      color,
+    const frame = bodyFrame(frames, world, ants.colony[i], ants.uid[i] % 2, animated);
+    sprites.addFrame(
+      frame,
+      p.x + params.shadowOffsetX,
+      p.y + params.shadowOffsetY,
+      widthPx,
+      heightPx,
+      ants.heading[i],
+      kShadowTint,
     );
+  }
+
+  for (let i = 0; i < ants.size(); i++) {
+    const worldP = lerpVec(
+      { x: ants.prevX[i], y: ants.prevY[i] },
+      { x: ants.posX[i], y: ants.posY[i] },
+      alpha,
+    );
+    if (!contains(view, worldP)) continue;
+    const p = camera.worldToScreen(worldP);
+    const heading = ants.heading[i];
+    const dir = fromAngle(heading);
+    const variant = ants.uid[i] % 2;
+    const frame = bodyFrame(frames, world, ants.colony[i], variant, animated);
+    sprites.addFrame(frame, p.x, p.y, widthPx, heightPx, heading, kWhite);
 
     if (ants.mass[i] > params.mass) {
-      batch.addCircle(
-        {
-          x: p.x + dir.x * lengthPx * kCarriedFoodOffset,
-          y: p.y + dir.y * lengthPx * kCarriedFoodOffset,
-        },
-        Math.max(1.2, lengthPx * kCarriedFoodRadius),
-        theme.food,
-        8,
+      sprites.addFrame(
+        frames.food(FoodKind.Seeds, ants.uid[i] % 4),
+        p.x + dir.x * lengthPx * kCarriedFoodOffset,
+        p.y + dir.y * lengthPx * kCarriedFoodOffset,
+        Math.max(1, lengthPx * kCarriedFoodSize),
+        Math.max(1, lengthPx * kCarriedFoodSize),
+        heading,
+        kWhite,
       );
+    }
+
+    if (!animated) continue;
+    const phase = gait.phaseAt(i);
+    const cos = Math.cos(heading);
+    const sin = Math.sin(heading);
+    for (let leg = 0; leg < 6; leg++) {
+      const pose = legPose(phase, leg, lengthPx);
+      const hip = {
+        x: p.x + pose.hipX * cos - pose.hipY * sin,
+        y: p.y + pose.hipX * sin + pose.hipY * cos,
+      };
+      const knee = {
+        x: p.x + pose.kneeX * cos - pose.kneeY * sin,
+        y: p.y + pose.kneeX * sin + pose.kneeY * cos,
+      };
+      const foot = {
+        x: p.x + pose.footX * cos - pose.footY * sin,
+        y: p.y + pose.footX * sin + pose.footY * cos,
+      };
+      legs.addLine(hip, knee, kLegWidthPx, kLegColor);
+      legs.addLine(knee, foot, kLegWidthPx, kLegColor);
     }
   }
 }

@@ -15,7 +15,19 @@ test("options: defaults", () => {
   assert.equal(r.options.seed, 1);
   assert.equal(r.options.threads, 0);
   assert.equal(r.options.vsync, true);
+  assert.equal(r.options.zoom, 1);
   assert.equal(effectiveTicks(r.options), 0);
+});
+
+test("options: --zoom selects the run close-up", () => {
+  assert.equal(parse("--zoom", "3").options.zoom, 3);
+  assert.equal(parse("--zoom", "0.5").options.zoom, 0.5);
+  assert.equal(parseOptions([]).options.zoom, 1);
+  assert.equal(parse("--zoom", "0").error, "invalid value for --zoom: 0 (expected 0.1-16)");
+  assert.equal(parse("--zoom", "20").error, "invalid value for --zoom: 20 (expected 0.1-16)");
+  assert.equal(parse("--zoom", "abc").error, "invalid value for --zoom: abc (expected 0.1-16)");
+  assert.equal(optionsFromUrl("?zoom=2.5").options.zoom, 2.5);
+  assert.ok(usageText().includes("--zoom"));
 });
 
 test("options: headless screenshot", () => {

@@ -10,7 +10,7 @@ import { loadPreset, quickStartSetup } from "../sim/presets.js";
 import { worldFromSetup } from "../sim/setup_apply.js";
 import { stepWorld } from "../sim/world.js";
 import { AppShell, type ShellFrame, type ShellHooks, type SpeedSetting } from "../ui/shell.js";
-import type { AppOptions } from "./options.js";
+import { effectiveTicks, type AppOptions } from "./options.js";
 
 const kMaxFrameSeconds = 0.25;
 const kZoomStep = 1.15;
@@ -36,6 +36,8 @@ export function runInteractive(
     setup = quickStartSetup(options.seed);
   }
   const world = worldFromSetup(setup, defaultParams());
+  const warmup = effectiveTicks(options);
+  for (let i = 0; i < warmup; i++) stepWorld(world);
 
   const theme = themeForPreset(setup.presetId);
   const settings = defaultViewSettings();
@@ -110,6 +112,9 @@ export function runInteractive(
     }
     if (!fitted) {
       camera.fit(world.size);
+      if (options.zoom !== 1) {
+        camera.zoomAt({ x: viewportW / 2, y: viewportH / 2 }, options.zoom);
+      }
       fitted = true;
     }
 

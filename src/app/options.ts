@@ -18,6 +18,7 @@ export interface AppOptions {
   height: number;
   threads: number;
   vsync: boolean;
+  zoom: number;
 }
 
 export interface ParseResult {
@@ -28,6 +29,8 @@ export interface ParseResult {
 const kSeedMax = 4294967295;
 const kSizeMin = 16;
 const kSizeMax = 8192;
+const kZoomMin = 0.1;
+const kZoomMax = 16;
 const kFlagsInUrl = new Set(["headless", "no-vsync"]);
 
 function defaults(): AppOptions {
@@ -41,6 +44,7 @@ function defaults(): AppOptions {
     height: 1080,
     threads: 0,
     vsync: true,
+    zoom: 1,
   };
 }
 
@@ -170,6 +174,18 @@ export function parseOptions(tokens: readonly string[]): ParseResult {
         i = taken.next;
         break;
       }
+      case "--zoom": {
+        const taken = take(i, "--zoom");
+        if (taken === null) break;
+        const zoom = Number(taken.value);
+        if (!Number.isFinite(zoom) || zoom < kZoomMin || zoom > kZoomMax) {
+          error = `invalid value for --zoom: ${taken.value} (expected 0.1-16)`;
+          break;
+        }
+        options.zoom = zoom;
+        i = taken.next;
+        break;
+      }
       default:
         error = `unknown option: ${token}`;
         break;
@@ -212,6 +228,7 @@ export function usageText(): string {
     "  --size <WxH>          pixel size for headless mode (default 1920x1080)",
     "  --bench <preset>      timing table (Node CLI)",
     "  --threads <n>         worker threads, 1-64 (default: all cores)",
+    "  --zoom <n>            camera zoom on run, 0.1-16 (default 1)",
     "  --no-vsync            uncapped frame rate (debug timing)",
     "  --help, -h            show this text",
     "  --version             show the version",

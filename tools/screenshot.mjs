@@ -11,12 +11,14 @@ const kMinSize = 16;
 const kMaxSize = 8192;
 const kMaxSeed = 0xffffffff;
 const kMaxTicks = 10_000_000;
+const kMinZoom = 0.1;
+const kMaxZoom = 16;
 const kPresets = ["meadow", "dunes", "creek", "boulder", "blank"];
 
 class UsageError extends Error {}
 
 function parseArgs(argv) {
-  const args = { ticks: 30, out: "", size: kDefaultSize, seed: 1, preset: "meadow", interactive: false };
+  const args = { ticks: 30, out: "", size: kDefaultSize, seed: 1, preset: "meadow", zoom: 1, interactive: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--ticks") args.ticks = Number(argv[++i]);
@@ -24,6 +26,7 @@ function parseArgs(argv) {
     else if (arg === "--size") args.size = argv[++i] ?? "";
     else if (arg === "--seed") args.seed = Number(argv[++i]);
     else if (arg === "--preset") args.preset = argv[++i] ?? "";
+    else if (arg === "--zoom") args.zoom = Number(argv[++i]);
     else if (arg === "--interactive") args.interactive = true;
     else throw new UsageError(`unknown option: ${arg}`);
   }
@@ -43,6 +46,9 @@ function parseArgs(argv) {
   }
   if (!Number.isInteger(args.seed) || args.seed < 0 || args.seed > kMaxSeed) {
     throw new UsageError(`invalid --seed: ${args.seed} (0..${kMaxSeed})`);
+  }
+  if (!Number.isFinite(args.zoom) || args.zoom < kMinZoom || args.zoom > kMaxZoom) {
+    throw new UsageError(`invalid --zoom: ${args.zoom} (${kMinZoom}..${kMaxZoom})`);
   }
   return args;
 }
@@ -89,6 +95,7 @@ async function main() {
     query.set("size", args.size);
     query.set("seed", String(args.seed));
     query.set("preset", args.preset);
+    if (args.zoom !== 1) query.set("zoom", String(args.zoom));
     const url = `${server.url}/?${query.toString()}`;
 
     const chromeArgs = [
@@ -127,7 +134,7 @@ async function main() {
 main().catch((error) => {
   console.error(`error: ${error.message}`);
   if (error instanceof UsageError) {
-    console.error("usage: node tools/screenshot.mjs --out <file.png> [--preset <id>] [--ticks N] [--size WxH] [--seed N] [--interactive]");
+    console.error("usage: node tools/screenshot.mjs --out <file.png> [--preset <id>] [--zoom <n>] [--ticks N] [--size WxH] [--seed N] [--interactive]");
     process.exitCode = 2;
   } else {
     process.exitCode = 1;

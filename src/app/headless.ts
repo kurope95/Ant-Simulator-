@@ -33,6 +33,10 @@ export function runHeadless(
   const camera = new Camera();
   camera.setViewport(renderer.sizePx());
   camera.fit(world.size);
+  if (options.zoom !== 1) {
+    const size = renderer.sizePx();
+    camera.zoomAt({ x: size.x / 2, y: size.y / 2 }, options.zoom);
+  }
 
   const ticks = effectiveTicks(options);
   for (let i = 0; i < ticks; i++) stepWorld(world);

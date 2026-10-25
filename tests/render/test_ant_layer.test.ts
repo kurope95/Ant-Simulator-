@@ -1,80 +1,88 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-
-import { GeometryBatch } from "../../src/render/batch.js";
+import { makeAtlasFrames } from "../../src/render/atlas.js";
 import { Camera } from "../../src/render/camera.js";
 import { buildAnts } from "../../src/render/ant_layer.js";
-import { meadowTheme } from "../../src/render/theme.js";
-import { rgb } from "../../src/core/color.js";
-import { colonyHex } from "../../src/sim/palette.js";
+import { GeometryBatch } from "../../src/render/batch.js";
+import { GaitTracker } from "../../src/render/legs.js";
+import { SpriteBatch } from "../../src/render/sprite_batch.js";
 import { makeColony } from "../../src/sim/colony.js";
 import { defaultParams } from "../../src/sim/params.js";
-import { makeWorld, type World } from "../../src/sim/world.js";
+import { makeWorld } from "../../src/sim/world.js";
 
-function makeLayerWorld(): { world: World; camera: Camera } {
+function layerWorld() {
   const params = defaultParams();
   params.worldW = 400;
   params.worldH = 300;
   const world = makeWorld(params, 1);
   world.colonies.push(makeColony(0, { x: 60, y: 60 }));
-  world.ants.spawn({ pos: { x: 100, y: 100 } }, 0, world.params.antSpeed, world.params);
-  world.ants.spawn({ pos: { x: 120, y: 100 } }, 1, world.params.antSpeed, world.params);
+  world.ants.spawn({ pos: { x: 200, y: 150 } }, 0, params.antSpeed, params);
   const camera = new Camera();
   camera.setViewport({ x: 800, y: 600 });
   camera.fit(world.size);
-  return { world, camera };
+  return { world, camera, params };
 }
 
-test("ants: one body quad per visible ant in its colony colour", () => {
-  const { world, camera } = makeLayerWorld();
-  const batch = new GeometryBatch();
-  buildAnts(batch, world, camera, 0, meadowTheme());
-  assert.equal(batch.vertexCount(), 8);
-  assert.equal(batch.indexCount(), 12);
-  const color = rgb(colonyHex(0));
-  assert.ok(Math.abs(batch.vertexData()[2] - color.r / 255) < 1e-6);
+test("ants: a shadow and a body sprite plus animated legs at fit zoom", () => {
+  const { world, camera } = layerWorld();
+  const sprites = new SpriteBatch();
+  const legs = new GeometryBatch();
+  const gait = new GaitTracker();
+  gait.update(world);
+  buildAnts(sprites, legs, world, camera, 0, makeAtlasFrames(), gait);
+  assert.equal(sprites.quadCount(), 2);
+  assert.equal(legs.vertexCount(), 48);
 });
 
-test("ants: off-screen ants are culled and a zero viewport stays finite", () => {
-  const { world, camera } = makeLayerWorld();
-  for (const index of [0, 1]) {
-    world.ants.posX[index] = 2000;
-    world.ants.prevX[index] = 2000;
-    world.ants.posY[index] = 2000;
-    world.ants.prevY[index] = 2000;
-  }
-  const batch = new GeometryBatch();
-  buildAnts(batch, world, camera, 0.5, meadowTheme());
-  assert.equal(batch.indexCount(), 0);
+test("ants: a small frame with baked legs below the threshold", () => {
+  const { world, camera } = layerWorld();
+  world.params.legsMinPx = 1000;
+  const sprites = new SpriteBatch();
+  const legs = new GeometryBatch();
+  const gait = new GaitTracker();
+  gait.update(world);
+  buildAnts(sprites, legs, world, camera, 0, makeAtlasFrames(), gait);
+  assert.equal(sprites.quadCount(), 2);
+  assert.equal(legs.vertexCount(), 0);
+});
+
+test("ants: off-screen ants are culled and extreme scales stay finite", () => {
+  const { world, camera } = layerWorld();
+  world.ants.posX[0] = 2000;
+  world.ants.posY[0] = 2000;
+  world.ants.prevX[0] = 2000;
+  world.ants.prevY[0] = 2000;
+  const sprites = new SpriteBatch();
+  const legs = new GeometryBatch();
+  const gait = new GaitTracker();
+  gait.update(world);
+  buildAnts(sprites, legs, world, camera, 0.5, makeAtlasFrames(), gait);
+  assert.equal(sprites.quadCount(), 0);
   world.ants.posX[0] = 200;
   world.ants.posY[0] = 150;
   world.ants.prevX[0] = 200;
   world.ants.prevY[0] = 150;
-  world.ants.posX[1] = 2000;
-  world.ants.posY[1] = 2000;
-  const zero = new Camera();
-  zero.setViewport({ x: 0, y: 0 });
-  zero.fit(world.size);
-  buildAnts(batch, world, zero, 0.5, meadowTheme());
-  assert.ok(batch.vertexCount() > 0);
-  for (const value of batch.vertexData()) assert.ok(Number.isFinite(value));
+  camera.setViewport({ x: 0, y: 0 });
+  camera.fit(world.size);
+  buildAnts(sprites, legs, world, camera, 0.5, makeAtlasFrames(), gait);
+  for (const v of sprites.vertexData()) assert.ok(Number.isFinite(v));
+  for (const v of legs.vertexData()) assert.ok(Number.isFinite(v));
 });
 
-test("ants: alpha interpolates between prev and pos without NaN", () => {
-  const { world, camera } = makeLayerWorld();
+test("ants: body interpolation uses the alpha between prev and pos", () => {
+  const { world, camera } = layerWorld();
   world.ants.prevX[0] = 100;
   world.ants.posX[0] = 110;
   world.ants.prevY[0] = 100;
   world.ants.posY[0] = 100;
   world.ants.heading[0] = 0;
-  world.ants.posX[1] = 2000;
-  world.ants.posY[1] = 2000;
-  const batch = new GeometryBatch();
-  buildAnts(batch, world, camera, 0.5, meadowTheme());
-  const data = batch.vertexData();
-  for (const value of data) assert.ok(Number.isFinite(value));
+  const sprites = new SpriteBatch();
+  const gait = new GaitTracker();
+  gait.update(world);
+  buildAnts(sprites, new GeometryBatch(), world, camera, 0.5, makeAtlasFrames(), gait);
+  const data = sprites.vertexData();
   const expectedX = camera.worldToScreen({ x: 105, y: 100 }).x;
   let sumX = 0;
-  for (let vertex = 0; vertex < 4; vertex++) sumX += data[vertex * 6];
+  for (let v = 0; v < 4; v++) sumX += data[32 + v * 8]; // second quad = body
   assert.ok(Math.abs(sumX / 4 - expectedX) < 1e-6);
 });
