@@ -1,0 +1,130 @@
+import type { Vec2 } from "../core/vec2.js";
+import { ObstacleKind, type ObstacleCells } from "./setup.js";
+
+export const kSandSpeedFactor = 0.6;
+export const kMudSpeedFactor = 0.45;
+
+export interface ObstacleGrid {
+  cell: number;
+  width: number;
+  height: number;
+  size: Vec2;
+  kind: Uint8Array;
+  border: Uint8Array;
+}
+
+function solidKind(kind: number): boolean {
+  return kind === ObstacleKind.Rock || kind === ObstacleKind.Water;
+}
+
+function gridSize(width: number, height: number, cell: number): Vec2 {
+  return { x: width * cell, y: height * cell };
+}
+
+export function makeObstacleGrid(size: Vec2, cell: number): ObstacleGrid {
+  const scale = Number.isFinite(cell) && cell > 0 ? cell : 4;
+  const worldW = Number.isFinite(size.x) && size.x > 0 ? size.x : 1;
+  const worldH = Number.isFinite(size.y) && size.y > 0 ? size.y : 1;
+  const width = Math.max(1, Math.ceil(worldW / scale));
+  const height = Math.max(1, Math.ceil(worldH / scale));
+  return {
+    cell: scale,
+    width,
+    height,
+    size: gridSize(width, height, scale),
+    kind: new Uint8Array(width * height),
+    border: new Uint8Array(width * height),
+  };
+}
+
+export function obstacleGridFromCells(cells: ObstacleCells): ObstacleGrid {
+  const width = Math.max(1, cells.width);
+  const height = Math.max(1, cells.height);
+  const grid: ObstacleGrid = {
+    cell: cells.cell,
+    width,
+    height,
+    size: gridSize(width, height, cells.cell),
+    kind: new Uint8Array(cells.kind),
+    border: new Uint8Array(width * height),
+  };
+  rebuildBorder(grid);
+  return grid;
+}
+
+export function rebuildBorder(grid: ObstacleGrid): void {
+  const { width, height, kind, border } = grid;
+  for (let row = 0; row < height; row++) {
+    for (let col = 0; col < width; col++) {
+      const index = row * width + col;
+      if (!solidKind(kind[index])) {
+        border[index] = 0;
+        continue;
+      }
+      const openLeft = col === 0 || !solidKind(kind[index - 1]);
+      const openRight = col === width - 1 || !solidKind(kind[index + 1]);
+      const openUp = row === 0 || !solidKind(kind[index - width]);
+      const openDown = row === height - 1 || !solidKind(kind[index + width]);
+      border[index] = openLeft || openRight || openUp || openDown ? 1 : 0;
+    }
+  }
+}
+
+export function isSolidCell(grid: ObstacleGrid, col: number, row: number): boolean {
+  if (col < 0 || row < 0 || col >= grid.width || row >= grid.height) return true;
+  return solidKind(grid.kind[row * grid.width + col]);
+}
+
+export function isSolidAt(grid: ObstacleGrid, p: Vec2): boolean {
+  return isSolidCell(grid, Math.floor(p.x / grid.cell), Math.floor(p.y / grid.cell));
+}
+
+function cellKindAtPoint(grid: ObstacleGrid, p: Vec2): ObstacleKind {
+  const col = Math.floor(p.x / grid.cell);
+  const row = Math.floor(p.y / grid.cell);
+  if (col < 0 || row < 0 || col >= grid.width || row >= grid.height) return ObstacleKind.None;
+  const kind = grid.kind[row * grid.width + col];
+  return kind >= ObstacleKind.None && kind <= ObstacleKind.Mud ? kind : ObstacleKind.None;
+}
+
+export function speedFactorAt(grid: ObstacleGrid, p: Vec2): number {
+  const kind = cellKindAtPoint(grid, p);
+  if (kind === ObstacleKind.Rock || kind === ObstacleKind.Water) return 0;
+  if (kind === ObstacleKind.Sand) return kSandSpeedFactor;
+  if (kind === ObstacleKind.Mud) return kMudSpeedFactor;
+  return 1;
+}
+
+export function lineOfSight(grid: ObstacleGrid, a: Vec2, b: Vec2): boolean {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  if (dx === 0 && dy === 0) return true;
+
+  let col = Math.floor(a.x / grid.cell);
+  let row = Math.floor(a.y / grid.cell);
+  const stepX = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+  const stepY = dy > 0 ? 1 : dy < 0 ? -1 : 0;
+  const tDeltaX = stepX === 0 ? Infinity : grid.cell / Math.abs(dx);
+  const tDeltaY = stepY === 0 ? Infinity : grid.cell / Math.abs(dy);
+  let tMaxX = stepX === 0
+    ? Infinity
+    : ((stepX > 0 ? (col + 1) * grid.cell : a.x - col * grid.cell) / Math.abs(dx));
+  let tMaxY = stepY === 0
+    ? Infinity
+    : ((stepY > 0 ? (row + 1) * grid.cell : a.y - row * grid.cell) / Math.abs(dy));
+
+  while (true) {
+    let t: number;
+    if (tMaxX < tMaxY) {
+      col += stepX;
+      t = tMaxX;
+      tMaxX += tDeltaX;
+    } else {
+      row += stepY;
+      t = tMaxY;
+      tMaxY += tDeltaY;
+    }
+    if (t > 1) return true;
+    if (isSolidCell(grid, col, row)) return false;
+  }
+}
