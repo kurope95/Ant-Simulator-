@@ -7,10 +7,10 @@ export function turnToward(heading: number, target: number, maxTurn: number): nu
   return heading + clamp(angleDiff(heading, target), -maxTurn, maxTurn);
 }
 
-export function updateWander(world: World, ant: number, dt: number): void {
+export function updateWander(world: World, ant: number, dt: number): boolean {
   const ants = world.ants;
   ants.wanderTimer[ant] -= dt;
-  if (ants.wanderTimer[ant] > 0) return;
+  if (ants.wanderTimer[ant] > 0) return false;
   const explorer = ants.role[ant] === AntRole.Explorer;
   const params = world.params;
   const angle = explorer ? params.wanderAngleExplorer : params.wanderAngleFollower;
@@ -19,4 +19,5 @@ export function updateWander(world: World, ant: number, dt: number): void {
   ants.wanderOffset[ant] = randRange(world.seed, uid, world.tick, RandStream.WanderOffset, -angle, angle);
   ants.wanderTimer[ant] =
     interval * randRange(world.seed, uid, world.tick, RandStream.WanderInterval, 0.5, 1.5);
+  return true;
 }

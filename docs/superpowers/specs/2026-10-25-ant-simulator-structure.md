@@ -220,7 +220,7 @@ senseMarkers(world, ant, channel, pattern): SenseResult
 directSightHeading(world, ant): number | null
 fallbackHeading(world, ant, wanderHeading): number                     // [M2]
 turnToward(heading, target, maxTurn): number
-updateWander(world, ant, dt): void
+updateWander(world, ant, dt): boolean        // true on the tick a new offset is drawn
 
 // sim/tick.ts                                                       [M1] phase bodies used by stepWorld
 thinkChunk(world, begin, end, out: ChunkEvents): void

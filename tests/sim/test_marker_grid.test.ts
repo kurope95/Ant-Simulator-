@@ -89,6 +89,6 @@ test("markers: the decay factor matches 0.9985 per tick and is frame-rate indepe
 test("markers: emission strength falls off with time since the anchor", () => {
   const params = defaultParams();
   assert.equal(emissionStrength(0, params), 1);
-  assert.ok(Math.abs(emissionStrength(20, params) - Math.exp(-1)) < 1e-9);
+  assert.ok(Math.abs(emissionStrength(20, params) - Math.exp(-20 * params.emissionDecay)) < 1e-9);
   assert.ok(emissionStrength(200, params) < params.markerEps);
 });

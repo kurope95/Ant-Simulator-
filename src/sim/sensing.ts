@@ -55,6 +55,7 @@ export function senseMarkers(
   const colony = ants.colony[ant];
   let bestSignal = 0;
   let bestFoodSignal = 0;
+  let bestBias = Infinity;
   let bestX = 0;
   let bestY = 0;
 
@@ -68,8 +69,10 @@ export function senseMarkers(
     const food = world.markers.toFood[cell];
     if (food > bestFoodSignal) bestFoodSignal = food;
     const signal = channel === MarkerChannel.ToHome ? home : food;
-    if (signal > bestSignal) {
+    const bias = Math.abs(sample.angleOffset);
+    if (signal > 0 && (signal > bestSignal || (signal === bestSignal && bias < bestBias))) {
       bestSignal = signal;
+      bestBias = bias;
       bestX = x;
       bestY = y;
     }

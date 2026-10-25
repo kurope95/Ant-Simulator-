@@ -158,6 +158,17 @@ test("removals: dead ants are removed and populations fall", () => {
   assert.equal(world.colonies[0].population, 1);
 });
 
+test("collisions: ants stay inside the world edges", () => {
+  const { world } = makePipelineWorld();
+  const low = spawnAnt(world, { x: 1, y: 1 }, Math.PI);
+  const high = spawnAnt(world, { x: 399, y: 399 });
+  stepWorld(world);
+  assert.ok(world.ants.posX[low] >= world.params.antRadius);
+  assert.ok(world.ants.posY[low] >= world.params.antRadius);
+  assert.ok(world.ants.posX[high] <= world.size.x - world.params.antRadius);
+  assert.ok(world.ants.posY[high] <= world.size.y - world.params.antRadius);
+});
+
 test("decay: stepWorld fades markers by the per-tick factor", () => {
   const world = makeWorld(defaultParams(), 1);
   world.markers.owner[5] = 0;

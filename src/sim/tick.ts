@@ -60,8 +60,7 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
       desired = chosen.heading;
     }
 
-    updateWander(world, ant, dt);
-    desired += ants.wanderOffset[ant];
+    if (updateWander(world, ant, dt)) desired += ants.wanderOffset[ant];
 
     ants.heading[ant] = turnToward(ants.heading[ant], desired, params.turnRate * dt);
     const direction = fromAngle(ants.heading[ant]);
@@ -235,8 +234,20 @@ export function applyEvents(world: World, events: readonly ChunkEvents[]): void 
   }
 }
 
-export function removeDead(world: World): void {
+export function clampToWorld(world: World): void {
   const ants = world.ants;
+  const radius = world.params.antRadius;
+  const maxX = world.size.x - radius;
+  const maxY = world.size.y - radius;
+  for (let index = 0; index < ants.size(); index++) {
+    if (ants.posX[index] < radius) ants.posX[index] = radius;
+    else if (ants.posX[index] > maxX) ants.posX[index] = maxX;
+    if (ants.posY[index] < radius) ants.posY[index] = radius;
+    else if (ants.posY[index] > maxY) ants.posY[index] = maxY;
+  }
+}
+
+export function removeDead(world: World): void {  const ants = world.ants;
   for (let index = ants.size() - 1; index >= 0; index--) {
     if (ants.energy[index] > 0) continue;
     const colony = world.colonies[ants.colony[index]];

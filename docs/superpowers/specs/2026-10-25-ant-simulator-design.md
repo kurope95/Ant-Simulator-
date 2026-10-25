@@ -115,6 +115,7 @@ Each cell has one owner, so colonies compete for cells.
 **Emission strength.** A deposit has strength `e = exp(−time_since_anchor × EMISSION_DECAY)`.
 - The anchor is the place the ant last touched: its nest when laying `to_home`, the food source when laying `to_food`.
 - Deposits are strong near the source and weak far from it, so the trail has a gradient that points toward the source.
+- For that gradient to survive the marker decay, `EMISSION_DECAY` must exceed the decay rate `ln 2 / MARKER_HALF_LIFE ≈ 0.09/s`; at 0.05 a returning ant's single trail inverted at read time (seed 1: delivered 0, ants walked away from the nest). `0.11` keeps the gradient pointing at the source while leaving roughly a minute of a full trip's deposits above `MARKER_DETECT_MIN`. *(M1 tuning ruling; see the plan ledger.)*
 - No deposit is made when `e < MARKER_EPS`.
 
 **Who deposits what:**
@@ -454,7 +455,7 @@ Rules:
 | `WANDER_INTERVAL` (F / E) | 0.4 / 0.25 | s | |
 | `WANDER_ANGLE` (F / E) | 0.3 / 1.0 | rad | |
 | `MARKER_DROP_DIST` | 8 | u | |
-| `EMISSION_DECAY` | 0.05 | 1/s | |
+| `EMISSION_DECAY` | 0.11 | 1/s | |
 | `MARKER_HALF_LIFE` | 7.7 | s | slider |
 | `MARKER_EPS` / `MARKER_DETECT_MIN` | 1e-4 / 1e-3 | | |
 | `TERRITORY_RULE` / `FOREIGN_ERASURE_FACTOR` | on / 0.5 | | |

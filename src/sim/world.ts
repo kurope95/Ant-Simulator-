@@ -9,6 +9,7 @@ import { emptyPhaseTimings, Phase, type PhaseTimings } from "./phases.js";
 import { markerDecayFactor, type SimParams } from "./params.js";
 import {
   applyEvents,
+  clampToWorld,
   removeDead,
   resetChunkEvents,
   thinkChunk,
@@ -69,6 +70,7 @@ export function stepWorld(world: World): void {
     }
   });
   timed(Phase.Events, () => applyEvents(world, world.chunkEvents));
+  timed(Phase.Collisions, () => clampToWorld(world));
   timed(Phase.Removals, () => removeDead(world));
   timed(Phase.Decay, () =>
     decayMarkers(

@@ -48,6 +48,22 @@ test("sensing: an own-colony cell ahead is found", () => {
   assert.ok(Math.abs(result.targetHeading) < 1e-9);
 });
 
+test("sensing: a saturated field keeps the ant heading straight", () => {
+  const { world, index } = makeSenseWorld();
+  for (let y = 64; y <= 168; y += 8) {
+    for (let x = 64; x <= 168; x += 8) {
+      const cell = world.markers.cellIndex({ x, y });
+      if (cell < 0) continue;
+      world.markers.owner[cell] = 0;
+      world.markers.toFood[cell] = 0.8;
+    }
+  }
+  const result = senseMarkers(world, index, MarkerChannel.ToFood, followerPattern());
+  assert.equal(result.found, true);
+  near(result.bestSignal, 0.8);
+  assert.ok(Math.abs(result.targetHeading) < 1e-9, `heading ${result.targetHeading}`);
+});
+
 test("sensing: a foreign-owned cell is ignored", () => {
   const { world, index } = makeSenseWorld();
   const cell = world.markers.cellIndex({ x: 120, y: 100 });
