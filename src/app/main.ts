@@ -1,5 +1,6 @@
 import { buildInfo } from "../core/build_info.js";
 import { runHeadless } from "./headless.js";
+import { runInteractive } from "./interactive.js";
 import { Mode, optionsFromUrl, usageText } from "./options.js";
 
 function element<T extends HTMLElement>(id: string): T {
@@ -10,6 +11,7 @@ function element<T extends HTMLElement>(id: string): T {
 
 const canvas = element<HTMLCanvasElement>("view");
 const logElement = element<HTMLDivElement>("log");
+const uiRoot = element<HTMLDivElement>("ui");
 const lines: string[] = [];
 
 function say(line: string): void {
@@ -43,7 +45,7 @@ if (parsed.error !== "") {
       say("run the bench in Node: npm run bench -- --scenario sandbox --ticks 1200");
       break;
     case Mode.Interactive:
-      say("error: interactive mode is not implemented yet");
+      runInteractive(options, canvas, uiRoot, say);
       break;
   }
 }

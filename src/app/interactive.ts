@@ -1,0 +1,176 @@
+import { FixedStepClock } from "../core/fixed_step.js";
+import type { Vec2 } from "../core/vec2.js";
+import { GeometryBatch } from "../render/batch.js";
+import { Camera } from "../render/camera.js";
+import { GlRenderer } from "../render/gl_renderer.js";
+import { buildTestPattern } from "../render/test_pattern.js";
+import { sandTheme } from "../render/theme.js";
+import { defaultParams } from "../sim/params.js";
+import { makeWorld, stepWorld } from "../sim/world.js";
+import { DebugPanel } from "../ui/debug_panel.js";
+import type { AppOptions } from "./options.js";
+
+const kMaxFrameSeconds = 0.25;
+const kZoomStep = 1.15;
+
+export function runInteractive(
+  options: AppOptions,
+  canvas: HTMLCanvasElement,
+  uiRoot: HTMLElement,
+  log: (line: string) => void = (line) => console.log(line),
+): void {
+  const created = GlRenderer.create(canvas);
+  if ("error" in created) {
+    log(`error: ${created.error}`);
+    return;
+  }
+  const renderer = created.renderer;
+  renderer.resizeToDisplaySize();
+
+  const world = makeWorld(defaultParams(), options.seed);
+  const camera = new Camera();
+  const clock = new FixedStepClock(1 / world.params.simHz, 16);
+  const panel = new DebugPanel(uiRoot);
+  const theme = sandTheme();
+  const batch = new GeometryBatch();
+
+  let paused = false;
+  let zen = false;
+  let dragging = false;
+  let stepRequests = 0;
+  let frameMs = 1000 / 60;
+  let lastTime = performance.now();
+  let stepsThisFrame = 0;
+  let viewportW = 0;
+  let viewportH = 0;
+  let fitted = false;
+  let rafId = 0;
+
+  const dpr = (): number => window.devicePixelRatio || 1;
+
+  log("renderer: webgl2");
+  log(`display scale: ${dpr().toFixed(2)}`);
+
+  const frame = (now: number): void => {
+    rafId = requestAnimationFrame(frame);
+    const frameSeconds = Math.min(Math.max((now - lastTime) / 1000, 0), kMaxFrameSeconds);
+    lastTime = now;
+    frameMs = frameMs * 0.9 + frameSeconds * 1000 * 0.1;
+
+    renderer.resizeToDisplaySize();
+    const size = renderer.sizePx();
+    if (size.x === 0 || size.y === 0) return;
+    if (size.x !== viewportW || size.y !== viewportH) {
+      viewportW = size.x;
+      viewportH = size.y;
+      camera.setViewport(size);
+    }
+    if (!fitted) {
+      camera.fit(world.size);
+      fitted = true;
+    }
+
+    stepsThisFrame = clock.advance(frameSeconds, paused ? 0 : 1);
+    if (stepRequests > 0) {
+      stepsThisFrame += stepRequests;
+      stepRequests = 0;
+    }
+    for (let i = 0; i < stepsThisFrame; i++) stepWorld(world);
+
+    renderer.clear(theme.outside);
+    batch.clear();
+    const simSeconds = (world.tick + (paused ? 0 : clock.alpha())) / world.params.simHz;
+    buildTestPattern(batch, camera, world.size, theme, simSeconds);
+    renderer.drawBatch(batch);
+    renderer.present();
+
+    panel.setVisible(!zen);
+    panel.update({
+      fps: 1000 / Math.max(frameMs, 0.001),
+      frameMs,
+      renderer: "webgl2",
+      displayScale: dpr(),
+      widthPx: size.x,
+      heightPx: size.y,
+      tick: world.tick,
+      stepsThisFrame,
+      paused,
+      cameraScale: camera.scale(),
+      cameraCenter: camera.center(),
+      alpha: clock.alpha(),
+    });
+  };
+
+  const screenPoint = (event: MouseEvent): Vec2 => {
+    const rect = canvas.getBoundingClientRect();
+    return { x: (event.clientX - rect.left) * dpr(), y: (event.clientY - rect.top) * dpr() };
+  };
+
+  const onWheel = (event: WheelEvent): void => {
+    event.preventDefault();
+    camera.zoomAt(screenPoint(event), Math.pow(kZoomStep, -event.deltaY / 100));
+  };
+
+  const onPointerDown = (event: PointerEvent): void => {
+    if (event.button !== 1 && event.button !== 2) return;
+    event.preventDefault();
+    dragging = true;
+    canvas.setPointerCapture(event.pointerId);
+  };
+
+  const onPointerUp = (event: PointerEvent): void => {
+    if (event.button !== 1 && event.button !== 2) return;
+    dragging = false;
+  };
+
+  const onPointerMove = (event: PointerEvent): void => {
+    if (!dragging) return;
+    camera.panByScreen({ x: event.movementX * dpr(), y: event.movementY * dpr() });
+  };
+
+  const onKeyDown = (event: KeyboardEvent): void => {
+    if (event.repeat) return;
+    switch (event.code) {
+      case "KeyP":
+        paused = !paused;
+        break;
+      case "Space":
+        if (paused) stepRequests += 1;
+        event.preventDefault();
+        break;
+      case "KeyH":
+        zen = !zen;
+        break;
+      case "Home":
+        camera.fit(world.size);
+        break;
+      default:
+        break;
+    }
+  };
+
+  const onContextMenu = (event: Event): void => {
+    event.preventDefault();
+  };
+
+  const onPageHide = (): void => {
+    cancelAnimationFrame(rafId);
+    canvas.removeEventListener("wheel", onWheel);
+    canvas.removeEventListener("pointerdown", onPointerDown);
+    canvas.removeEventListener("pointerup", onPointerUp);
+    canvas.removeEventListener("pointermove", onPointerMove);
+    canvas.removeEventListener("contextmenu", onContextMenu);
+    window.removeEventListener("keydown", onKeyDown);
+    window.removeEventListener("pagehide", onPageHide);
+  };
+
+  canvas.addEventListener("wheel", onWheel, { passive: false });
+  canvas.addEventListener("pointerdown", onPointerDown);
+  canvas.addEventListener("pointerup", onPointerUp);
+  canvas.addEventListener("pointermove", onPointerMove);
+  canvas.addEventListener("contextmenu", onContextMenu);
+  window.addEventListener("keydown", onKeyDown);
+  window.addEventListener("pagehide", onPageHide);
+
+  rafId = requestAnimationFrame(frame);
+}
