@@ -210,8 +210,10 @@ export class RunHud {
 
     this.colonyPanelHost = el("aside", "hud__panel hud__panel--left");
     this.colonyPanelHost.setAttribute("aria-label", "Colonies");
+    this.colonyPanelHost.hidden = true;
     this.settingsHost = el("aside", "hud__panel hud__panel--right");
     this.settingsHost.setAttribute("aria-label", "Settings");
+    this.settingsHost.hidden = true;
 
     hud.append(bar, this.colonyPanelHost, this.settingsHost, dock);
     root.append(hud);

@@ -18,10 +18,15 @@ import { worldFromSetup } from "../sim/setup_apply.js";
 import { stepWorld, type World } from "../sim/world.js";
 import { BuilderModel, BuilderTool } from "../ui/builder_model.js";
 import { BuilderScreen, type BuilderHooks } from "../ui/builder_screen.js";
+import { ColonyPanel } from "../ui/colony_panel.js";
 import { el } from "../ui/dom.js";
+import { FinishDialog } from "../ui/finish_dialog.js";
 import { HomeScreen } from "../ui/home_screen.js";
+import { applySpecValue, paramSpecs, type ParamKey } from "../ui/param_specs.js";
+import { PauseMenu, type PauseMenuHooks } from "../ui/pause_menu.js";
 import { RunHud, type HudState, type RunHudHooks } from "../ui/run_hud.js";
-import type { SpeedSetting } from "../ui/view_models.js";
+import { SettingsDrawer, type SettingsHooks } from "../ui/settings_drawer.js";
+import { formatClock, type SpeedSetting } from "../ui/view_models.js";
 import { makeAttractWorld, seedFromNow } from "./attract.js";
 import { effectiveTicks, type AppOptions } from "./options.js";
 import {
@@ -30,6 +35,7 @@ import {
   finishRun,
   newSession,
   restartRun,
+  resumeRun,
   startRun,
   summarizeRun,
   togglePause,
@@ -48,6 +54,14 @@ function isBrushTool(tool: BuilderTool): boolean {
     tool === BuilderTool.Mud ||
     tool === BuilderTool.Erase
   );
+}
+
+function resetLiveParams(target: SimParams, defaults: SimParams): void {
+  const worldW = target.worldW;
+  const worldH = target.worldH;
+  Object.assign(target, defaults);
+  target.worldW = worldW;
+  target.worldH = worldH;
 }
 
 export class AppController {
@@ -73,6 +87,13 @@ export class AppController {
   private builderScreen: BuilderScreen | null = null;
   private builderModel: BuilderModel | null = null;
   private runHud: RunHud | null = null;
+  private pauseMenu: PauseMenu | null = null;
+  private finishDialog: FinishDialog | null = null;
+  private colonyPanel: ColonyPanel | null = null;
+  private settingsDrawer: SettingsDrawer | null = null;
+  private coloniesOpen = false;
+  private settingsOpen = false;
+  private finishOpen = false;
   private brushRing: HTMLElement | null = null;
   private attractWorld: World | null = null;
   private previewPresetId = "";
@@ -129,9 +150,23 @@ export class AppController {
     });
     this.runHud = new RunHud(this.uiRoot, this.params, this.hudHooks());
     this.runHud.root.hidden = true;
+    this.colonyPanel = new ColonyPanel(this.runHud.colonyPanelHost, (id) => {
+      this.focusColony(id);
+    });
+    this.settingsDrawer = new SettingsDrawer(
+      this.runHud.settingsHost,
+      this.params,
+      this.settingsHooks(),
+    );
+    this.settingsDrawer.sync(this.view);
     this.brushRing = el("div", "brush-ring");
     this.brushRing.hidden = true;
     this.uiRoot.append(this.brushRing);
+    this.pauseMenu = new PauseMenu(this.uiRoot, this.pauseHooks());
+    this.finishDialog = new FinishDialog(this.uiRoot, {
+      onKeepWatching: () => this.keepWatching(),
+      onFinish: () => this.finishCurrentRun(),
+    });
 
     this.startScreen();
   }
@@ -205,6 +240,7 @@ export class AppController {
   }
 
   private showHome(world: World, theme: Theme): void {
+    this.closeOverlays();
     this.session = { ...this.session, screen: Screen.Home, zen: false };
     this.activeWorld = world;
     this.activeTheme = theme;
@@ -216,6 +252,7 @@ export class AppController {
   }
 
   private showBuilder(model: BuilderModel): void {
+    this.closeOverlays();
     if (this.builderScreen !== null && this.builderModel !== model) {
       this.builderScreen.root.remove();
       this.builderScreen = null;
@@ -243,6 +280,7 @@ export class AppController {
   }
 
   private showRun(world: World, session: SessionState, resetZoom = false): void {
+    this.closeOverlays();
     this.runWorld = world;
     this.session = session;
     this.activeWorld = world;
@@ -266,6 +304,16 @@ export class AppController {
     this.builderScreen?.root.classList.toggle("screen--active", screen === Screen.Builder);
     if (this.runHud !== null) this.runHud.root.hidden = screen !== Screen.Run;
     if (this.brushRing !== null) this.brushRing.hidden = true;
+  }
+
+  private closeOverlays(): void {
+    this.coloniesOpen = false;
+    this.settingsOpen = false;
+    this.colonyPanel?.setOpen(false);
+    this.settingsDrawer?.setOpen(false);
+    this.pauseMenu?.close();
+    this.finishOpen = false;
+    this.finishDialog?.close();
   }
 
   private requestFit(): void {
@@ -292,6 +340,10 @@ export class AppController {
     this.needsFit = false;
   }
 
+  private presetName(): string {
+    return presetInfo(this.setup.presetId)?.name ?? this.setup.presetId;
+  }
+
   private hudHooks(): RunHudHooks {
     return {
       onPause: () => {
@@ -304,35 +356,142 @@ export class AppController {
         this.session = { ...this.session, speed: value };
       },
       onReset: () => {
-        if (this.runWorld === null) return;
-        const world = worldFromSetup(this.setup, this.params);
-        this.session = restartRun(this.session);
-        this.zoomApplied = true;
-        this.showRun(world, this.session);
+        this.restartCurrent();
       },
       onEdit: () => {
-        if (this.runWorld === null) return;
-        this.session = editRun(this.session);
-        this.showBuilder(new BuilderModel(cloneSetup(this.setup)));
+        this.editCurrent();
       },
       onFinish: () => {
-        if (this.runWorld === null) return;
-        const finished = this.runWorld;
-        const summary = summarizeRun(finished, this.setup);
-        this.session = finishRun(this.session, summary);
-        this.runWorld = null;
-        this.showHome(finished, this.runTheme);
+        this.requestFinish();
       },
       onColonies: () => {
-        this.log("colonies: the panel arrives with the next task");
+        this.coloniesOpen = !this.coloniesOpen;
+        this.settingsOpen = false;
+        this.colonyPanel?.setOpen(this.coloniesOpen);
+        this.settingsDrawer?.setOpen(false);
       },
       onSettings: () => {
-        this.log("settings: the drawer arrives with the next task");
+        this.settingsOpen = !this.settingsOpen;
+        this.coloniesOpen = false;
+        this.settingsDrawer?.setOpen(this.settingsOpen);
+        this.colonyPanel?.setOpen(false);
       },
       onFit: () => {
         this.requestFit();
       },
     };
+  }
+
+  private pauseHooks(): PauseMenuHooks {
+    return {
+      onResume: () => {
+        this.resume();
+      },
+      onRestart: () => {
+        this.restartCurrent();
+      },
+      onEdit: () => {
+        this.editCurrent();
+      },
+      onFinish: () => {
+        this.requestFinish();
+      },
+    };
+  }
+
+  private settingsHooks(): SettingsHooks {
+    return {
+      onHeatmap: (mode) => {
+        this.view.heatmap = mode;
+      },
+      onAnts: () => {
+        this.view.showAnts = !this.view.showAnts;
+      },
+      onGrid: () => {
+        this.view.showGrid = !this.view.showGrid;
+        this.runShowGrid = this.view.showGrid;
+      },
+      onParam: (key, value) => {
+        this.applyParam(key, value);
+      },
+      onResetParams: () => {
+        this.resetParams();
+      },
+      onFit: () => {
+        this.requestFit();
+      },
+    };
+  }
+
+  private resume(): void {
+    this.finishOpen = false;
+    this.finishDialog?.close();
+    this.pauseMenu?.close();
+    this.session = resumeRun(this.session);
+  }
+
+  private keepWatching(): void {
+    this.resume();
+  }
+
+  private restartCurrent(): void {
+    if (this.runWorld === null) return;
+    this.closeOverlays();
+    const world = worldFromSetup(this.setup, this.params);
+    this.session = restartRun({ ...this.session, screen: Screen.Run });
+    this.zoomApplied = true;
+    this.showRun(world, this.session);
+  }
+
+  private editCurrent(): void {
+    if (this.runWorld === null) return;
+    this.closeOverlays();
+    this.session = editRun(this.session);
+    this.showBuilder(new BuilderModel(cloneSetup(this.setup)));
+  }
+
+  private requestFinish(): void {
+    if (this.runWorld === null || this.finishDialog === null) return;
+    this.finishOpen = true;
+    this.coloniesOpen = false;
+    this.settingsOpen = false;
+    this.colonyPanel?.setOpen(false);
+    this.settingsDrawer?.setOpen(false);
+    this.pauseMenu?.close();
+    this.session = { ...this.session, paused: true };
+    this.finishDialog.open(summarizeRun(this.runWorld, this.setup));
+  }
+
+  private finishCurrentRun(): void {
+    const finished = this.runWorld;
+    if (finished === null) return;
+    const summary = summarizeRun(finished, this.setup);
+    this.finishOpen = false;
+    this.finishDialog?.close();
+    this.session = finishRun(this.session, summary);
+    this.runWorld = null;
+    this.showHome(finished, this.runTheme);
+  }
+
+  private focusColony(id: number): void {
+    const colony = this.runWorld?.colonies.find((candidate) => candidate.id === id);
+    if (colony === undefined) return;
+    this.camera.centerOn(colony.nest);
+  }
+
+  private applyParam(key: ParamKey, value: number): void {
+    const spec = paramSpecs().find((candidate) => candidate.key === key);
+    if (spec === undefined) return;
+    applySpecValue(spec, this.params, value);
+    if (this.runWorld !== null) applySpecValue(spec, this.runWorld.params, value);
+    this.settingsDrawer?.update(this.view);
+  }
+
+  private resetParams(): void {
+    const defaults = defaultParams();
+    resetLiveParams(this.params, defaults);
+    if (this.runWorld !== null) resetLiveParams(this.runWorld.params, defaults);
+    this.settingsDrawer?.update(this.view);
   }
 
   private builderHooks(): BuilderHooks {
@@ -480,15 +639,15 @@ export class AppController {
     drawWorld(renderer, cache, world, this.camera, this.view, this.activeTheme, alpha);
     this.updateBrushRing();
     renderer.present();
+    this.updateOverlays();
 
     if (
       this.session.screen === Screen.Run &&
       this.runWorld !== null &&
       this.runHud !== null
     ) {
-      const presetName = presetInfo(this.setup.presetId)?.name ?? this.setup.presetId;
       const state: HudState = {
-        presetName,
+        presetName: this.presetName(),
         seed: this.setup.seed,
         paused: this.session.paused,
         speed: this.session.speed,
@@ -496,12 +655,50 @@ export class AppController {
         showAnts: this.view.showAnts,
         showGrid: this.view.showGrid,
         zen: this.session.zen,
-        coloniesOpen: false,
-        settingsOpen: false,
+        coloniesOpen: this.coloniesOpen,
+        settingsOpen: this.settingsOpen,
       };
       this.runHud.update(this.runWorld, 1000 / Math.max(this.frameMs, 0.001), state);
     }
   };
+
+  private updateOverlays(): void {
+    const running = this.session.screen === Screen.Run && this.runWorld !== null;
+    if (!running) {
+      if (this.coloniesOpen || this.settingsOpen) {
+        this.coloniesOpen = false;
+        this.settingsOpen = false;
+        this.colonyPanel?.setOpen(false);
+        this.settingsDrawer?.setOpen(false);
+      }
+      this.pauseMenu?.close();
+      if (this.finishOpen) {
+        this.finishOpen = false;
+        this.finishDialog?.close();
+      }
+      return;
+    }
+
+    if (this.session.zen) {
+      this.coloniesOpen = false;
+      this.settingsOpen = false;
+    }
+    this.colonyPanel?.setOpen(this.coloniesOpen);
+    this.settingsDrawer?.setOpen(this.settingsOpen);
+    if (this.coloniesOpen && this.runWorld !== null) this.colonyPanel?.update(this.runWorld);
+    if (this.settingsOpen) this.settingsDrawer?.sync(this.view);
+
+    const wantPause = this.session.paused && !this.finishOpen;
+    if (wantPause && this.runWorld !== null) {
+      this.pauseMenu?.setContext(
+        this.presetName(),
+        formatClock(this.runWorld.tick, this.runWorld.params.simHz),
+      );
+      if (this.pauseMenu !== null && !this.pauseMenu.isOpen()) this.pauseMenu.open();
+    } else if (this.pauseMenu?.isOpen() === true) {
+      this.pauseMenu.close();
+    }
+  }
 
   private updateBrushRing(): void {
     const ring = this.brushRing;
@@ -646,6 +843,21 @@ export class AppController {
     }
     const screen = this.session.screen;
 
+    if (
+      screen === Screen.Run &&
+      (this.finishDialog?.isOpen() === true || this.pauseMenu?.isOpen() === true)
+    ) {
+      if (event.code === "Escape" || event.code === "KeyP") {
+        event.preventDefault();
+        if (this.finishDialog?.isOpen() === true) {
+          this.keepWatching();
+        } else {
+          this.resume();
+        }
+      }
+      return;
+    }
+
     if (screen === Screen.Builder) {
       if (this.builderKey(event)) event.preventDefault();
       return;
@@ -664,7 +876,12 @@ export class AppController {
         this.session = { ...this.session, zen: !this.session.zen };
         break;
       case "Escape":
-        if (this.session.zen) this.session = { ...this.session, zen: false };
+        if (this.session.zen) {
+          this.session = { ...this.session, zen: false };
+        } else {
+          this.session = togglePause(this.session);
+        }
+        event.preventDefault();
         break;
       case "KeyM":
         this.view.heatmap = cycleHeatmap(this.view.heatmap);
