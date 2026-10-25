@@ -30,6 +30,10 @@ export interface SimParams {
   markerDetectMin: number;
   territoryRule: boolean;
   foreignErasureFactor: number;
+  // An owner keeps a cell until a rival is this many times its strength (M1.7).
+  flipMargin: number;
+  // How much rival scent takes off an ant's own signal on a cell; 0 ignores rivals (M1.7).
+  foreignAversion: number;
   stuckTimeout: number;
   stuckTurnJitter: number;
   degradeTime: number;
@@ -99,6 +103,8 @@ export function defaultParams(): SimParams {
     markerDetectMin: 1e-3,
     territoryRule: true,
     foreignErasureFactor: 0.5,
+    flipMargin: 1.25,
+    foreignAversion: 0.35,
     stuckTimeout: 2.5,
     stuckTurnJitter: 0.6,
     degradeTime: 3.0,

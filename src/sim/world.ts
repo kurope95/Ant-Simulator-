@@ -119,6 +119,7 @@ export function stepWorld(world: World): void {
       world.markers,
       markerDecayFactor(world.params, 1 / world.params.simHz),
       world.params.markerEps,
+      world.params.flipMargin,
     ),
   );
   timed(Phase.Stats, () => updateStats(world));

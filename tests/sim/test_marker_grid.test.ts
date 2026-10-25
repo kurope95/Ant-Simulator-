@@ -78,7 +78,7 @@ test("markers: decay scales both channels and resets empty owners", () => {
   deposit(grid, 0, 0, MarkerChannel.ToHome, 0.5, params);
   deposit(grid, 0, 0, MarkerChannel.ToFood, 0.25, params);
   deposit(grid, 1, 2, MarkerChannel.ToFood, 1e-5, params);
-  decayMarkers(grid, 0.5, 1e-4);
+  decayMarkers(grid, 0.5, 1e-4, 1.25);
   assert.ok(Math.abs(grid.toHome[0] - 0.25) < 1e-6);
   assert.ok(Math.abs(grid.toFood[0] - 0.125) < 1e-6);
   assert.equal(grid.owner[0], 0);
@@ -92,7 +92,7 @@ test("markers: owner is the stronger colony after decay", () => {
   grid.toHome[0] = 0.4;
   grid.toFood[cells] = 0.9;
   grid.toFood[1] = 0.7;
-  decayMarkers(grid, 0.5, 1e-4);
+  decayMarkers(grid, 0.5, 1e-4, 1.25);
   assert.equal(grid.owner[0], 1);
   assert.equal(grid.owner[1], 0);
   near(grid.toHome[0], 0.2);
@@ -146,10 +146,37 @@ test("trails: an exhausted food's trail fades below markerDetectMin within 150 s
   deposit(grid, cell, 0, MarkerChannel.ToFood, 1, params);
   const factor = markerDecayFactor(params, 1 / params.simHz);
   for (let tick = 0; tick < 150 * params.simHz; tick++) {
-    decayMarkers(grid, factor, params.markerDetectMin);
+    decayMarkers(grid, factor, params.markerDetectMin, params.flipMargin);
   }
   const left = foodAt(grid, 0, cell);
   assert.ok(left < params.markerDetectMin, `trail still ${left} after 150 s`);
+});
+
+test("owner: a rival's traffic flips a cell once it is clearly stronger", () => {
+  const params = defaultParams();
+  const grid = makeMarkerGrid({ x: 16, y: 8 }, 8, 2);
+  deposit(grid, 0, 0, MarkerChannel.ToFood, 1, params);
+  decayMarkers(grid, 1, 1e-4, params.flipMargin);
+  assert.equal(grid.owner[0], 0);
+  // Each 0.8 deposit wears colony 0's food to 60% of what it was: 1 → 0.6 → 0.36 → 0.216.
+  for (let i = 0; i < 3; i++) deposit(grid, 0, 1, MarkerChannel.ToFood, 0.8, params);
+  near(foodAt(grid, 0, 0), 0.216);
+  near(foodAt(grid, 1, 0), 0.8);
+  decayMarkers(grid, 1, 1e-4, params.flipMargin);
+  assert.equal(grid.owner[0], 1);
+});
+
+test("owner: hysteresis keeps the owner until a rival is 25% stronger", () => {
+  const grid = makeMarkerGrid({ x: 16, y: 8 }, 8, 2);
+  const cells = grid.width * grid.height;
+  grid.owner[0] = 0;
+  grid.toFood[0] = 0.6;
+  grid.toFood[cells] = 0.7;
+  decayMarkers(grid, 1, 1e-4, 1.25);
+  assert.equal(grid.owner[0], 0);
+  grid.toFood[cells] = 0.8;
+  decayMarkers(grid, 1, 1e-4, 1.25);
+  assert.equal(grid.owner[0], 1);
 });
 
 test("markers: emission strength falls off with time since the anchor", () => {

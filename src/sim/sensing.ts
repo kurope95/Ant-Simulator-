@@ -75,6 +75,19 @@ export interface SenseResult {
   bestFoodSignal: number;
 }
 
+// The strongest scent any rival colony has on this cell, by its larger channel.
+function rivalStrength(grid: MarkerGrid, colony: number, cell: number): number {
+  const cells = grid.width * grid.height;
+  let strongest = 0;
+  for (let other = 0; other < grid.colonies; other++) {
+    if (other === colony) continue;
+    const index = other * cells + cell;
+    const strength = Math.max(grid.toHome[index], grid.toFood[index]);
+    if (strength > strongest) strongest = strength;
+  }
+  return strongest;
+}
+
 export function senseMarkers(
   world: World,
   ant: number,
@@ -96,6 +109,9 @@ export function senseMarkers(
   let bestSignal = 0;
   let bestFoodSignal = 0;
   let bestBias = Infinity;
+  // Foreign scent repels: a rival's strength on a sampled cell comes off the ant's own signal there.
+  const aversion = world.params.foreignAversion;
+  const contested = aversion > 0 && grid.colonies > 1;
   let bestX = 0;
   let bestY = 0;
 
@@ -112,7 +128,9 @@ export function senseMarkers(
     const home = grid.toHome[index];
     const food = grid.toFood[index];
     if (food > bestFoodSignal) bestFoodSignal = food;
-    const signal = channel === MarkerChannel.ToHome ? home : food;
+    const own = channel === MarkerChannel.ToHome ? home : food;
+    // The signal is the score: a cell only counts as found while the own scent beats the rival's.
+    const signal = contested ? own - aversion * rivalStrength(grid, colony, cell) : own;
     const bias = Math.abs(sample.angleOffset);
     if (signal > 0 && (signal > bestSignal || (signal === bestSignal && bias < bestBias))) {
       bestSignal = signal;
