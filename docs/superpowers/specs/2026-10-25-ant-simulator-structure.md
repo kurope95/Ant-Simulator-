@@ -212,14 +212,19 @@ class Ants {   // SoA; every field is an array-like of the same length
 // sim/marker_grid.ts
 enum MarkerChannel { ToHome, ToFood }
 interface MarkerGrid { width: number; height: number; cell: number;
-                       owner: Int8Array; toHome: Float32Array; toFood: Float32Array;
-                       resize(worldSize: Vec2, cellSize: number): void;
+                       colonies: number;                           // layers, >= 1
+                       owner: Int8Array;                           // derived by decayMarkers, drawing only
+                       toHome: Float32Array;                       // colonies * cells, index = colony * cells + cell
+                       toFood: Float32Array;
+                       resize(worldSize: Vec2, cellSize: number, colonies?: number): void;
                        cellIndex(pos: Vec2): number }              // -1 outside the world
-makeMarkerGrid(worldSize, cellSize): MarkerGrid
+makeMarkerGrid(worldSize, cellSize, colonies?): MarkerGrid
+homeAt(grid, colony, cell): number         // 0 for a cell or colony out of range
+foodAt(grid, colony, cell): number
 emissionStrength(timeSinceAnchor, params): number
 deposit(grid, cell, colony, channel, strength, params): void
-degrade(grid, cell, colony, channel, factor): void
-decayMarkers(grid, factor, eps): void
+degrade(grid, cell, colony, channel, factor): void     // the depositor's own layer only
+decayMarkers(grid, factor, eps): void                  // all layers, then recompute owner
 
 // sim/food.ts
 interface FoodAmount { pos: Vec2; amount: number; infinite: boolean }

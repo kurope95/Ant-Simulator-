@@ -21,17 +21,16 @@ export function fillHeatmapRgba(
   const cells = grid.width * grid.height;
   for (let cell = 0; cell < cells; cell++) {
     const offset = cell * 4;
-    const owner = grid.owner[cell];
-    if (owner === kNoOwner) {
-      rgbaOut[offset] = 0;
-      rgbaOut[offset + 1] = 0;
-      rgbaOut[offset + 2] = 0;
-      rgbaOut[offset + 3] = 0;
-      continue;
-    }
-    const home = grid.toHome[cell];
-    const food = grid.toFood[cell];
     if (mode === HeatmapMode.DualChannel) {
+      // Both channels sum every colony's layer, so contested ground is the
+      // brightest, whichever colony laid the trail.
+      let home = 0;
+      let food = 0;
+      for (let colony = 0; colony < grid.colonies; colony++) {
+        const index = colony * cells + cell;
+        home += grid.toHome[index];
+        food += grid.toFood[index];
+      }
       rgbaOut[offset] = Math.round(Math.min(255, theme.heatHome.r * home + theme.heatFood.r * food));
       rgbaOut[offset + 1] = Math.round(
         Math.min(255, theme.heatHome.g * home + theme.heatFood.g * food),
@@ -42,6 +41,17 @@ export function fillHeatmapRgba(
       rgbaOut[offset + 3] = Math.round(255 * Math.min(home + food, 1) * theme.heatAlpha);
       continue;
     }
+    const owner = grid.owner[cell];
+    if (owner === kNoOwner || owner >= grid.colonies) {
+      rgbaOut[offset] = 0;
+      rgbaOut[offset + 1] = 0;
+      rgbaOut[offset + 2] = 0;
+      rgbaOut[offset + 3] = 0;
+      continue;
+    }
+    const index = owner * cells + cell;
+    const home = grid.toHome[index];
+    const food = grid.toFood[index];
     const hex = colonyHex(owner);
     const strength = Math.min(Math.max(home, food), 1);
     rgbaOut[offset] = (hex >> 16) & 0xff;

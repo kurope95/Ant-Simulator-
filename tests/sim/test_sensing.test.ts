@@ -62,7 +62,6 @@ test("sensing: the patterns follow the sensor params", () => {
 test("sensing: a narrowed cone stops sensing a far marker", () => {
   const { world, index } = makeSenseWorld();
   const cell = world.markers.cellIndex({ x: 120, y: 100 });
-  world.markers.owner[cell] = 0;
   world.markers.toFood[cell] = 0.8;
   world.params.sensorRadius = 10;
   world.params.sensorHalfFovDeg = 20;
@@ -77,7 +76,6 @@ test("sensing: a narrowed cone stops sensing a far marker", () => {
 test("sensing: an own-colony cell ahead is found", () => {
   const { world, index } = makeSenseWorld();
   const cell = world.markers.cellIndex({ x: 120, y: 100 });
-  world.markers.owner[cell] = 0;
   world.markers.toFood[cell] = 0.8;
   const result = senseMarkers(world, index, MarkerChannel.ToFood, followerPattern(world.params));
   assert.equal(result.found, true);
@@ -89,7 +87,6 @@ test("sensing: an own-colony cell ahead is found", () => {
 test("sensing: a solid halfway point blocks the sample", () => {
   const { world, index } = makeSenseWorld();
   const cell = world.markers.cellIndex({ x: 132, y: 100 });
-  world.markers.owner[cell] = 0;
   world.markers.toFood[cell] = 0.8;
   const pattern = [{ angleOffset: 0, distance: 32 }];
   const open = senseMarkers(world, index, MarkerChannel.ToFood, pattern);
@@ -111,7 +108,6 @@ test("sensing: a saturated field keeps the ant heading straight", () => {
     for (let x = 64; x <= 168; x += 8) {
       const cell = world.markers.cellIndex({ x, y });
       if (cell < 0) continue;
-      world.markers.owner[cell] = 0;
       world.markers.toFood[cell] = 0.8;
     }
   }
@@ -121,11 +117,12 @@ test("sensing: a saturated field keeps the ant heading straight", () => {
   assert.ok(Math.abs(result.targetHeading) < 1e-9, `heading ${result.targetHeading}`);
 });
 
-test("sensing: a foreign-owned cell is ignored", () => {
+test("sensing: a foreign colony's layer is invisible", () => {
   const { world, index } = makeSenseWorld();
+  world.markers.resize(world.size, world.markers.cell, 2);
+  const cells = world.markers.width * world.markers.height;
   const cell = world.markers.cellIndex({ x: 120, y: 100 });
-  world.markers.owner[cell] = 1;
-  world.markers.toFood[cell] = 0.9;
+  world.markers.toFood[cells + cell] = 0.9;
   const result = senseMarkers(world, index, MarkerChannel.ToFood, followerPattern(world.params));
   assert.equal(result.found, false);
   assert.equal(result.bestSignal, 0);
@@ -135,7 +132,6 @@ test("sensing: a foreign-owned cell is ignored", () => {
 test("sensing: the food signal is reported even while following home", () => {
   const { world, index } = makeSenseWorld();
   const cell = world.markers.cellIndex({ x: 120, y: 100 });
-  world.markers.owner[cell] = 0;
   world.markers.toHome[cell] = 0.2;
   world.markers.toFood[cell] = 0.7;
   const result = senseMarkers(world, index, MarkerChannel.ToHome, followerPattern(world.params));

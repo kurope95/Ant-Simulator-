@@ -95,21 +95,23 @@ What follows from this:
 
 | Grid | Cell size | Contents |
 |---|---|---|
-| Marker grid | 8 u | owner colony, `to_home`, `to_food` |
+| Marker grid | 8 u | a `to_home` and a `to_food` layer per colony, derived owner |
 | Obstacle grid | 4 u | `solid` flag, `border` flag |
 | Spatial hash | 6 u | ant indices, rebuilt every tick |
 
 All three grids share the same world origin. The obstacle grid is finer than the marker grid so painted walls look less blocky *(Claude's call)*.
 
 ### 4.2 Marker grid (one grid shared by all colonies)
-Each cell stores three fields, as three separate arrays:
-- `int8 owner` (−1 means no owner),
-- `float to_home` (0–1),
-- `float to_food` (0–1).
 
-Each cell has one owner, so colonies compete for cells.
+Every colony has its own pair of trail layers, so a cell stores, for each colony `k`:
+- `float to_home[k]` (0–1),
+- `float to_food[k]` (0–1).
 
-**Decay (every tick).** Multiply both channels by `f = 2^(−dt / MARKER_HALF_LIFE)`. Values below `MARKER_EPS` become 0, and when both channels are 0 the owner resets to −1.
+The layers are colony-major: `index = k × cells + cell`. A derived `int8 owner` array records the colony with the strongest signal in each cell (−1 when every layer is empty); it exists for drawing only — sensing, deposit and degrade all address a colony's own layer.
+
+Two colonies' trails therefore coexist in one cell *(M2: with a single-owner cell, the first colony to touch a cell locked every rival out of it, and the contest preset's second colony delivered nothing)*.
+
+**Decay (every tick).** Multiply both channels of every layer by `f = 2^(−dt / MARKER_HALF_LIFE)`. Values below `MARKER_EPS` become 0. After decaying, `owner` is recomputed as the argmax over colonies of `max(to_home, to_food)`, or −1 when every layer is 0.
 - The default half-life is 20 s, raised from 7.7 s in the M2 retune so a carrier's trail survives a long trip. 7.7 s matched the original "×0.9985 per tick" at 60 Hz, but stays the same at any frame rate. *(Fix: the original per-tick factor made trails fade twice as fast at 120 FPS.)*
 
 **Emission strength.** A deposit has strength `e = exp(−time_since_anchor × EMISSION_DECAY)`.
@@ -133,15 +135,12 @@ Each cell has one owner, so colonies compete for cells.
 Exhausted ants still move their drop point, because stuck detection (§5.5) relies on it.
 
 **Deposit rule** for cell `c` and an ant of colony `k`:
-1. If `c.owner == k` or `c.owner == −1`: set `c.owner = k` and `c.channel = max(c.channel, e)`.
-2. Otherwise, if the territory rule is on (`TERRITORY_RULE`, the default):
-   - subtract `e × FOREIGN_ERASURE_FACTOR` from both channels, clamping at 0;
-   - if both reach 0, set `c.owner = k` and immediately apply rule 1 *(Claude's call)*.
-3. Otherwise (the territory rule is off): leave the cell alone.
+1. Write the depositing colony's own layer: `to_home[k][c] = max(to_home[k][c], e)` (or `to_food[k][c]`). A rival's trail never blocks the deposit.
+2. If the territory rule is on (`TERRITORY_RULE`, the default), multiply every *other* colony's `to_home` and `to_food` at `c` by `1 − e × FOREIGN_ERASURE_FACTOR`. Territory wears rival trails down; it never locks them out.
 
-This rule is implemented in `src/sim/marker_grid.ts` (`deposit`) and applies from M1.5. Until then, `deposit` ignores foreign cells; the presentation-overhaul plan closes that gap.
+This rule is implemented in `src/sim/marker_grid.ts` (`deposit`). The single-owner rule of M1.5 was replaced in M2 (§15).
 
-**Erasing dead-end trails.** While an ant's `degrade_timer > 0`, each time it enters a new marker cell owned by its own colony, it multiplies the channel it is *following* by `DEGRADE_FACTOR` (0.5). It follows `to_food` while FORAGING and `to_home` otherwise.
+**Erasing dead-end trails.** While an ant's `degrade_timer > 0`, each time it enters a new marker cell whose own layer still holds the channel it is following, it multiplies *that channel of its own layer* by `DEGRADE_FACTOR` (0.5). It follows `to_food` while FORAGING and `to_home` otherwise. Rival layers are never erased this way.
 
 All writes to the marker grid happen in the serial event phase (§5.2), in a fixed order.
 
@@ -469,7 +468,7 @@ Rules:
 | `EMISSION_DECAY` | 0.11 | 1/s | slider "Trail fade with distance", range 0.005–0.2 |
 | `MARKER_HALF_LIFE` | 20 | s | slider |
 | `MARKER_EPS` / `MARKER_DETECT_MIN` | 1e-4 / 1e-3 | | |
-| `TERRITORY_RULE` / `FOREIGN_ERASURE_FACTOR` | on / 0.5 | | |
+| `TERRITORY_RULE` / `FOREIGN_ERASURE_FACTOR` | on / 0.5 | | rival layers × `1 − e × factor` per foreign deposit (§4.2) |
 | `STUCK_TIMEOUT` / `DEGRADE_TIME` / `DEGRADE_FACTOR` | 2.5 / 3.0 / 0.5 | s / s / – | |
 | `CROWD_LIMIT` | 4 | ants | within 3 × `ANT_RADIUS` |
 | `STUCK_TURN_JITTER` / `CROWD_RADIUS_FACTOR` / `ZONE_MARGIN` | 0.6 / 3 / 16 | rad / × `ANT_RADIUS` / u | the ±0.6 turn, the "3 ×" crowd radius and the nest/food zone margin from §5.5 |

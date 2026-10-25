@@ -38,10 +38,11 @@ export function worldChecksum(world: World): number {
   }
 
   const markers = world.markers;
-  for (let cell = 0; cell < markers.owner.length; cell++) {
-    foldInt(markers.owner[cell]);
-    foldFloat(markers.toHome[cell]);
-    foldFloat(markers.toFood[cell]);
+  foldInt(markers.colonies);
+  for (let cell = 0; cell < markers.owner.length; cell++) foldInt(markers.owner[cell]);
+  for (let i = 0; i < markers.toHome.length; i++) {
+    foldFloat(markers.toHome[i]);
+    foldFloat(markers.toFood[i]);
   }
 
   const obstacles = world.obstacles;

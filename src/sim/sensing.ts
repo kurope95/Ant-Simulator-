@@ -1,6 +1,6 @@
 import { angleDiff } from "../core/math.js";
 import { angleOf, fromAngle } from "../core/vec2.js";
-import { MarkerChannel } from "./marker_grid.js";
+import { MarkerChannel, type MarkerGrid } from "./marker_grid.js";
 import { isSolidAt, freeDistance, freeDistanceDir, lineOfSight } from "./obstacles.js";
 import type { SimParams } from "./params.js";
 import { AntState } from "./types.js";
@@ -85,7 +85,14 @@ export function senseMarkers(
   const posX = ants.posX[ant];
   const posY = ants.posY[ant];
   const heading = ants.heading[ant];
+  const grid: MarkerGrid = world.markers;
   const colony = ants.colony[ant];
+  // The grid holds one layer per colony, so this is homeAt/foodAt inlined into
+  // the per-sample loop: 25 samples per ant per tick makes the calls show.
+  if (colony < 0 || colony >= grid.colonies) {
+    return { found: false, targetHeading: 0, bestSignal: 0, bestFoodSignal: 0 };
+  }
+  const layer = colony * grid.width * grid.height;
   let bestSignal = 0;
   let bestFoodSignal = 0;
   let bestBias = Infinity;
@@ -99,10 +106,11 @@ export function senseMarkers(
     if (isSolidAt(world.obstacles, { x, y })) continue;
     // Cheap line of sight: a wall at the halfway point blocks the sample too.
     if (isSolidAt(world.obstacles, { x: (posX + x) * 0.5, y: (posY + y) * 0.5 })) continue;
-    const cell = world.markers.cellIndex({ x, y });
-    if (cell < 0 || world.markers.owner[cell] !== colony) continue;
-    const home = world.markers.toHome[cell];
-    const food = world.markers.toFood[cell];
+    const cell = grid.cellIndex({ x, y });
+    if (cell < 0) continue;
+    const index = layer + cell;
+    const home = grid.toHome[index];
+    const food = grid.toFood[index];
     if (food > bestFoodSignal) bestFoodSignal = food;
     const signal = channel === MarkerChannel.ToHome ? home : food;
     const bias = Math.abs(sample.angleOffset);

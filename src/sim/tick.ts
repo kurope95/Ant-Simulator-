@@ -4,7 +4,7 @@ import { fromAngle } from "../core/vec2.js";
 import { slideHeadingAlongNormal } from "./collide.js";
 import { nestRadius, type Colony } from "./colony.js";
 import { ContactKind, makeChunkEvents, type ChunkEvents } from "./events.js";
-import { degrade, deposit, emissionStrength, MarkerChannel } from "./marker_grid.js";
+import { degrade, deposit, emissionStrength, foodAt, homeAt, MarkerChannel } from "./marker_grid.js";
 import { isSolidAt, speedFactorAt, freeDistance } from "./obstacles.js";
 import {
   chooseFallback,
@@ -206,12 +206,16 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
       const cell = world.markers.cellIndex({ x: ants.posX[ant], y: ants.posY[ant] });
       if (cell !== ants.lastMarkerCell[ant]) {
         ants.lastMarkerCell[ant] = cell;
-        if (cell >= 0 && world.markers.owner[cell] === ants.colony[ant]) {
-          out.degrades.push({
-            cell,
-            colony: ants.colony[ant],
-            channel: senseChannel(ants.state[ant]),
-          });
+        if (cell >= 0) {
+          const channel = senseChannel(ants.state[ant]);
+          const colony = ants.colony[ant];
+          // Only cells that still hold this colony's trail need erasing; the
+          // check keeps the event list from filling with no-ops.
+          const own =
+            channel === MarkerChannel.ToHome
+              ? homeAt(world.markers, colony, cell)
+              : foodAt(world.markers, colony, cell);
+          if (own > 0) out.degrades.push({ cell, colony, channel });
         }
       }
     }

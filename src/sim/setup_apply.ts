@@ -30,6 +30,8 @@ export function worldFromSetup(
     const colony = setup.colonies[i];
     world.colonies.push(makeColony(i, { x: colony.nest.x, y: colony.nest.y }, colony.color));
   }
+  // One marker layer per colony; the count is known only after the colonies exist.
+  world.markers.resize(world.size, world.params.markerCell, Math.max(1, world.colonies.length));
 
   let maxUid = 0;
   for (const source of setup.food) {
