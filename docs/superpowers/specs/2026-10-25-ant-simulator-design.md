@@ -391,6 +391,8 @@ The UI is a DOM overlay (HTML/CSS) above the WebGL canvas, crisp at any display 
 | M | cycle the marker overlay |
 | A | toggle ants |
 | G | toggle the grid |
+| F | follow the selected ant (Run; any pan, arrow or WASD key cancels it) |
+| V | show the selected ant's sensors (Run) |
 | Home | fit the whole world |
 | + / − | zoom about the view centre |
 | Arrows, W, S, D (A in the Builder) | pan while held |
@@ -398,9 +400,13 @@ The UI is a DOM overlay (HTML/CSS) above the WebGL canvas, crisp at any display 
 | Delete / Backspace | remove the selected colony or food (builder) |
 | 1–8 | choose a builder tool (Select, Colony, Food, Rock, Water, Sand, Mud, Erase) |
 
-**Mouse:** left uses the current builder tool (or pans, see Camera), right or middle drag pans, the wheel zooms at the cursor.
+**Mouse:** left uses the current builder tool (or pans, see Camera), right or middle drag pans, the wheel zooms at the cursor. On Run, a click (a press that moves less than 4 px) picks the nearest ant within 12 px and opens the inspector; a click on empty ground clears the selection.
 
-This replaces the M1 control drawer; its sliders move into the settings drawer. The **Degrade after** slider returns with M2, when stuck detection exists. The inspector, telemetry and sparklines remain M5 work.
+**Inspector (M5):** the selected ant's name (from its uid), colony, energy, role, what it is doing, whether it carries food, speed, heading and time since its anchor. Follow keeps the camera on it; Sensors draws its cone, its sample points (brighter where the marker is stronger) and the point it can see directly. The selection is by uid and clears on Reset, Edit, Finish and Back. When the ant dies, the panel says so. The inspector shares the right-hand slot with the settings drawer; opening settings hides it, and the selection stays.
+
+**Telemetry (M5):** each colony row carries two sparklines, delivered per second and ants, sampled once a second over the last two minutes.
+
+This replaces the M1 control drawer; its sliders move into the settings drawer. The **Degrade after** slider returned with M2, when stuck detection exists, and it is live again: M5 restored its row in the trails group.
 
 ---
 
@@ -547,7 +553,7 @@ Each milestone ends with a running app and the checks listed.
 | M2 | Navigation and foraging. Wander fix; sliding along walls and edges; look-ahead steering and fallback rays; spatial hash; stuck detection with dead-end trail erasure; spawn safety; reach harness; retuned trail and energy defaults; homing memory; one trail layer per colony; maze preset with a breach control | On the boulder preset fewer than 5% of ants touch rocks (or 3x fewer than before); reach harness: at 1000 u the first delivery comes within 60 s, and at 1500 u ants deliver in minute 3; the far colony in the contest delivers; in the maze, deliveries per minute after the breach are at least 3x those before it. **Done 2026-10-25.** Evidence: boulder ants touching rock 0.0211 → 0.0007 (3.3% → 0.07%); reach first delivery 36.3 s at 1000 u, 84 deliveries in minute 3 at 1500 u; contest colony B 1 / 58 / 84 per minute (was 0); maze 4 deliveries in minutes 7–9 against 1016 in minutes 12–14 after the breach at 10:00 (ratio 254); 228 tests; bench 0.448–0.457 ms avg across runs, plugged in |
 | M3 | **Absorbed and closed.** Multi-colony setup, palette, territory and the colony heatmap shipped in M1.5. Only inter-colony hostilities (§14) remain, and they are not scheduled. | — |
 | M4 | **Crowds and scale.** PBD collisions, PBMAD avoidance, worker pool, stress scenario, bench mode | No overlapping ants; opposing streams form lanes; 20k-ant bench numbers recorded; determinism test passes with 1 and 8 workers |
-| M5 | **Inspector and telemetry.** Ant inspector with follow and names, sensor drawing, telemetry with sparklines, and the live `degradeTime` control once M2 makes degradation fire | Zoomed-in inspector screenshots look right; the inspector follows one ant through a food trip |
+| M5 | **Inspector and telemetry. Built 2026-10-26; waiting on Marek's check.** Ant inspector with follow and names, sensor drawing, telemetry with sparklines, and the live `degradeTime` control once M2 makes degradation fire | Zoomed-in inspector screenshots look right; the inspector follows one ant through a food trip. Evidence: see the M5 report (tests, golden checksum, screenshots). |
 | M6 | **Tuning and hardening.** Tune the defaults toward the look of the videos, performance passes, edge cases (painting over nests or food, extinct colonies, ant caps) | User is happy with how it looks and feels |
 
 M1.5 absorbed the obstacle editing, multi-colony setup and visual work previously listed under M2, M3 and M5, and closed them. Navigation and foraging range, formerly part of a separate mechanics project, are now M2. Ant-to-ant collisions stay in M4. Birth and population tuning remain unscheduled. The wall painting, obstacle collision and terrain-speed pieces M2's maze builds on already shipped in M1.5.

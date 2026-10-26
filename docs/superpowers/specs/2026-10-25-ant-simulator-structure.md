@@ -778,7 +778,7 @@ a phase may write only its own ants' slots, and anything cross-ant goes through 
 | M2 Navigation and foraging | `sim/{spatial_hash,stuck}`; `app/{reach,reach_cli}`; wander fix; wall sliding; look-ahead and fallback rays; stuck detection and degrading; spawn safety; retuned defaults; homing memory; per-colony trail layers; maze preset and breach | [plans/2026-10-25-m2-navigation-foraging.md](../plans/2026-10-25-m2-navigation-foraging.md) |
 | M3 Colonies | **closed** — multi-colony setup, palette, territory and the colony heatmap shipped in M1.5. Only the open hostilities topic (main spec §14) remains, unscheduled | — |
 | M4 Crowds and scale | `core/worker_pool`; ant-to-ant PBD in `collide`; `sim/avoidance`; stress preset; determinism test with 1 and N workers; worker-scale neighbour queries through the spatial hash | later |
-| M5 Inspector | `sim/{picking,names}`; ant inspector with follow; sensor drawing; telemetry sparklines; live `degradeTime` control | later |
+| M5 Inspector **(built 2026-10-26)** | `sim/{picking,names,inspect}`; `ui/{inspector_panel,sparkline}`; `render/inspector_overlay`; click, follow and sensors in `app/controller`; `--inspect/--follow/--sensors`; live `degradeTime` row | [plans/2026-10-26-m5-inspector-telemetry.md](../plans/2026-10-26-m5-inspector-telemetry.md) |
 | M6 Tuning and hardening | parameter tuning, performance passes, edge cases, README | later |
 
 Navigation and foraging range, formerly part of a separate mechanics project, are now M2. Ant-to-ant
