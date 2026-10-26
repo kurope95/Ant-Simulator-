@@ -1810,5 +1810,6 @@ body.headless #log {
 
 .inspector__actions .button.is-on {
   border-color: var(--accent);
+  background: rgba(231, 179, 106, 0.18);
   color: var(--accent-strong);
 }
