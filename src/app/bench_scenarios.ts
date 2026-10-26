@@ -13,18 +13,17 @@ import type { World } from "../sim/world.js";
 export const kCrowdDefaultAnts = 2000;
 export const kCrowdMaxAnts = 20000;
 
-const kFixedFoodAmount = 1e9;
-
 // Builds the crowd world: `count` ants spread evenly along the corridor, even
 // uids foraging east and odd uids carrying west (mass 3). Infinite food,
 // no energy burn and no births keep the population at `count`.
 export function crowdWorld(seed: number, count: number): World {
   const setup = loadPreset("highway", seed);
   if (setup === null) throw new Error("the highway preset is missing");
-  for (const food of setup.food) food.amount = kFixedFoodAmount;
   setup.paramOverrides = { ...setup.paramOverrides, energyBurn: 0, spawnCost: 1e9 };
   const params: SimParams = defaultParams();
   const world = worldFromSetup(setup, params, { spawnAnts: false });
+  // Infinite food: the source never empties and keeps its small touch radius.
+  for (const source of world.food.items) source.infinite = true;
   const corridor = { minX: 420, maxX: 1980, minY: 376, maxY: 524 };
   const n = Math.max(0, Math.min(Math.trunc(count), kCrowdMaxAnts));
   for (let i = 0; i < n; i++) {

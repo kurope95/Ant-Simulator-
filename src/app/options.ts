@@ -112,7 +112,9 @@ export function parseOptions(tokens: readonly string[]): ParseResult {
         const taken = take(i, token);
         if (taken === null) break;
         if (taken.value === "crowd") {
+          // The crowd scenario only exists for the bench and the reach harness.
           options.scenario = "crowd";
+          options.mode = Mode.Bench;
           i = taken.next;
           break;
         }
