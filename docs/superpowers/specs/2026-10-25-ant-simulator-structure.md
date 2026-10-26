@@ -500,6 +500,10 @@ terrainLook(theme, worldSize, cell, time): TerrainLook; terrainUniforms(gl, prog
 buildAnts(sprites: SpriteBatch, legs: GeometryBatch, shadows: SpriteBatch, world, camera, alpha,
           frames: AtlasFrames, gait: GaitTracker): void
 
+// render/inspector_overlay.ts (M5): one GeometryBatch per frame for the selected ant
+buildInspectorOverlay(batch: GeometryBatch, options: OverlayOptions): void   // ring; plus cone, sample points, sight target when sensors are on
+wedgeEdgePoints(ant, heading, halfFov, radiusPx): [Vec2, Vec2]
+
 // render/world_view.ts
 interface WorldRenderCache { atlasTexture: WebGLTexture | null; terrainTexture: WebGLTexture | null;
                              heatmapTexture: WebGLTexture | null; heatmapPixels: Uint8Array;
