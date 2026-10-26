@@ -240,7 +240,9 @@ addFoodSource(sources, pos, amount, infinite?, kind?): number
 // sim/colony.ts
 interface Colony { id: ColonyId; nest: Vec2; color: number; foodPool: number; population: number;
                    deliveredTotal: number; deliveredLastSample: number;
-                   deliveredPerSecond: RingBuffer<number>; extinct: boolean }
+                   deliveredPerSecond: RingBuffer<number>;
+                   populationPerSecond: RingBuffer<number>; foodPoolPerSecond: RingBuffer<number>;   // M5: observation only, sampled each second
+                   extinct: boolean }
 makeColony(id, nest, color?, historyCapacity?): Colony     // historyCapacity = 120
 nestRadius(colony, params): number
 

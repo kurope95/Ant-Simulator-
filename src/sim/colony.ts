@@ -12,6 +12,9 @@ export interface Colony {
   deliveredTotal: number;
   deliveredLastSample: number;
   deliveredPerSecond: RingBuffer<number>;
+  // Observation only: sampled once a second, never read by the simulation.
+  populationPerSecond: RingBuffer<number>;
+  foodPoolPerSecond: RingBuffer<number>;
   extinct: boolean;
 }
 
@@ -25,6 +28,8 @@ export function makeColony(id: ColonyId, nest: Vec2, color = 0, historyCapacity 
     deliveredTotal: 0,
     deliveredLastSample: 0,
     deliveredPerSecond: new RingBuffer<number>(historyCapacity),
+    populationPerSecond: new RingBuffer<number>(historyCapacity),
+    foodPoolPerSecond: new RingBuffer<number>(historyCapacity),
     extinct: false,
   };
 }

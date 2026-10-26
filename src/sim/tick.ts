@@ -409,6 +409,8 @@ export function updateStats(world: World): void {
     if (sample) {
       colony.deliveredPerSecond.push(colony.deliveredLastSample);
       colony.deliveredLastSample = 0;
+      colony.populationPerSecond.push(colony.population);
+      colony.foodPoolPerSecond.push(colony.foodPool);
     }
     colony.extinct = colony.population === 0 && colony.foodPool < world.params.spawnCost;
   }
