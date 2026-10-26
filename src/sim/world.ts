@@ -1,6 +1,7 @@
 import type { Vec2 } from "../core/vec2.js";
 import { stopwatch } from "../core/stopwatch.js";
 import { Ants } from "./ants.js";
+import { computeAvoidance, makeAvoidScratch, type AvoidScratch } from "./avoidance.js";
 import {
   makeCollisionScratch,
   resolveAntOverlaps,
@@ -38,6 +39,7 @@ export interface World {
   food: FoodSources;
   spatialHash: SpatialHash;
   collisionScratch: CollisionScratch;
+  avoidScratch: AvoidScratch;
   chunkEvents: ChunkEvents[];
   nextUid: number;
 }
@@ -78,6 +80,7 @@ export function makeWorld(params: SimParams, seed: number, size?: Vec2): World {
     food: makeFoodSources(),
     spatialHash: new SpatialHash(),
     collisionScratch: makeCollisionScratch(),
+    avoidScratch: makeAvoidScratch(),
     chunkEvents: [],
     nextUid: 0,
   };
@@ -132,6 +135,9 @@ export function stepWorld(world: World): void {
     ),
   );
   timed(Phase.Think, () => {
+    // The avoidance pre-pass runs first, on start-of-tick state, so the think
+    // loop below sees the same avoidance whatever order its chunks run in.
+    if (world.params.antCollisions) computeAvoidance(world, world.avoidScratch);
     resetChunkEvents(world);
     const chunkSize = world.params.chunkSize;
     const lists = world.chunkEvents;

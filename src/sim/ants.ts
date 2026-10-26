@@ -36,6 +36,8 @@ export class Ants {
   wanderTimer: Float32Array;
   homeErrX: Float32Array;
   homeErrY: Float32Array;
+  avoidX: Float32Array;
+  avoidY: Float32Array;
 
   private count = 0;
   private capacity: number;
@@ -68,6 +70,8 @@ export class Ants {
     this.wanderTimer = new Float32Array(capacity);
     this.homeErrX = new Float32Array(capacity);
     this.homeErrY = new Float32Array(capacity);
+    this.avoidX = new Float32Array(capacity);
+    this.avoidY = new Float32Array(capacity);
   }
 
   size(): number {
@@ -102,6 +106,8 @@ export class Ants {
     this.wanderTimer[i] = 0;
     this.homeErrX[i] = 0;
     this.homeErrY[i] = 0;
+    this.avoidX[i] = 0;
+    this.avoidY[i] = 0;
     this.indexByUid.set(uid, i);
     this.count += 1;
     return i;
@@ -139,6 +145,8 @@ export class Ants {
       this.wanderTimer[index] = this.wanderTimer[last];
       this.homeErrX[index] = this.homeErrX[last];
       this.homeErrY[index] = this.homeErrY[last];
+      this.avoidX[index] = this.avoidX[last];
+      this.avoidY[index] = this.avoidY[last];
       this.indexByUid.set(this.uid[index], index);
     }
     this.indexByUid.delete(removedUid);
@@ -178,6 +186,8 @@ export class Ants {
     this.wanderTimer = grow(this.wanderTimer, next);
     this.homeErrX = grow(this.homeErrX, next);
     this.homeErrY = grow(this.homeErrY, next);
+    this.avoidX = grow(this.avoidX, next);
+    this.avoidY = grow(this.avoidY, next);
     this.capacity = next;
   }
 }

@@ -175,6 +175,17 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
         clearAhead = fallback.clearAhead;
       }
     }
+    // Avoidance (§6.1) is a sideways nudge to the heading, blended in before the
+    // wall check so that walls still win. It breaks the fallback's clear-ahead
+    // proof, so the wall check runs again when it applies.
+    if (params.antCollisions && (ants.avoidX[ant] !== 0 || ants.avoidY[ant] !== 0)) {
+      const sp = ants.speed[ant];
+      desired = Math.atan2(
+        Math.sin(desired) + ants.avoidY[ant] / sp,
+        Math.cos(desired) + ants.avoidX[ant] / sp,
+      );
+      clearAhead = false;
+    }
     if (!clearAhead) desired = steerAroundWalls(world, ant, desired);
 
     ants.heading[ant] = turnToward(ants.heading[ant], desired, params.turnRate * dt);

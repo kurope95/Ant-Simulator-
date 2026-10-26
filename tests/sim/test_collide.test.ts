@@ -273,6 +273,9 @@ function scatter(index: number, centre: { x: number; y: number }, radius: number
 
 test("collide: a packed cluster separates", { timeout: 60_000 }, () => {
   const { world, params } = wallWorld();
+  // This test is about the PBD pass alone, so avoidance steering is switched
+  // off (its cap is 0). With avoidance on the cluster ends at 4.05 u.
+  world.params.avoidMaxSpeedFactor = 0;
   for (let i = 0; i < 200; i++) {
     const p = scatter(i, { x: 200, y: 150 }, 40);
     spawn(world, p.x, p.y);
