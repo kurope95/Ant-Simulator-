@@ -1,10 +1,110 @@
+import { mix32 } from "../core/rng.js";
 import type { Ants } from "./ants.js";
+import { nestRadius } from "./colony.js";
 import { nearestFreePoint } from "./obstacles.js";
 import { ObstacleKind } from "./setup.js";
 import type { World } from "./world.js";
 
 function solid(kind: number): boolean {
   return kind === ObstacleKind.Rock || kind === ObstacleKind.Water;
+}
+
+// Per-pass buffers for the Jacobi ant-to-ant pass. Owned by the world and
+// grown with the ant capacity, so a tick allocates nothing.
+export interface CollisionScratch {
+  corrX: Float32Array;
+  corrY: Float32Array;
+  count: Uint16Array;
+  nb: Uint32Array;
+}
+
+const kNeighbourBuffer = 64;
+
+export function makeCollisionScratch(): CollisionScratch {
+  return {
+    corrX: new Float32Array(0),
+    corrY: new Float32Array(0),
+    count: new Uint16Array(0),
+    nb: new Uint32Array(kNeighbourBuffer),
+  };
+}
+
+// True for an ant inside its own nest radius: its colony's ants pile up at the
+// entrance and must still reach the nest, so they neither push nor get pushed.
+export function exemptAtNest(world: World, index: number): boolean {
+  const ants = world.ants;
+  const colony = world.colonies[ants.colony[index]];
+  if (colony === undefined) return false;
+  const reach = nestRadius(colony, world.params) * world.params.nestExemptFactor;
+  const dx = ants.posX[index] - colony.nest.x;
+  const dy = ants.posY[index] - colony.nest.y;
+  return dx * dx + dy * dy <= reach * reach;
+}
+
+// Pushes overlapping ants apart (spec §6.2). Jacobi: every correction is
+// computed from the same positions, then all are applied together, so the
+// result does not depend on ant order. Carriers (heavier) move less.
+export function resolveAntOverlaps(world: World, scratch: CollisionScratch): void {
+  const ants = world.ants;
+  const params = world.params;
+  const n = ants.size();
+  if (scratch.corrX.length < n) {
+    scratch.corrX = new Float32Array(ants.posX.length);
+    scratch.corrY = new Float32Array(ants.posX.length);
+    scratch.count = new Uint16Array(ants.posX.length);
+  }
+  const { corrX, corrY, count, nb } = scratch;
+  const hash = world.spatialHash;
+  const posX = ants.posX;
+  const posY = ants.posY;
+  const d = 2 * params.antRadius;
+  const dSq = d * d;
+
+  for (let i = 0; i < n; i++) {
+    corrX[i] = 0;
+    corrY[i] = 0;
+    count[i] = 0;
+    if (exemptAtNest(world, i)) continue;
+    // +1 u: positions shift between iterations, so look a little wider than contact.
+    const found = hash.queryWithin(posX[i], posY[i], d + 1, posX, posY, i, nb);
+    for (let k = 0; k < found; k++) {
+      const j = nb[k];
+      if (exemptAtNest(world, j)) continue;
+      const dx = posX[i] - posX[j];
+      const dy = posY[i] - posY[j];
+      const distSq = dx * dx + dy * dy;
+      if (distSq >= dSq) continue;
+      let nx: number;
+      let ny: number;
+      let overlap: number;
+      if (distSq < 1e-8) {
+        // Coincident: a fixed direction per pair, antisymmetric between the two ants.
+        const lo = Math.min(ants.uid[i], ants.uid[j]);
+        const hi = Math.max(ants.uid[i], ants.uid[j]);
+        const a = (mix32((Math.imul(lo, 0x9e3779b1) ^ hi) >>> 0) / 4294967296) * Math.PI * 2;
+        const s = ants.uid[i] === lo ? 1 : -1;
+        nx = Math.cos(a) * s;
+        ny = Math.sin(a) * s;
+        overlap = d;
+      } else {
+        const dist = Math.sqrt(distSq);
+        nx = dx / dist;
+        ny = dy / dist;
+        overlap = d - dist;
+      }
+      const wi = 1 / ants.mass[i];
+      const wj = 1 / ants.mass[j];
+      const share = wi / (wi + wj);
+      corrX[i] += nx * overlap * share;
+      corrY[i] += ny * overlap * share;
+      count[i] += 1;
+    }
+  }
+  for (let i = 0; i < n; i++) {
+    if (count[i] === 0) continue;
+    posX[i] += corrX[i] / count[i];
+    posY[i] += corrY[i] / count[i];
+  }
 }
 
 // Keeps a heading from pointing into a wall: only the tangent part survives.
