@@ -514,6 +514,7 @@ createWorldRenderCache(renderer, world): WorldRenderCache
 disposeWorldRenderCache(renderer, cache): void    // deletes terrain + heatmap textures; atlas is shared
 refreshTerrain(renderer, cache, world): void        // rebuilds the mask and bumps terrainId
 drawWorld(renderer, cache, world, camera, settings, theme, alpha): void
+drawSelection(renderer, batch, options: OverlayOptions): void   // M5: the selected ant's ring and sensors, one batch
 ```
 
 **Draw order inside `drawWorld`:** terrain copy (redrawn only when stale) → heatmap texture (additive) → `under` grid and border → `shadows` (ants and food) →
@@ -696,6 +697,7 @@ class AppController {
   dispose(): void
 }
 // Owns the session machine, camera, overlays, builder wiring, keyboard shortcuts and the frame loop.
+// M5: click an ant to select it (InspectorPanel); F follows, V toggles sensors, Esc deselects. The selection is by uid and clears on every screen change.
 
 // app/interactive.ts
 runInteractive(options, canvas: HTMLCanvasElement, uiRoot: HTMLElement,
