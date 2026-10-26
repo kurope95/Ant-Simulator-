@@ -282,6 +282,9 @@ updateStats(world): void
 // sim/checksum.ts
 worldChecksum(world): number     // hashes ant state + marker grid; used by determinism tests
 
+// sim/names.ts (M5)
+antName(uid): string             // pure: uid -> female first name; the first 1000 uids are ~all distinct
+
 // sim/obstacles.ts
 const kSandSpeedFactor = 0.6
 const kMudSpeedFactor = 0.45
