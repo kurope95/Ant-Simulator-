@@ -15,7 +15,7 @@ export interface PresetInfo {
   name: string;
 }
 
-export const kPresetIds = ["meadow", "dunes", "creek", "boulder", "maze", "blank"] as const;
+export const kPresetIds = ["meadow", "dunes", "creek", "boulder", "maze", "highway", "blank"] as const;
 
 const kPresetNames: Record<string, string> = {
   meadow: "Meadow",
@@ -23,6 +23,7 @@ const kPresetNames: Record<string, string> = {
   creek: "Creek",
   boulder: "Boulder",
   maze: "Maze",
+  highway: "Highway",
   blank: "Blank",
 };
 
@@ -146,6 +147,24 @@ function maze(seed: number): WorldSetup {
   return setup;
 }
 
+// Two long walls leave a 180 u corridor. Opposing streams meet in it, so they
+// either split into lanes or jam. Food sits at the far end.
+const kHighwayWallThickness = 16;
+
+export function highway(seed: number): WorldSetup {
+  const setup = makeSetup({ x: 2400, y: 900 }, seed, "highway");
+  addColony(setup, { x: 200, y: 450 }, 1, 600);
+  addFood(setup, { x: 2200, y: 450 }, 20000, FoodKind.Seeds);
+  for (const wallY of [360, 540]) {
+    paintRect(setup, ObstacleKind.Rock, {
+      pos: { x: 400, y: wallY - kHighwayWallThickness / 2 },
+      size: { x: 1600, y: kHighwayWallThickness },
+    });
+  }
+  setup.paramOverrides = { energyBurn: 0.3 };
+  return setup;
+}
+
 function blank(seed: number): WorldSetup {
   return makeSetup({ x: 1920, y: 1080 }, seed, "blank");
 }
@@ -162,6 +181,8 @@ export function loadPreset(id: string, seed: number): WorldSetup | null {
       return boulder(seed);
     case "maze":
       return maze(seed);
+    case "highway":
+      return highway(seed);
     case "blank":
       return blank(seed);
     default:

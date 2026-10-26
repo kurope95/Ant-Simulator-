@@ -4,7 +4,8 @@ import { kPhaseCount, phaseName } from "../sim/phases.js";
 import { defaultParams } from "../sim/params.js";
 import { loadPreset } from "../sim/presets.js";
 import { worldFromSetup } from "../sim/setup_apply.js";
-import { stepWorld } from "../sim/world.js";
+import { stepWorld, type World } from "../sim/world.js";
+import { crowdWorld } from "./bench_scenarios.js";
 import { effectiveTicks, type AppOptions } from "./options.js";
 
 export interface BenchReport {
@@ -36,12 +37,19 @@ export function formatBenchReport(report: BenchReport): string {
 }
 
 export function runBench(options: AppOptions): number {
-  const setup = loadPreset(options.preset, options.seed);
-  if (setup === null) {
-    process.stderr.write(`unknown preset: ${options.preset}\n`);
-    return 1;
+  let world: World;
+  let label = options.preset;
+  if (options.scenario === "crowd") {
+    label = "crowd";
+    world = crowdWorld(options.seed, options.ants);
+  } else {
+    const setup = loadPreset(options.preset, options.seed);
+    if (setup === null) {
+      process.stderr.write(`unknown preset: ${options.preset}\n`);
+      return 1;
+    }
+    world = worldFromSetup(setup, defaultParams());
   }
-  const world = worldFromSetup(setup, defaultParams());
   for (let i = 0; i < 60; i++) stepWorld(world);
 
   const ticks = effectiveTicks(options);
@@ -58,7 +66,7 @@ export function runBench(options: AppOptions): number {
   const seconds = watch.elapsedSeconds();
 
   const report: BenchReport = {
-    preset: options.preset,
+    preset: label,
     ticks,
     // M0 is single-threaded; the worker pool arrives in M4.
     threads: 1,

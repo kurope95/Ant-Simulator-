@@ -144,6 +144,8 @@ export function themeForPreset(presetId: string): Theme {
       return boulderTheme();
     case "maze":
       return boulderTheme();
+    case "highway":
+      return boulderTheme();
     case "blank":
       return blankTheme();
     default:

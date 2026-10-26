@@ -1,4 +1,5 @@
 import { defaultParams } from "../sim/params.js";
+import { crowdMetrics, crowdWorld, kCrowdDefaultAnts } from "./bench_scenarios.js";
 import { loadPreset } from "../sim/presets.js";
 import { addColony, addFood, FoodKind, makeSetup, type WorldSetup } from "../sim/setup.js";
 import { worldFromSetup } from "../sim/setup_apply.js";
@@ -45,6 +46,13 @@ export interface MazeReachRow {
   alive: number;
 }
 
+export interface CrowdReachRow {
+  ants: number;
+  seconds: number;
+  lanes: number;
+  overlap: number;
+}
+
 export interface ReachReport {
   seed: number;
   ants: number;
@@ -52,7 +60,13 @@ export interface ReachReport {
   rows: ReachRow[];
   contest: ReachRow;
   maze: MazeReachRow;
+  crowd: CrowdReachRow;
 }
+
+// Targets from the M4 plan: lanes form when the score is at least 0.70, and
+// ants count as overlapping only when they are within 1 % of the population.
+export const kLaneTarget = 0.7;
+export const kOverlapTarget = 0.01;
 
 interface MeasuredColony {
   firstSeconds: number | null;
@@ -86,7 +100,19 @@ export function formatReachReport(report: ReachReport): string {
   text += `${formatRow(report.contest)}\n`;
   text += `maze breach at ${kMazeBreachMinute}:00, windows 7:00-10:00 and 12:00-15:00\n`;
   text += `${formatMazeRow(report.maze)}\n`;
+  text += `${formatCrowdRow(report.crowd)}\n`;
   return text;
+}
+
+function formatCrowdRow(row: CrowdReachRow): string {
+  const lanes = row.lanes.toFixed(3);
+  const overlap = row.overlap.toFixed(4);
+  const lanesResult = row.lanes >= kLaneTarget ? "pass" : "fail";
+  const overlapResult = row.overlap <= kOverlapTarget ? "pass" : "fail";
+  return (
+    `crowd ants=${row.ants} seconds=${row.seconds} lanes=${lanes} target>=${kLaneTarget.toFixed(2)} ${lanesResult}` +
+    ` overlap=${overlap} target<=${kOverlapTarget.toFixed(2)} ${overlapResult}`
+  );
 }
 
 function formatMazeRow(row: MazeReachRow): string {
@@ -173,9 +199,23 @@ export function runReach(): number {
     rows,
     contest: rowFrom("contest", contest[0], contest[1] ?? null),
     maze: measureMaze(),
+    crowd: measureCrowd(),
   };
   process.stdout.write(formatReachReport(report));
   return 0;
+}
+
+// Crowd run: 2000 ants in the highway corridor for a minute, then the lane and
+// overlap snapshot. The count is fixed, so the snapshot is the whole picture.
+const kCrowdAnts = kCrowdDefaultAnts;
+const kCrowdSeconds = 60;
+
+function measureCrowd(): CrowdReachRow {
+  const world = crowdWorld(kSeed, kCrowdAnts);
+  const totalTicks = kCrowdSeconds * world.params.simHz;
+  for (let tick = 1; tick <= totalTicks; tick++) stepWorld(world);
+  const metrics = crowdMetrics(world);
+  return { ants: world.ants.size(), seconds: kCrowdSeconds, lanes: metrics.lanes, overlap: metrics.overlap };
 }
 
 // The maze run: the breach opens after the step that reaches minute 10, the

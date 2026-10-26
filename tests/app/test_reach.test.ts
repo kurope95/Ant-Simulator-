@@ -58,9 +58,15 @@ test("reach: report format is stable", () => {
       ratio: 4,
       alive: 180,
     },
+    crowd: {
+      ants: 2000,
+      seconds: 60,
+      lanes: 0.812,
+      overlap: 0.004,
+    },
   };
   const lines = splitLines(formatReachReport(report));
-  assert.equal(lines.length, 7);
+  assert.equal(lines.length, 8);
   assert.equal(lines[0], "reach seed=7 ants=200 seconds=180");
   assert.equal(lines[1], "D          first_s      m1      m2      m3   alive    b_m1    b_m2    b_m3");
   assert.equal(lines[2], "500           12.4      41      63      72     198       -       -       -");
@@ -68,6 +74,10 @@ test("reach: report format is stable", () => {
   assert.equal(lines[4], "contest       18.2      22      35      47     190       3       8      12");
   assert.equal(lines[5], "maze breach at 10:00, windows 7:00-10:00 and 12:00-15:00");
   assert.equal(lines[6], "first_s=123.4 m7-9=12 m12-14=48 ratio=4.0 alive=180 target>=3 pass");
+  assert.equal(
+    lines[7],
+    "crowd ants=2000 seconds=60 lanes=0.812 target>=0.70 pass overlap=0.0040 target<=0.01 pass",
+  );
 });
 
 test("reach: 1000 u delivers", { timeout: 120_000 }, () => {

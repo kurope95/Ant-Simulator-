@@ -4,7 +4,7 @@ import { FoodKind, ObstacleKind, validateSetup } from "../../src/sim/setup.js";
 import { loadPreset, presetNames, quickStartSetup } from "../../src/sim/presets.js";
 
 test("presets: the six ids are stable", () => {
-  assert.deepEqual(presetNames(), ["meadow", "dunes", "creek", "boulder", "maze", "blank"]);
+  assert.deepEqual(presetNames(), ["meadow", "dunes", "creek", "boulder", "maze", "highway", "blank"]);
 });
 
 test("presets: every preset is deterministic and every non-blank one is valid", () => {

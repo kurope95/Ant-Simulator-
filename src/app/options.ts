@@ -1,4 +1,5 @@
 import { kPresetIds } from "../sim/presets.js";
+import { kCrowdDefaultAnts, kCrowdMaxAnts } from "./bench_scenarios.js";
 
 export enum Mode {
   Interactive,
@@ -24,6 +25,9 @@ export interface AppOptions {
   zoom: number;
   focus: { x: number; y: number } | null;
   breachTick: number;
+  // Hidden bench and reach scenario: "" for the preset, or "crowd".
+  scenario: string;
+  ants: number;
 }
 
 export interface ParseResult {
@@ -55,6 +59,8 @@ function defaults(): AppOptions {
     zoom: 1,
     focus: null,
     breachTick: -1,
+    scenario: "",
+    ants: kCrowdDefaultAnts,
   };
 }
 
@@ -105,6 +111,11 @@ export function parseOptions(tokens: readonly string[]): ParseResult {
       case "--scenario": {
         const taken = take(i, token);
         if (taken === null) break;
+        if (taken.value === "crowd") {
+          options.scenario = "crowd";
+          i = taken.next;
+          break;
+        }
         const preset = presetValue(taken.value);
         if (preset === null) {
           error = `unknown preset: ${taken.value} (expected ${kPresetList})`;
@@ -180,6 +191,18 @@ export function parseOptions(tokens: readonly string[]): ParseResult {
         bench = true;
         options.mode = Mode.Bench;
         options.preset = preset;
+        i = taken.next;
+        break;
+      }
+      case "--ants": {
+        const taken = take(i, "--ants");
+        if (taken === null) break;
+        const ants = Number(taken.value);
+        if (!isDigits(taken.value) || ants < 1 || ants > kCrowdMaxAnts) {
+          error = `invalid value for --ants: ${taken.value} (expected 1-${kCrowdMaxAnts})`;
+          break;
+        }
+        options.ants = ants;
         i = taken.next;
         break;
       }
@@ -275,6 +298,8 @@ export function usageText(): string {
     "  --screenshot <file>   output PNG for tools/screenshot.mjs",
     "  --size <WxH>          pixel size for headless mode (default 1920x1080)",
     "  --bench <preset>      timing table (Node CLI); --scenario sandbox is deprecated",
+    "  --scenario crowd      bench only: the highway corridor with a fixed ant count",
+    "  --ants <n>            crowd scenario size (default 2000, max 20000)",
     "  --threads <n>         worker threads, 1-64 (default: all cores)",
     "  --zoom <n>            camera zoom on run, 0.1-16 (default 1)",
     "  --focus <x,y>         centre the run camera on this world point (default: the centre)",
