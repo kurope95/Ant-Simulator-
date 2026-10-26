@@ -559,7 +559,7 @@ type ParamKey = "antSpeed" | "turnRate" | "sensorRadius" | "sensorHalfFovDeg" | 
 type ParamGroup = "movement" | "trails" | "colony"
 interface ParamSpec { key: ParamKey; label: string; unit: string; min: number; max: number;
                       step: number; scale: number; group: ParamGroup; digits?: number }
-paramSpecs(): readonly ParamSpec[]      // ten live rows; degradeTime typed but not shown until M5
+paramSpecs(): readonly ParamSpec[]      // eleven live rows (degradeTime added in M5)
 specValue(spec, params): number
 applySpecValue(spec, params, displayValue): number
 formatSpecValue(spec, displayValue): string
