@@ -52,3 +52,36 @@ export function colonyRows(world: World): ColonyRow[] {
       extinct: colony.extinct,
     }));
 }
+
+export function stateLabel(state: number): string {
+  switch (state) {
+    case 0:
+      return "Foraging";
+    case 1:
+      return "Carrying food";
+    case 2:
+      return "Heading home, tired";
+    default:
+      return "Unknown";
+  }
+}
+
+export function roleLabel(role: number): string {
+  return role === 1 ? "Explorer" : "Follower";
+}
+
+// Energy as 0..1 of the cap (the energy a new ant starts with).
+export function energyFraction(energy: number, cap = 100): number {
+  if (!(cap > 0) || !(energy > 0)) return 0;
+  return Math.min(1, energy / cap);
+}
+
+const kCompass = ["E", "SE", "S", "SW", "W", "NW", "N", "NE"];
+
+// Heading in screen terms: 0 is east, a quarter turn is south (y grows down).
+export function headingLabel(rad: number): string {
+  const deg = ((rad * 180) / Math.PI) % 360;
+  const wrapped = deg < 0 ? deg + 360 : deg;
+  const index = Math.round(wrapped / 45) % 8;
+  return `${kCompass[index]} ${Math.round(wrapped)}°`;
+}

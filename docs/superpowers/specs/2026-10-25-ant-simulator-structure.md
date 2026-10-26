@@ -540,6 +540,12 @@ formatClock(ticks, simHz): string        // mm:ss
 speedLabel(speed): string                // "1×", "Max"
 trailModeLabel(mode): string             // "Off", "Trails", "Colonies"
 colonyRows(world): ColonyRow[]
+stateLabel(state), roleLabel(role): string   // M5 inspector labels
+energyFraction(energy, cap=100): number      // 0..1 for the energy bar
+headingLabel(rad): string                    // "NE 315°"
+
+// ui/sparkline.ts (M5)
+sparklinePath(values, width, height, pad=2): string   // SVG path "M x y L x y ..."; empty -> ""; flat -> mid-height line
 
 // ui/param_specs.ts
 type ParamKey = "antSpeed" | "turnRate" | "sensorRadius" | "sensorHalfFovDeg" | "explorerRatio"
