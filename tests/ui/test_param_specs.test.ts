@@ -31,10 +31,10 @@ function assertFiniteWorld(world: World): void {
   }
 }
 
-test("param specs: ten live controls with valid ranges and defaults", () => {
+test("param specs: eleven live controls with valid ranges and defaults", () => {
   const specs = paramSpecs();
-  assert.equal(specs.length, 10);
-  assert.equal(new Set(specs.map((spec) => spec.key)).size, 10);
+  assert.equal(specs.length, 11);
+  assert.equal(new Set(specs.map((spec) => spec.key)).size, 11);
   // The live degradeTime control is scheduled for M5 (design spec section 15).
   assert.equal(specs.some((spec) => spec.key === "degradeTime"), false);
   const defaults = defaultParams();
@@ -95,4 +95,16 @@ test("every extreme still steps the sandbox without NaN", () => {
   for (const spec of specs) applySpecValue(spec, world.params, spec.max);
   for (let i = 0; i < 300; i++) stepWorld(world);
   assertFiniteWorld(world);
+});
+
+test("param specs: avoidance look-ahead runs 0.25 to 2.5 s in 0.05 s steps", () => {
+  const spec = paramSpecs().find((candidate) => candidate.key === "tHorizon");
+  assert.ok(spec);
+  assert.equal(spec.min, 0.25);
+  assert.equal(spec.max, 2.5);
+  assert.equal(spec.step, 0.05);
+  const params = defaultParams();
+  assert.equal(applySpecValue(spec, params, 9), 2.5);
+  assert.equal(params.tHorizon, 2.5);
+  assert.equal(applySpecValue(spec, params, 0.5), 0.5);
 });

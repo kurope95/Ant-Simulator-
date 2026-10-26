@@ -18,6 +18,7 @@ export interface SettingsHooks {
   onParam(key: ParamKey, value: number): void;
   onResetParams(): void;
   onHoming(): void;
+  onAntCollisions(): void;
   onFit(): void;
 }
 
@@ -66,6 +67,7 @@ export class SettingsDrawer {
   private readonly antsSwitch: HTMLButtonElement;
   private readonly gridSwitch: HTMLButtonElement;
   private readonly homingSwitch: HTMLButtonElement;
+  private readonly antCollisionsSwitch: HTMLButtonElement;
   private readonly trailButtons = new Map<HeatmapMode, HTMLButtonElement>();
   private lastView: ViewSettings | null = null;
 
@@ -118,8 +120,13 @@ export class SettingsDrawer {
       "Ants steer home from their own path estimate when no trail is in range",
       () => hooks.onHoming(),
     );
+    this.antCollisionsSwitch = this.makeSwitch(
+      "Ant collisions",
+      "Ants push apart and step aside before bumping; off restores the ghost ants",
+      () => hooks.onAntCollisions(),
+    );
     const ruleSwitches = el("div", "drawer__switches");
-    ruleSwitches.append(this.homingSwitch);
+    ruleSwitches.append(this.homingSwitch, this.antCollisionsSwitch);
     rules.append(ruleSwitches);
 
     const groups = new Map<ParamGroup, { section: HTMLElement; grid: HTMLElement }>();
@@ -181,6 +188,7 @@ export class SettingsDrawer {
       control.input.style.setProperty("--fill", this.fillPercent(control));
     }
     this.homingSwitch.setAttribute("aria-checked", String(this.params.homingEnabled));
+    this.antCollisionsSwitch.setAttribute("aria-checked", String(this.params.antCollisions));
     if (this.lastView !== null) {
       this.antsSwitch.setAttribute("aria-checked", String(this.lastView.showAnts));
       this.gridSwitch.setAttribute("aria-checked", String(this.lastView.showGrid));
