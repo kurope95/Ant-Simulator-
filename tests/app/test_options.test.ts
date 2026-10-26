@@ -143,3 +143,24 @@ test("options: URL query strings parse like flags", () => {
   assert.equal(r.options.preset, "creek");
   assert.equal(r.options.vsync, false);
 });
+
+test("options: --inspect, --follow and --sensors pick an ant and its views", () => {
+  const r = parse("--screen", "run", "--inspect", "42", "--follow", "--sensors");
+  assert.equal(r.error, "");
+  assert.equal(r.options.inspect, 42);
+  assert.equal(r.options.follow, true);
+  assert.equal(r.options.sensors, true);
+  const off = parse();
+  assert.equal(off.options.inspect, -1);
+  assert.equal(off.options.follow, false);
+  assert.equal(off.options.sensors, false);
+  assert.match(parse("--inspect", "x").error, /invalid value for --inspect/);
+});
+
+test("options: the URL accepts ?inspect=, ?follow and ?sensors", () => {
+  const r = optionsFromUrl("?screen=run&inspect=7&follow&sensors");
+  assert.equal(r.error, "");
+  assert.equal(r.options.inspect, 7);
+  assert.equal(r.options.follow, true);
+  assert.equal(r.options.sensors, true);
+});

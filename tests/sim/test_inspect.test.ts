@@ -4,6 +4,9 @@ import assert from "node:assert/strict";
 import { defaultParams } from "../../src/sim/params.js";
 import { angleDiff } from "../../src/core/math.js";
 import { inspectAnt, sensorView } from "../../src/sim/inspect.js";
+import { quickStartSetup } from "../../src/sim/presets.js";
+import { worldFromSetup } from "../../src/sim/setup_apply.js";
+import { stepWorld } from "../../src/sim/world.js";
 import { antName } from "../../src/sim/names.js";
 import { AntRole, AntState } from "../../src/sim/types.js";
 import { makeWorld } from "../../src/sim/world.js";
@@ -86,4 +89,39 @@ test("sensor view: scores are zero with no markers and reuse the buffer", () => 
   assert.ok(first.scores.every((score) => score === 0));
   const again = sensorView(world, 1, first);
   assert.equal(again, first);
+});
+
+// Acceptance for M5: one ant goes out, finds food, carries it home and drops
+// it, and the inspector reads the same uid the whole time.
+test("food trip: an inspected ant forages, carries food and drops it", () => {
+  const params = defaultParams();
+  for (const uid of [0, 1, 2, 3, 4]) {
+    const world = worldFromSetup(quickStartSetup(7), params);
+    let foraged = false;
+    let carried = false;
+    let droppedAfterCarry = false;
+    let alive = true;
+    for (let tick = 0; tick < 10_800 && alive; tick++) {
+      stepWorld(world);
+      const snap = inspectAnt(world, uid);
+      if (snap === null) {
+        alive = false;
+        break;
+      }
+      assert.equal(snap.uid, uid);
+      assert.ok(snap.energy >= 0 && snap.energy <= params.energyMax, `energy ${snap.energy} at tick ${tick}`);
+      if (snap.state === AntState.Foraging) {
+        if (carried) droppedAfterCarry = true;
+        else foraged = true;
+      }
+      if (snap.carrying) {
+        assert.equal(snap.state, AntState.ReturningFood);
+        assert.equal(snap.mass, params.massCarrying);
+        carried = true;
+      }
+      if (droppedAfterCarry) break;
+    }
+    if (foraged && carried && droppedAfterCarry) return;
+  }
+  assert.fail("no ant among uids 0..4 completed a food trip within 10 800 ticks");
 });

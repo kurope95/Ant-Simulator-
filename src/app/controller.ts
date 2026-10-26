@@ -249,6 +249,7 @@ export class AppController {
         this.session = started.state;
         this.showRun(world, started.state, true);
         this.breached = breached;
+        this.applyInspectOptions(world);
         break;
       }
       default:
@@ -563,6 +564,19 @@ export class AppController {
     this.session = finishRun(this.session, summary);
     this.runWorld = null;
     this.showHome(finished, this.runTheme);
+  }
+
+  // --inspect, --follow and --sensors: applied once, after the warm-up, like --focus.
+  private applyInspectOptions(world: World): void {
+    this.sensorsOn = this.options.sensors;
+    const uid = this.options.inspect;
+    if (uid < 0) return;
+    if (world.ants.indexOf(uid) === null) {
+      this.log(`inspect: no ant with uid ${uid}`);
+      return;
+    }
+    this.selectAnt(uid);
+    this.setFollowing(this.options.follow);
   }
 
   private selectAnt(uid: number): void {
