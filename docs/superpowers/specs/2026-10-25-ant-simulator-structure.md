@@ -617,6 +617,13 @@ class RunHud { readonly root: HTMLElement; readonly colonyPanelHost: HTMLElement
 class ColonyPanel { readonly root: HTMLElement
                     constructor(root: HTMLElement, onFocus: (id: number) => void)
                     update(world: World): void; setOpen(open: boolean): void }
+                    // M5: each colony row shows two sparklines (delivered/s, ants), redrawn at most 2x/s
+
+// ui/inspector_panel.ts (M5): the selected ant, in the right-hand slot shared with the settings drawer
+class InspectorPanel { readonly root: HTMLElement
+                       constructor(root: HTMLElement, hooks: InspectorHooks)
+                       show(snap: AntSnapshot, colonyName, colonyHex, following, sensors): void
+                       showGone(name: string): void; hide(): void }
 
 // ui/settings_drawer.ts
 interface SettingsHooks { onHeatmap(mode: HeatmapMode): void; onAnts(): void; onGrid(): void;
