@@ -290,6 +290,7 @@ pickAnt(world, x, y, radius): number   // uid of the nearest ant within radius (
 
 // sim/inspect.ts (M5)
 inspectAnt(world, uid): AntSnapshot | null   // looked up by uid each call; null once the ant is gone
+sensorView(world, uid, out?): SensorView | null   // the cone, sample points, marker scores and sight target the ant uses (same patterns as steering)
 
 // sim/obstacles.ts
 const kSandSpeedFactor = 0.6

@@ -1,5 +1,5 @@
 import { angleDiff } from "../core/math.js";
-import { angleOf, fromAngle } from "../core/vec2.js";
+import { angleOf, fromAngle, type Vec2 } from "../core/vec2.js";
 import { MarkerChannel, type MarkerGrid } from "./marker_grid.js";
 import { isSolidAt, freeDistance, freeDistanceDir, lineOfSight } from "./obstacles.js";
 import type { SimParams } from "./params.js";
@@ -206,7 +206,9 @@ export function fallbackHeading(world: World, ant: number): number {
   return chooseFallback(world, ant).heading;
 }
 
-export function directSightHeading(world: World, ant: number): number | null {
+// The point an ant can see directly (its food while foraging, its nest while
+// returning), if it is in range and inside its cone; null otherwise.
+export function directSightTarget(world: World, ant: number): Vec2 | null {
   const ants = world.ants;
   const posX = ants.posX[ant];
   const posY = ants.posY[ant];
@@ -251,5 +253,11 @@ export function directSightHeading(world: World, ant: number): number | null {
   const target = Math.atan2(dy, dx);
   const halfFov = (params.sensorHalfFovDeg * Math.PI) / 180;
   if (Math.abs(angleDiff(heading, target)) > halfFov) return null;
-  return target;
+  return { x: targetX, y: targetY };
+}
+
+export function directSightHeading(world: World, ant: number): number | null {
+  const target = directSightTarget(world, ant);
+  if (target === null) return null;
+  return Math.atan2(target.y - world.ants.posY[ant], target.x - world.ants.posX[ant]);
 }

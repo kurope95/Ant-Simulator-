@@ -18,7 +18,7 @@ import { evaluateStuck, inRestZone } from "./stuck.js";
 import { AntRole, AntState, RandStream } from "./types.js";
 import type { World } from "./world.js";
 
-function senseChannel(state: number): MarkerChannel {
+export function senseChannel(state: number): MarkerChannel {
   return state === AntState.Foraging ? MarkerChannel.ToFood : MarkerChannel.ToHome;
 }
 
