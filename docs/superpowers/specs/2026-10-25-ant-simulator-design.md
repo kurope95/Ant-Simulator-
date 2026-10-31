@@ -149,6 +149,10 @@ This rule is implemented in `src/sim/marker_grid.ts` (`deposit`). The single-own
 
 All writes to the marker grid happen in the serial event phase (§5.2), in a fixed order.
 
+**Trail upkeep and extinction** (2026-10-31, Marek: "a path not upkept by its own kind should go extinct"):
+- `TRAIL_UNUSED_LIFE` (90 s): a trail cell no ant of its colony has deposited on for this long is wiped, however strong it still was, so abandoned trails stop webbing the map while busy ones, however long, stay. Each layer cell keeps the tick of its last deposit (`MarkerGrid.visited`). 0 turns it off.
+- `TRAIL_REFRESH` (default 1, slider "Scent per passing ant"): a deposit closes this share of the gap between the cell and the ant's own strength; 1 is the original "highest wins" rule. Measured on the 1000 u reach (seeds 7, 1, 2, 3): with trails adding up per ant, or closing 30–50% of the gap, foraging fell to a quarter to a half in minutes 6–8 (old 814–1,104 deliveries; 0.5: 214–858; 0.3: 162–411), because a weaker new trail recruits fewer ants, which keeps it weak. Making it work would mean retuning sensing and steering around it; until then 1 stays the default.
+
 ### 4.3 Obstacles
 - A 4 u grid with one byte per cell: `0` empty, `1` Rock, `2` Water, `3` Sand, `4` Mud. The builder paints or erases cells with a circular brush; presets seed the grid.
 - **Rock and Water are solid.** Only their border cells are collidable: a border cell is Rock/Water and has at least one of its four direct neighbours out of bounds or not Rock/Water. Interior cells are never tested, which keeps the original "hollow collider" optimisation. Border flags are rebuilt only in the area around an edit.

@@ -131,6 +131,7 @@ export function stepWorld(world: World): void {
   world.timings = emptyPhaseTimings();
   const total = stopwatch();
   world.tick += 1;
+  world.markers.now = world.tick;
 
   const timed = (phase: Phase, run: () => void): void => {
     const watch = stopwatch();
@@ -174,6 +175,7 @@ export function stepWorld(world: World): void {
       markerDecayFactor(world.params, 1 / world.params.simHz),
       world.params.markerEps,
       world.params.flipMargin,
+      Math.round(world.params.trailUnusedLife * world.params.simHz),
     ),
   );
   timed(Phase.Stats, () => updateStats(world));

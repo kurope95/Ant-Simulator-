@@ -27,6 +27,11 @@ export interface SimParams {
   emissionDecay: number;
   markerHalfLife: number;
   markerEps: number;
+  // Share of the gap to its own strength one ant's deposit closes; 1 raises the
+  // cell straight to it (the rule before 2026-10-31).
+  trailRefresh: number;
+  // A trail cell no ant of its colony has walked for this many seconds is gone; 0 never.
+  trailUnusedLife: number;
   markerDetectMin: number;
   territoryRule: boolean;
   foreignErasureFactor: number;
@@ -140,6 +145,8 @@ export function defaultParams(): SimParams {
     emissionDecay: 0.11,
     markerHalfLife: 15,
     markerEps: 1e-4,
+    trailRefresh: 1,
+    trailUnusedLife: 90,
     markerDetectMin: 1e-3,
     territoryRule: true,
     foreignErasureFactor: 0.5,

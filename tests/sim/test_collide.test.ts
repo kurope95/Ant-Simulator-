@@ -379,6 +379,8 @@ test("collide: antCollisions false restores the old behaviour", { timeout: 60_00
   params.lifeCycle = false;
   params.foodRegrowTime = 0;
   params.restAtHome = false;
+  params.trailRefresh = 1;
+  params.trailUnusedLife = 0;
   const world = worldFromSetup(quickStartSetup(7), params);
   for (let tick = 0; tick < 300; tick++) stepWorld(world);
   assert.equal(worldChecksum(world), 2915110820);

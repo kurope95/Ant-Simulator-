@@ -226,15 +226,16 @@ interface MarkerGrid { width: number; height: number; cell: number;
                        owner: Int8Array;                           // derived by decayMarkers, drawing only
                        toHome: Float32Array;                       // colonies * cells, index = colony * cells + cell
                        toFood: Float32Array;
+                       visited: Uint32Array; now: number;         // tick of each layer cell's last deposit; the world sets now each step
                        resize(worldSize: Vec2, cellSize: number, colonies?: number): void;
                        cellIndex(pos: Vec2): number }              // -1 outside the world
 makeMarkerGrid(worldSize, cellSize, colonies?): MarkerGrid
 homeAt(grid, colony, cell): number         // 0 for a cell or colony out of range
 foodAt(grid, colony, cell): number
 emissionStrength(timeSinceAnchor, params): number
-deposit(grid, cell, colony, channel, strength, params): void
+deposit(grid, cell, colony, channel, strength, params): void   // closes trailRefresh of the gap (1 = highest wins); stamps visited
 degrade(grid, cell, colony, channel, factor): void     // the depositor's own layer only
-decayMarkers(grid, factor, eps, flipMargin): void     // all layers, then recompute owner with hysteresis (M1.7)
+decayMarkers(grid, factor, eps, flipMargin, maxAgeTicks?): void     // all layers, then recompute owner with hysteresis (M1.7)   // maxAgeTicks: unvisited cells die (trailUnusedLife)
 
 // sim/food.ts
 interface FoodAmount { pos: Vec2; amount: number; infinite: boolean }
