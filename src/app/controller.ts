@@ -292,6 +292,9 @@ export class AppController {
 
   private openBuilderFromHome(): void {
     this.setup = loadPreset("meadow", seedFromNow(performance.now())) ?? this.setup;
+    // A new world starts with Meadow's ground and food but no nest: the player
+    // places every colony (Marek, 2026-10-31).
+    this.setup.colonies = [];
     this.runTheme = themeForPreset(this.setup.presetId);
     this.showBuilder(new BuilderModel(cloneSetup(this.setup)));
   }
