@@ -23,8 +23,8 @@ export function browserPath() {
     return chromePath();
   } catch {
     const edge = [
-      "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-      "C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+      "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+      "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
     ].find((path) => existsSync(path));
     if (!edge) throw new Error("neither Chrome nor Edge found; set CHROME_PATH");
     return edge;
