@@ -353,7 +353,7 @@ test("collide: ants inside their own nest radius don't collide", () => {
     assert.equal(world.ants.posX[i], x0[i], `ant ${i} x moved`);
     assert.equal(world.ants.posY[i], y0[i], `ant ${i} y moved`);
   }
-  assert.equal(params.nestExemptFactor, 1.0);
+  assert.equal(params.nestExemptFactor, 1.5); // M4 tuning default
 });
 
 test("collide: velocity is the actual movement, pushes included", () => {
