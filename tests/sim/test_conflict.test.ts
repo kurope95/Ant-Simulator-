@@ -163,7 +163,7 @@ test("conflict: a killed ant is counted as a fight death and its killer lets go"
   for (let t = 0; t < 30; t++) stepWorld(world);
   assert.equal(world.colonies[1].diedInFight, 1);
   assert.equal(world.corpses.items.length, 1, "the victim lies where it fell");
-  assert.equal(world.ants.combat[at(world, killer)], Combat.None);
+  assert.equal(world.ants.combat[at(world, killer)], Combat.Cooldown, "it lets go and cools down");
   assert.equal(world.ants.foe[at(world, killer)], kNoFoe);
 });
 
@@ -273,4 +273,42 @@ test("conflict: warriors never rest; fighting at the nest calls resting ants out
   }
   const out = 10 - colony.resting;
   assert.ok(out >= world.params.defendCallRate - 1 && out <= world.params.defendCallRate + 1, `${out} defenders in 1 s`);
+});
+
+test("conflict: a pursuer that cannot catch its foe gives up and starts no new fight while cooling down", () => {
+  const world = twoColonies();
+  const params = world.params;
+  const chaser = uidOf(world, addAnt(world, 0, { x: 300, y: 300 }, AntRole.Warrior, 0));
+  const runner = uidOf(world, addAnt(world, 1, { x: 330, y: 300 }, AntRole.Follower, 0));
+  const c = at(world, chaser);
+  world.ants.combat[c] = Combat.Fight;
+  world.ants.combatTimer[c] = params.chaseTime;
+  world.ants.foe[c] = runner;
+  // The runner is far faster: it can never be caught.
+  world.ants.speed[at(world, runner)] = 400;
+  for (let t = 0; t < (params.chaseTime + 0.5) * params.simHz; t++) stepWorld(world);
+  assert.equal(world.ants.combat[at(world, chaser)], Combat.Cooldown);
+  // Cooling down, it ignores a rival warrior right in front of it.
+  const i = at(world, chaser);
+  addAnt(world, 1, { x: world.ants.posX[i] + 12, y: world.ants.posY[i] }, AntRole.Warrior, Math.PI);
+  stepWorld(world);
+  assert.equal(world.ants.combat[at(world, chaser)], Combat.Cooldown);
+  for (let t = 0; t < params.fightCooldown * params.simHz; t++) stepWorld(world);
+  assert.notEqual(world.ants.combat[at(world, chaser)], Combat.Cooldown, "after the cool-down it may fight again");
+});
+
+test("conflict: once biting has started an outnumbered ant fights on; only bad wounds make it run", () => {
+  const world = twoColonies();
+  const lone = uidOf(world, addAnt(world, 0, { x: 500, y: 300 }, AntRole.Warrior, 0));
+  const foe = addAnt(world, 1, { x: 506, y: 300 }, AntRole.Warrior, Math.PI);
+  const l = at(world, lone);
+  world.ants.combat[l] = Combat.Fight;
+  world.ants.combatTimer[l] = world.params.chaseTime;
+  world.ants.foe[l] = world.ants.uid[foe];
+  for (let k = 0; k < 5; k++) addAnt(world, 1, { x: 512 + 3 * k, y: 292 + 4 * k }, AntRole.Follower, Math.PI);
+  stepWorld(world);
+  assert.equal(world.ants.combat[at(world, lone)], Combat.Fight, "outnumbered, but already biting: it fights on");
+  world.ants.wounds[at(world, lone)] = world.ants.energy[at(world, lone)] - 10;
+  stepWorld(world);
+  assert.equal(world.ants.combat[at(world, lone)], Combat.Retreat, "badly hurt: now it runs");
 });

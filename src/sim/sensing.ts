@@ -336,7 +336,7 @@ export function directSightTarget(world: World, ant: number): Vec2 | null {
       }
     }
     // Workers also see bodies lying in range (conflict design §2).
-    if (params.conflict && ants.role[ant] !== AntRole.Warrior && ants.combat[ant] === Combat.None) {
+    if (params.conflict && ants.role[ant] !== AntRole.Warrior && (ants.combat[ant] === Combat.None || ants.combat[ant] === Combat.Cooldown)) {
       const corpse = world.corpses.nearest(posX, posY, params.sensorRadius);
       if (corpse >= 0) {
         const body = world.corpses.items[corpse];

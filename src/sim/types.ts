@@ -23,6 +23,8 @@ export enum Combat {
   Standoff,
   Fight,
   Retreat,
+  // Gave up a chase: back to its job, and starts no new fight for fightCooldown s.
+  Cooldown,
 }
 
 // Ants.foe when the ant has no foe.

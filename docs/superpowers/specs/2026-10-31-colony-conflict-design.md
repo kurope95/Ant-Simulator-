@@ -52,6 +52,8 @@ Each ant looks at its surroundings at the start of the tick (a pass before Think
 - A worker heading out answers it only rarely (`WORKER_CALL × courage`).
 - Other workers treat it as danger: it lowers the score of their trail cells (`BATTLE_AVERSION`, less when the colony is stressed), so they take another way if there is one and push through if there is not.
 
+**No endless chases** (2026-10-31, Marek: runners dragged crowds of chasers across the map): once biting has started an ant fights it out and breaks off only below `RETREAT_HEALTH`; being outnumbered makes it back off only during the standoff. Wounds slow an ant by up to `WOUND_SLOW` (60%) of its speed, so a hurt runner is caught. A fight that ends (foe dead, gone, or never caught within `CHASE_TIME`) leaves the ant in `Cooldown` for `FIGHT_COOLDOWN` (5 s): it goes back to its job and starts no new fight, but still defends itself if bitten. Measured on Dunes seed 2 over 10 minutes: retreating ants 3–9 at a time (25–30 before), fights now kill about as many as old age.
+
 **Stopping, one ant at a time.** A fighter breaks off and heads home when its health falls below `RETREAT_HEALTH`, when it is very hungry, when it is outnumbered, or when its foe is gone or out of reach. A retreating ant does not start fights for `RETREAT_TIME`.
 
 **Stopping, whole colony.** Through mood and fear (§6): a colony that has lost many ants becomes careful, and a colony with full stores is calm and avoids fights.

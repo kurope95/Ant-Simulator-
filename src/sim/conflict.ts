@@ -160,9 +160,12 @@ function startRetreat(world: World, ant: number): void {
   if (ants.state[ant] === AntState.Foraging) ants.state[ant] = AntState.ReturningExhausted;
 }
 
+// A fight ends (foe gone, out of reach, or never caught): the ant goes back to
+// its job and cools down, so it does not at once pick the same runner up again
+// and a crowd does not chase one ant across the map.
 function stopFighting(world: World, ant: number): void {
-  world.ants.combat[ant] = Combat.None;
-  world.ants.combatTimer[ant] = 0;
+  world.ants.combat[ant] = Combat.Cooldown;
+  world.ants.combatTimer[ant] = world.params.fightCooldown;
   world.ants.foe[ant] = kNoFoe;
 }
 
@@ -193,6 +196,10 @@ export function combatStep(world: World, ant: number, look: LookAround, dt: numb
   ants.combatTimer[ant] -= dt;
 
   const state = ants.combat[ant];
+  if (state === Combat.Cooldown) {
+    if (ants.combatTimer[ant] <= 0) ants.combat[ant] = Combat.None;
+    return kFree;
+  }
   if (state === Combat.Retreat) {
     if (ants.combatTimer[ant] <= 0) {
       ants.combat[ant] = Combat.None;
@@ -216,7 +223,10 @@ export function combatStep(world: World, ant: number, look: LookAround, dt: numb
       stopFighting(world, ant);
       return kFree;
     }
-    if (weak || (outnumbered && !defending)) {
+    // Before blows an outnumbered ant backs off; once biting has started it
+    // fights it out and breaks off only when badly hurt (Marek, 2026-10-31:
+    // runners dragged crowds of chasers across the map).
+    if (weak || (state === Combat.Standoff && outnumbered && !defending)) {
       startRetreat(world, ant);
       return { heading: Math.atan2(-dy, -dx), hold: false };
     }

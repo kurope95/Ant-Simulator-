@@ -239,7 +239,9 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
     ants.heading[ant] = turnToward(ants.heading[ant], desired, params.turnRate * dt);
     const direction = fromAngle(ants.heading[ant]);
     // An ant facing off or biting stands its ground.
-    const moveSpeed = fight !== null && fight.hold ? 0 : ants.speed[ant];
+    // Wounds slow an ant down (up to woundSlow of its speed), so a hurt runner is caught.
+    const woundFactor = params.conflict ? 1 - params.woundSlow * Math.min(1, ants.wounds[ant] / params.energyMax) : 1;
+    const moveSpeed = fight !== null && fight.hold ? 0 : ants.speed[ant] * woundFactor;
     ants.velX[ant] = moveSpeed * direction.x;
     ants.velY[ant] = moveSpeed * direction.y;
     ants.prevX[ant] = ants.posX[ant];
@@ -322,7 +324,7 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
       params.conflict &&
       ants.state[ant] === AntState.Foraging &&
       ants.role[ant] !== AntRole.Warrior &&
-      ants.combat[ant] === Combat.None
+      (ants.combat[ant] === Combat.None || ants.combat[ant] === Combat.Cooldown)
     ) {
       const corpse = world.corpses.nearest(ants.posX[ant], ants.posY[ant], 2 * params.antRadius);
       if (corpse >= 0) out.contacts.push({ antIndex: ant, kind: ContactKind.Corpse, target: corpse });
@@ -666,7 +668,8 @@ function applyBite(world: World, attacker: number, victim: number, damage: numbe
   ants.wounds[victim] += taken;
   ants.sinceHit[victim] = 0;
   ants.fear[victim] = Math.min(1, ants.fear[victim] + taken * params.fearPerDamage);
-  if (ants.combat[victim] === Combat.None) {
+  // Bitten while not fighting, or cooling down after a chase: it turns on its attacker.
+  if (ants.combat[victim] === Combat.None || ants.combat[victim] === Combat.Cooldown) {
     ants.combat[victim] = Combat.Fight;
     ants.combatTimer[victim] = params.chaseTime;
     ants.foe[victim] = ants.uid[attacker];

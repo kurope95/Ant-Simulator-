@@ -92,6 +92,10 @@ export interface SimParams {
   defendCallRate: number;
   standoffTime: number;
   chaseTime: number;
+  // After giving up a chase an ant starts no new fight for this long (it still defends itself).
+  fightCooldown: number;
+  // Share of its speed a fully wounded ant loses: hurt runners get caught.
+  woundSlow: number;
   retreatTime: number;
   retreatOdds: number;
   workerOdds: number;
@@ -240,6 +244,8 @@ export function defaultParams(): SimParams {
     defendCallRate: 3,
     standoffTime: 3,
     chaseTime: 3,
+    fightCooldown: 5,
+    woundSlow: 0.6,
     retreatTime: 6,
     retreatOdds: 1.5,
     workerOdds: 2,
