@@ -66,6 +66,20 @@ export interface SimParams {
   birthRatePerAnt: number;
   // Births that can bank up while the stores are low.
   birthBurst: number;
+  // Self-balancing colony (spec §5.8). Off: every ant is always out foraging.
+  restAtHome: boolean;
+  // A resting ant burns this share of the normal energy rate.
+  restBurnFactor: number;
+  // Resting ants each delivery calls out of the nest.
+  recruitPerDelivery: number;
+  // Only a pile with at least this much left after the pickup is worth calling others out for.
+  recruitMinPile: number;
+  // Share of the resting ants that leave as scouts each second.
+  scoutRate: number;
+  // The queen lays by the food coming in per ant per minute: not at all at or
+  // below layIncomeNone, at full rate from layIncomeFull.
+  layIncomeNone: number;
+  layIncomeFull: number;
   nestBaseR: number;
   nestGrowth: number;
   foodBaseR: number;
@@ -152,6 +166,13 @@ export function defaultParams(): SimParams {
     birthRateBase: 1,
     birthRatePerAnt: 0.004,
     birthBurst: 3,
+    restAtHome: true,
+    restBurnFactor: 0.25,
+    recruitPerDelivery: 1,
+    recruitMinPile: 100,
+    scoutRate: 0.002,
+    layIncomeNone: 3,
+    layIncomeFull: 6,
     nestBaseR: 20,
     nestGrowth: 0.4,
     foodBaseR: 12,

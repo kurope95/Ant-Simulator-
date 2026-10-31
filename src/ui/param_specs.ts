@@ -13,6 +13,10 @@ export type ParamKey =
   | "energyBurn"
   | "spawnCost"
   | "foodRegrowTime"
+  | "recruitPerDelivery"
+  | "scoutRate"
+  | "layIncomeNone"
+  | "layIncomeFull"
   | "foreignErasureFactor"
   | "foreignAversion"
   | "tHorizon";
@@ -49,6 +53,11 @@ const kSpecs: readonly ParamSpec[] = [
   { key: "energyBurn", label: "Energy burn", unit: "/s", min: 0.1, max: 5, step: 0.1, scale: 1, group: "colony" },
   { key: "spawnCost", label: "Spawn cost", unit: "food", min: 1, max: 20, step: 1, scale: 1, group: "colony" },
   // Minutes for an emptied pile to grow back; 0 turns regrowth off.
+  // Self-balancing colony (spec §5.8).
+  { key: "recruitPerDelivery", label: "Ants called out per delivery", unit: "", min: 0, max: 4, step: 0.25, scale: 1, group: "colony", digits: 2 },
+  { key: "scoutRate", label: "Resting ants scouting", unit: "%/min", min: 0, max: 60, step: 1, scale: 6000, group: "colony" },
+  { key: "layIncomeNone", label: "Queen stops laying below", unit: "food/ant/min", min: 0, max: 5, step: 0.1, scale: 1, group: "colony" },
+  { key: "layIncomeFull", label: "Queen lays fully from", unit: "food/ant/min", min: 0.5, max: 10, step: 0.1, scale: 1, group: "colony" },
   { key: "foodRegrowTime", label: "Food grows back in", unit: "min", min: 0, max: 60, step: 1, scale: 1 / 60, group: "colony" },
 ];
 

@@ -41,6 +41,8 @@ export class Ants {
   avoidX: Float32Array;
   avoidY: Float32Array;
   lifeLeft: Float32Array;
+  // 1 while carrying from a pile that still had plenty left: worth calling others out for (spec §5.8).
+  richFind: Uint8Array;
 
   private count = 0;
   private capacity: number;
@@ -76,6 +78,7 @@ export class Ants {
     this.avoidX = new Float32Array(capacity);
     this.avoidY = new Float32Array(capacity);
     this.lifeLeft = new Float32Array(capacity);
+    this.richFind = new Uint8Array(capacity);
   }
 
   size(): number {
@@ -113,6 +116,7 @@ export class Ants {
     this.avoidX[i] = 0;
     this.avoidY[i] = 0;
     this.lifeLeft[i] = a.lifeLeft ?? Infinity;
+    this.richFind[i] = 0;
     this.indexByUid.set(uid, i);
     this.count += 1;
     return i;
@@ -153,6 +157,7 @@ export class Ants {
       this.avoidX[index] = this.avoidX[last];
       this.avoidY[index] = this.avoidY[last];
       this.lifeLeft[index] = this.lifeLeft[last];
+      this.richFind[index] = this.richFind[last];
       this.indexByUid.set(this.uid[index], index);
     }
     this.indexByUid.delete(removedUid);
@@ -195,6 +200,7 @@ export class Ants {
     this.avoidX = grow(this.avoidX, next);
     this.avoidY = grow(this.avoidY, next);
     this.lifeLeft = grow(this.lifeLeft, next);
+    this.richFind = grow(this.richFind, next);
     this.capacity = next;
   }
 }
