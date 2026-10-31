@@ -118,3 +118,24 @@ test("food: eating off a pile shrinks it", () => {
   sources.eat(0, 9);
   assert.equal(sources.items[0].amount, 0, "eaten under one piece, it dies");
 });
+
+test("food: living piles seed new ones and wild food sprouts, never on rock, at a nest or on a pile", async () => {
+  const { worldFromSetup } = await import("../../src/sim/setup_apply.js");
+  const { quickStartSetup } = await import("../../src/sim/presets.js");
+  const { stepWorld } = await import("../../src/sim/world.js");
+  const { isSolidAt } = await import("../../src/sim/obstacles.js");
+  const params = defaultParams();
+  params.foodSpreadRate = 3;
+  params.foodSproutRate = 3;
+  const world = worldFromSetup(quickStartSetup(4), params, { spawnAnts: false });
+  const before = world.food.items.length;
+  for (let t = 0; t < 120 * params.simHz; t++) stepWorld(world);
+  assert.ok(world.food.items.length > before, `${before} -> ${world.food.items.length} piles`);
+  assert.ok(world.food.items.length <= params.foodPileCap);
+  for (const pile of world.food.items) {
+    assert.equal(isSolidAt(world.obstacles, pile.pos), false, "not on rock or water");
+    for (const colony of world.colonies) {
+      assert.ok(Math.hypot(pile.pos.x - colony.nest.x, pile.pos.y - colony.nest.y) >= nestRadius(colony, params) * 3 - 1);
+    }
+  }
+});

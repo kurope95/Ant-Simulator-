@@ -55,6 +55,9 @@ import {
 // 12 px gap, matching --rail-w in styles.css) and a small edge margin.
 const kRunRailInsetCss = 88;
 const kRunEdgeInsetCss = 12;
+// The builder's top bar and tool rail, when they cannot be measured yet.
+const kBuilderTopInsetCss = 92;
+const kBuilderLeftInsetCss = 120;
 const kMaxFrameSeconds = 0.25;
 // Most of a frame the simulation may use at 1x; past it the frame draws and the
 // rest of the steps are dropped, so a big colony slows the ants, not the picture.
@@ -434,10 +437,24 @@ export class AppController {
   // open over the map on hover); everywhere else, and in zen mode, it uses the
   // whole canvas.
   private runInsets(): Insets {
+    if (this.session.screen === Screen.Builder) return this.builderInsets();
     if (this.session.screen !== Screen.Run || this.session.zen) return kNoInsets;
     const side = kRunRailInsetCss * this.camera.pixelRatio();
     const edge = kRunEdgeInsetCss * this.camera.pixelRatio();
     return { left: side, right: side, top: edge, bottom: edge };
+  }
+
+  // The builder fits the map below its top bar and right of its tool rail, so
+  // no part of the map is hidden under them. Measured from the panels, which
+  // wrap on narrow windows; the fallback is their usual size.
+  private builderInsets(): Insets {
+    const ratio = this.camera.pixelRatio();
+    const root = this.builderScreen?.root ?? null;
+    const bar = root?.querySelector(".builder__bar")?.getBoundingClientRect();
+    const rail = root?.querySelector(".builder__rail")?.getBoundingClientRect();
+    const top = bar !== undefined && bar.bottom > 0 ? bar.bottom + 12 : kBuilderTopInsetCss;
+    const left = rail !== undefined && rail.right > 0 ? rail.right + 12 : kBuilderLeftInsetCss;
+    return { left: left * ratio, right: 16 * ratio, top: top * ratio, bottom: 16 * ratio };
   }
 
   private presetName(): string {

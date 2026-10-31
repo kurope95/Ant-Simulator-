@@ -378,6 +378,8 @@ test("collide: antCollisions false restores the old behaviour", { timeout: 60_00
   params.antCollisions = false;
   params.lifeCycle = false;
   params.foodGrowthRate = 0;
+  params.foodSpreadRate = 0;
+  params.foodSproutRate = 0;
   params.restAtHome = false;
   params.trailRefresh = 1;
   params.trailUnusedLife = 0;

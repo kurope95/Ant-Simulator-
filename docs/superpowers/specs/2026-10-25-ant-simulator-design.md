@@ -168,6 +168,7 @@ All writes to the marker grid happen in the serial event phase (§5.2), in a fix
 - Radius = `FOOD_BASE_R × sqrt(amount / FOOD_REF_AMOUNT)`, with a minimum.
 - They are placed with the Food tool, whose capacity and kind are chosen in the builder.
 - **Living food** (2026-10-31, Marek: food as "its own organism"; replaces a flat regrowth tried earlier the same day, which fed any colony size forever): a source grows like a population, logistically, by `FOOD_GROWTH_RATE × amount × (1 − amount / capacity)` per minute, in the Events phase; `capacity` is its starting amount, so it never grows past it. The less is left, the less it adds: a colony that keeps a pile half-eaten gets the most from it, one that strips it loses it. Eaten under one piece (by taking or by meals, §5.6), a source is **dead**: it never grows again, lies bare for `kDeadPileLinger` (60 s) so ants arriving on its trail find it empty (§5.4), and is then removed. A source that never grew (capacity 0, or growth 0) is removed when empty, as before.
+- **New food** (2026-11-01, Marek: finish everything agreed): with living food alone every map ended in starvation (founders strip piles faster than any growth rate can refill them). Checked once a second in the Events phase: each living source seeds a new one `FOOD_SPREAD_RATE` times a minute when full, less in proportion when depleted, 120–360 u away in a direction drawn from streams `FoodSprout`/`FoodSproutPlace`; and `FOOD_SPROUT_RATE` times a minute a wild one sprouts anywhere. A new source has half its parent's capacity (at least 500; wild ones 1,500) and starts at a tenth of it, then grows logistically. Never on rock or water, within three nest radii of a nest, within 60 u of another source, or past `FOOD_PILE_CAP` living sources. Dead patches never come back.
 - All colonies share all food sources.
 - **Visible pieces:** one piece per 100 units, 1–48 pieces; an infinite source always shows 48. Pieces sit on a deterministic golden-angle spiral, inner-first, so each 100 units consumed removes only the outer pieces. This is rendering state; it uses a visual hash, never `randU32`.
 
@@ -544,6 +545,7 @@ Rules:
 | `LAY_INCOME_NONE` / `LAY_INCOME_FULL` | 3 / 6 | food per ant per minute | §5.8; sliders "Queen stops laying below", "Queen lays fully from" |
 | `NEST_BASE_R` / `NEST_GROWTH` | 20 / 0.4 | u | r = base + growth × √population |
 | `FOOD_BASE_R` / `FOOD_REF_AMOUNT` | 12 / 500 | u / units | |
+| `FOOD_SPREAD_RATE` / `FOOD_SPROUT_RATE` / `FOOD_PILE_CAP` | 0.5 / 0.3 / 24 | per minute / per minute / sources | §4.4 new food; sliders "Food piles spread", "Wild food sprouts" |
 | `FOOD_GROWTH_RATE` | 0.4 | share of own size per minute | living food, logistic up to the starting amount; 0 = no growth (§4.4). Slider "Food growth" (%/min) |
 | `BARE_GO_HOME` / `FOOD_PATIENCE` | on / 5 | – / s | §5.4 |
 | `FOOD_MIN_R` | 4 | u | smallest drawn and touchable food radius |

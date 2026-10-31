@@ -15,6 +15,8 @@ export type ParamKey =
   | "energyBurn"
   | "spawnCost"
   | "foodGrowthRate"
+  | "foodSpreadRate"
+  | "foodSproutRate"
   | "recruitPerDelivery"
   | "scoutRate"
   | "layIncomeNone"
@@ -67,6 +69,8 @@ const kSpecs: readonly ParamSpec[] = [
   { key: "layIncomeNone", label: "Queen stops laying below", hint: "Food brought home per ant per minute below which the queen lays no eggs.", unit: "food/ant/min", min: 0, max: 5, step: 0.1, scale: 1, group: "colony" },
   { key: "layIncomeFull", label: "Queen lays fully from", hint: "Food brought home per ant per minute from which the queen lays at full speed.", unit: "food/ant/min", min: 0.5, max: 10, step: 0.1, scale: 1, group: "behaviour" },
   // Living food: growth as a share of the pile's own size per minute; 0 turns it off.
+  { key: "foodSpreadRate", label: "Food piles spread", hint: "How often a full food pile seeds a small new pile nearby, per minute. Fewer when it is half eaten.", unit: "/min", min: 0, max: 3, step: 0.1, scale: 1, group: "behaviour" },
+  { key: "foodSproutRate", label: "Wild food sprouts", hint: "How often a small new food pile sprouts somewhere random on the map, per minute.", unit: "/min", min: 0, max: 3, step: 0.1, scale: 1, group: "behaviour" },
   { key: "foodGrowthRate", label: "Food grows by", hint: "How fast a food pile grows back, as a share of its own size per minute. A stripped pile is dead for good.", unit: "%/min", min: 0, max: 200, step: 5, scale: 100, group: "behaviour" },
 ];
 

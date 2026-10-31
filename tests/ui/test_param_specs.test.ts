@@ -31,10 +31,10 @@ function assertFiniteWorld(world: World): void {
   }
 }
 
-test("param specs: twenty-one live controls with valid ranges and defaults", () => {
+test("param specs: twenty-three live controls with valid ranges and defaults", () => {
   const specs = paramSpecs();
-  assert.equal(specs.length, 21);
-  assert.equal(new Set(specs.map((spec) => spec.key)).size, 21);
+  assert.equal(specs.length, 23);
+  assert.equal(new Set(specs.map((spec) => spec.key)).size, 23);
   assert.ok(specs.some((spec) => spec.key === "degradeTime"));
   const defaults = defaultParams();
   for (const spec of specs) {

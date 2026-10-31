@@ -17,6 +17,7 @@ import { turnToward, updateWander } from "./steering.js";
 import { evaluateStuck, inRestZone } from "./stuck.js";
 import { AntRole, AntState, RandStream } from "./types.js";
 import type { SimParams } from "./params.js";
+import { FoodKind } from "./setup.js";
 import type { World } from "./world.js";
 
 export function senseChannel(state: number): MarkerChannel {
@@ -519,6 +520,7 @@ export function applyEvents(world: World, events: readonly ChunkEvents[]): void 
   }
 
   world.food.regrow(1 / params.simHz, params.foodGrowthRate);
+  if (world.tick % params.simHz === 0) sproutFood(world);
   world.food.removeEmpty();
   for (const colony of world.colonies) {
     updateIncome(colony, colony.deliveredTotal - (incomeMark.get(colony) ?? colony.deliveredTotal), params.simHz);
@@ -532,6 +534,68 @@ export function applyEvents(world: World, events: readonly ChunkEvents[]): void 
     }
     layEggs(world, colony);
   }
+}
+
+// New food (spec §4.4), checked once a second: each living pile may seed a
+// new one nearby, more often the fuller it is, and now and then a pile sprouts
+// anywhere. New piles start small and grow like the rest; dead patches never
+// come back. Never on rock or water, near a nest, or on top of another pile.
+const kSproutMinDistance = 120;
+const kSproutMaxDistance = 360;
+const kSproutPileGap = 60;
+const kSproutSeedShare = 0.1;
+const kWildCapacity = 1500;
+const kWildUid = 0x7fff0000;
+
+function sproutFood(world: World): void {
+  const params = world.params;
+  if (!(params.foodSpreadRate > 0) && !(params.foodSproutRate > 0)) return;
+  const items = world.food.items;
+  const living = (): number => items.filter((pile) => pile.deadFor === undefined && pile.amount >= 1).length;
+  const parents = items.filter(
+    (pile) => !pile.infinite && pile.deadFor === undefined && (pile.capacity ?? 0) > 0 && pile.amount >= 1,
+  );
+  for (const parent of parents) {
+    if (living() >= params.foodPileCap) return;
+    const capacity = parent.capacity ?? 0;
+    const chance = (params.foodSpreadRate / 60) * (parent.amount / capacity);
+    if (randUnit(world.seed, parent.uid, world.tick, RandStream.FoodSprout) >= chance) continue;
+    const angle = randRange(world.seed, parent.uid, world.tick, RandStream.FoodSproutPlace, -Math.PI, Math.PI);
+    const reach = kSproutMinDistance + (kSproutMaxDistance - kSproutMinDistance) * randUnit(world.seed, parent.uid ^ 0x55aa, world.tick, RandStream.FoodSproutPlace);
+    const pos = { x: parent.pos.x + Math.cos(angle) * reach, y: parent.pos.y + Math.sin(angle) * reach };
+    plantPile(world, pos, Math.max(500, capacity * 0.5), parent.kind);
+  }
+  if (params.foodSproutRate > 0 && living() < params.foodPileCap) {
+    const key = kWildUid;
+    if (randUnit(world.seed, key, world.tick, RandStream.FoodSprout) < params.foodSproutRate / 60) {
+      const pos = {
+        x: randRange(world.seed, key, world.tick, RandStream.FoodSproutPlace, 30, world.size.x - 30),
+        y: randRange(world.seed, key ^ 0x55aa, world.tick, RandStream.FoodSproutPlace, 30, world.size.y - 30),
+      };
+      const kind = Math.floor(randUnit(world.seed, key ^ 0x33cc, world.tick, RandStream.FoodSprout) * 3) as FoodKind;
+      plantPile(world, pos, kWildCapacity, kind);
+    }
+  }
+}
+
+function plantPile(world: World, pos: { x: number; y: number }, capacity: number, kind: FoodKind): void {
+  if (pos.x < 30 || pos.y < 30 || pos.x > world.size.x - 30 || pos.y > world.size.y - 30) return;
+  if (isSolidAt(world.obstacles, pos)) return;
+  for (const colony of world.colonies) {
+    const keep = nestRadius(colony, world.params) * 3;
+    if ((colony.nest.x - pos.x) ** 2 + (colony.nest.y - pos.y) ** 2 < keep * keep) return;
+  }
+  for (const pile of world.food.items) {
+    if ((pile.pos.x - pos.x) ** 2 + (pile.pos.y - pos.y) ** 2 < kSproutPileGap * kSproutPileGap) return;
+  }
+  world.food.items.push({
+    uid: world.food.nextUid++,
+    pos,
+    amount: Math.max(20, capacity * kSproutSeedShare),
+    capacity,
+    infinite: false,
+    kind,
+  });
 }
 
 // An ant eats its fill off a food pile, at the price of a meal at home (spec

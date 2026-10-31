@@ -27,4 +27,6 @@ export enum RandStream {
   Lifespan,
   StartingAge,
   LeaveNest,
+  FoodSprout,
+  FoodSproutPlace,
 }
