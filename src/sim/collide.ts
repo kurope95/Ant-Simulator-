@@ -15,6 +15,8 @@ export interface CollisionScratch {
   corrX: Float32Array;
   corrY: Float32Array;
   count: Uint16Array;
+  // 1 for an ant inside its nest exemption, worked out once per pass.
+  exempt: Uint8Array;
   nb: Uint32Array;
 }
 
@@ -25,6 +27,7 @@ export function makeCollisionScratch(): CollisionScratch {
     corrX: new Float32Array(0),
     corrY: new Float32Array(0),
     count: new Uint16Array(0),
+    exempt: new Uint8Array(0),
     nb: new Uint32Array(kNeighbourBuffer),
   };
 }
@@ -52,24 +55,26 @@ export function resolveAntOverlaps(world: World, scratch: CollisionScratch): voi
     scratch.corrX = new Float32Array(ants.posX.length);
     scratch.corrY = new Float32Array(ants.posX.length);
     scratch.count = new Uint16Array(ants.posX.length);
+    scratch.exempt = new Uint8Array(ants.posX.length);
   }
-  const { corrX, corrY, count, nb } = scratch;
+  const { corrX, corrY, count, exempt, nb } = scratch;
   const hash = world.spatialHash;
   const posX = ants.posX;
   const posY = ants.posY;
   const d = 2 * params.antRadius;
   const dSq = d * d;
 
+  for (let i = 0; i < n; i++) exempt[i] = exemptAtNest(world, i) ? 1 : 0;
   for (let i = 0; i < n; i++) {
     corrX[i] = 0;
     corrY[i] = 0;
     count[i] = 0;
-    if (exemptAtNest(world, i)) continue;
+    if (exempt[i] === 1) continue;
     // +1 u: positions shift between iterations, so look a little wider than contact.
     const found = hash.queryWithin(posX[i], posY[i], d + 1, posX, posY, i, nb);
     for (let k = 0; k < found; k++) {
       const j = nb[k];
-      if (exemptAtNest(world, j)) continue;
+      if (exempt[j] === 1) continue;
       const dx = posX[i] - posX[j];
       const dy = posY[i] - posY[j];
       const distSq = dx * dx + dy * dy;
