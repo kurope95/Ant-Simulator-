@@ -132,6 +132,10 @@ export function stepWorld(world: World): void {
   const total = stopwatch();
   world.tick += 1;
   world.markers.now = world.tick;
+  // Every ant's start-of-step position, for reads of other ants during Think.
+  const n = world.ants.size();
+  world.ants.prevX.set(world.ants.posX.subarray(0, n));
+  world.ants.prevY.set(world.ants.posY.subarray(0, n));
 
   const timed = (phase: Phase, run: () => void): void => {
     const watch = stopwatch();

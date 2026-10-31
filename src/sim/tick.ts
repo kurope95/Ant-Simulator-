@@ -129,12 +129,15 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
     // The crowd count and zone scan only matter once the timer has expired;
     // doing them every tick for every ant is most of the hash query cost.
     if (ants.timeSinceLastMarker[ant] > params.stuckTimeout) {
+      // Crowd counts read start-of-step positions (prevX/prevY, set for every
+      // ant before Think), so the answer does not depend on which ants have
+      // already moved this step: chunk order, and the worker count, cannot matter.
       const nearby = world.spatialHash.countWithin(
-        ants.posX[ant],
-        ants.posY[ant],
+        ants.prevX[ant],
+        ants.prevY[ant],
         params.crowdRadiusFactor * params.antRadius,
-        ants.posX,
-        ants.posY,
+        ants.prevX,
+        ants.prevY,
         ant,
       );
       const stuck = evaluateStuck(
@@ -274,11 +277,11 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
       const crowded =
         near >= 0 &&
         world.spatialHash.countWithin(
-          ants.posX[ant],
-          ants.posY[ant],
+          ants.prevX[ant],
+          ants.prevY[ant],
           params.crowdRadiusFactor * params.antRadius,
-          ants.posX,
-          ants.posY,
+          ants.prevX,
+          ants.prevY,
           ant,
         ) >= params.crowdLimit;
       ants.foodWait[ant] = crowded ? ants.foodWait[ant] + dt : 0;

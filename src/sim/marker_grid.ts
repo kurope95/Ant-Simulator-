@@ -1,3 +1,4 @@
+import { f32, i8, u32 } from "../core/shared.js";
 import type { Vec2 } from "../core/vec2.js";
 import type { SimParams } from "./params.js";
 import { kNoOwner } from "./types.js";
@@ -31,10 +32,10 @@ export function makeMarkerGrid(worldSize: Vec2, cellSize: number, colonies = 1):
     height: 0,
     cell: cellSize,
     colonies: 1,
-    owner: new Int8Array(0),
-    toHome: new Float32Array(0),
-    toFood: new Float32Array(0),
-    visited: new Uint32Array(0),
+    owner: i8(0),
+    toHome: f32(0),
+    toFood: f32(0),
+    visited: u32(0),
     now: 0,
     resize(size: Vec2, cell: number, layers = 1): void {
       this.cell = cell;
@@ -42,11 +43,11 @@ export function makeMarkerGrid(worldSize: Vec2, cellSize: number, colonies = 1):
       this.height = Math.ceil(size.y / cell);
       this.colonies = Math.max(1, Math.floor(layers));
       const cells = this.width * this.height;
-      this.owner = new Int8Array(cells);
+      this.owner = i8(cells);
       this.owner.fill(kNoOwner);
-      this.toHome = new Float32Array(cells * this.colonies);
-      this.toFood = new Float32Array(cells * this.colonies);
-      this.visited = new Uint32Array(cells * this.colonies);
+      this.toHome = f32(cells * this.colonies);
+      this.toFood = f32(cells * this.colonies);
+      this.visited = u32(cells * this.colonies);
     },
     cellIndex(pos: Vec2): number {
       if (pos.x < 0 || pos.y < 0 || pos.x >= this.width * this.cell || pos.y >= this.height * this.cell) {

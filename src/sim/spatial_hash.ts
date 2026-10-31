@@ -1,3 +1,4 @@
+import { u32 } from "../core/shared.js";
 import type { Vec2 } from "../core/vec2.js";
 
 // Counting-sort bucket grid over ant positions. Rebuilt once per tick; it
@@ -8,9 +9,9 @@ export class SpatialHash {
   cell = 1;
   cols = 0;
   rows = 0;
-  cellStart = new Uint32Array(0);
-  cellEnd = new Uint32Array(0);
-  items = new Uint32Array(0);
+  cellStart = u32(0);
+  cellEnd = u32(0);
+  items = u32(0);
   private slotByCell = new Int32Array(0);
   private activeCells = new Uint32Array(0);
   private lastCells = new Uint32Array(0);
@@ -23,8 +24,8 @@ export class SpatialHash {
     this.rows = Math.max(1, Math.ceil(worldSize.y / this.cell));
     const cells = this.cols * this.rows;
     if (this.cellStart.length !== cells) {
-      this.cellStart = new Uint32Array(cells);
-      this.cellEnd = new Uint32Array(cells);
+      this.cellStart = u32(cells);
+      this.cellEnd = u32(cells);
       this.slotByCell = new Int32Array(cells);
       this.slotByCell.fill(-1);
       this.lastCount = 0;
@@ -37,7 +38,7 @@ export class SpatialHash {
       }
     }
     this.lastCount = 0;
-    if (this.items.length < count) this.items = new Uint32Array(count);
+    if (this.items.length < count) this.items = u32(count);
     if (this.activeCells.length < count) {
       this.activeCells = new Uint32Array(count);
       this.lastCells = new Uint32Array(count);

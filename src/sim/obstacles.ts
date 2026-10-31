@@ -1,3 +1,4 @@
+import { u8 } from "../core/shared.js";
 import type { Vec2 } from "../core/vec2.js";
 import { ObstacleKind, type ObstacleCells } from "./setup.js";
 
@@ -18,6 +19,13 @@ function solidKind(kind: number): boolean {
   return kind === ObstacleKind.Rock || kind === ObstacleKind.Water;
 }
 
+// A shareable copy of the setup's cell kinds (core/shared.ts).
+function copyU8(source: ArrayLike<number>): Uint8Array {
+  const copy = u8(source.length);
+  copy.set(source);
+  return copy;
+}
+
 function gridSize(width: number, height: number, cell: number): Vec2 {
   return { x: width * cell, y: height * cell };
 }
@@ -33,9 +41,9 @@ export function makeObstacleGrid(size: Vec2, cell: number): ObstacleGrid {
     width,
     height,
     size: gridSize(width, height, scale),
-    kind: new Uint8Array(width * height),
-    border: new Uint8Array(width * height),
-    nearSolid: new Uint8Array(width * height),
+    kind: u8(width * height),
+    border: u8(width * height),
+    nearSolid: u8(width * height),
   };
 }
 
@@ -47,9 +55,9 @@ export function obstacleGridFromCells(cells: ObstacleCells): ObstacleGrid {
     width,
     height,
     size: gridSize(width, height, cells.cell),
-    kind: new Uint8Array(cells.kind),
-    border: new Uint8Array(width * height),
-    nearSolid: new Uint8Array(width * height),
+    kind: copyU8(cells.kind),
+    border: u8(width * height),
+    nearSolid: u8(width * height),
   };
   rebuildBorder(grid);
   return grid;
