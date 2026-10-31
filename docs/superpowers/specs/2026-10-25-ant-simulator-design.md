@@ -275,6 +275,8 @@ Starting values are below. Tune them so Explorers leave an established highway r
 
 **Randomness.** Every random number comes from a counter-based hash, `rand(seed, uid, tick, stream)`. There is no shared random-number state, so results don't depend on how threads are scheduled.
 
+**Seeing food** (2026-11-01, Marek saw ants circling a big pile on its scent ring): a foraging ant sees a source by its edge, not its centre (a pile of 8,000 is wider than the 32 u sight range), and within `FOOD_SMELL_RADIUS` (16 u) of the edge smells it in every direction, not only in its cone. 0 restores the old centre-only, cone-only sight; the legacy checksum test uses 0.
+
 **Empty and crowded sources** (2026-10-31, Marek saw hundreds of ants milling at a source while a few carried):
 - A forager that touches a dead source turns for home (`BARE_GO_HOME`); with the colony balancing itself (§5.8) it rests.
 - **Patience:** a forager within `ZONE_MARGIN` of a source and crowded (`CROWD_LIMIT` nestmates within `CROWD_RADIUS_FACTOR` radii) without reaching it for `FOOD_PATIENCE` seconds goes home. A piece won after waiting in a crowd (over 1 s) calls nobody out (§5.8), so a jam drains instead of being fed by recruitment.

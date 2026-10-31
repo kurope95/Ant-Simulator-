@@ -188,8 +188,11 @@ test("sensing: direct sight needs range, facing and the right target", () => {
   assert.notEqual(heading, null);
   assert.ok(Math.abs(heading! - Math.atan2(10, 20)) < 1e-9);
 
+  // Close enough to smell, it is found facing any way; a little farther, only in the cone.
   world.ants.heading[index] = Math.PI;
-  assert.equal(directSightHeading(world, index), null);
+  assert.notEqual(directSightHeading(world, index), null, "smelled up close in every direction");
+  world.food.items[0].pos = { x: 130, y: 115 };
+  assert.equal(directSightHeading(world, index), null, "farther off and behind: not seen");
 
   world.ants.state[index] = AntState.ReturningFood;
   world.ants.posX[index] = 20;
@@ -202,6 +205,13 @@ test("sensing: direct sight needs range, facing and the right target", () => {
   const far = makeSenseWorld();
   far.world.food.items.push({ uid: 1, pos: { x: 300, y: 100 }, amount: 500, infinite: false, kind: FoodKind.Seeds });
   assert.equal(directSightHeading(far.world, far.index), null);
+});
+
+test("sensing: a big pile is seen by its edge, not its centre", () => {
+  const { world, index } = makeSenseWorld();
+  // 8,000 food: radius about 48, so the centre is beyond the 32 u sight range.
+  world.food.items.push({ uid: 1, pos: { x: 160, y: 100 }, amount: 8000, infinite: false, kind: FoodKind.Seeds });
+  assert.notEqual(directSightHeading(world, index), null);
 });
 
 test("sensing: fallback picks the open gap", () => {

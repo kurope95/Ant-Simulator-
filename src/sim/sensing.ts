@@ -1,6 +1,7 @@
 import { angleDiff } from "../core/math.js";
 import { angleOf, type Vec2 } from "../core/vec2.js";
 import { MarkerChannel, type MarkerGrid } from "./marker_grid.js";
+import { foodRadius } from "./food.js";
 import { isSolidCell, freeDistance, freeDistanceDir, lineOfSight } from "./obstacles.js";
 import type { SimParams } from "./params.js";
 import { AntState } from "./types.js";
@@ -269,7 +270,30 @@ export function directSightTarget(world: World, ant: number): Vec2 | null {
   let targetY = 0;
   let hasTarget = false;
 
-  if (ants.state[ant] === AntState.Foraging) {
+  if (ants.state[ant] === AntState.Foraging && params.foodSmellRadius > 0) {
+    // A pile is seen by its edge, not its centre: a big pile is wider than the
+    // sight range, and ants walking its rim used to circle it on the scent ring
+    // its carriers lay (Marek, 2026-11-01). Within foodSmellRadius of the edge it
+    // is smelled in every direction, so an ant passing alongside turns into it.
+    let bestEdge = Infinity;
+    for (const item of world.food.items) {
+      if (!item.infinite && item.amount < 1) continue;
+      const dx = item.pos.x - posX;
+      const dy = item.pos.y - posY;
+      const edge = Math.max(0, Math.sqrt(dx * dx + dy * dy) - foodRadius(item, params));
+      if (edge > params.sensorRadius || edge >= bestEdge) continue;
+      if (!lineOfSight(world.obstacles, { x: posX, y: posY }, item.pos)) continue;
+      bestEdge = edge;
+      targetX = item.pos.x;
+      targetY = item.pos.y;
+      hasTarget = true;
+    }
+    if (!hasTarget) return null;
+    if (bestEdge <= params.foodSmellRadius) return { x: targetX, y: targetY };
+    const halfFov = (params.sensorHalfFovDeg * Math.PI) / 180;
+    if (Math.abs(angleDiff(heading, Math.atan2(targetY - posY, targetX - posX))) > halfFov) return null;
+    return { x: targetX, y: targetY };
+  } else if (ants.state[ant] === AntState.Foraging) {
     let bestDistSq = Infinity;
     for (const item of world.food.items) {
       if (!item.infinite && item.amount < 1) continue;

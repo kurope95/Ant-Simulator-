@@ -52,6 +52,9 @@ export interface SimParams {
   homingEnabled: boolean;
   homingDrift: number;
   pushOnSignal: number;
+  // Food within this distance of a pile's edge is smelled in every direction;
+  // sight is measured to the edge. 0: the old centre-only, cone-only sight.
+  foodSmellRadius: number;
   // A forager that touches a bare pile goes home (spec §5.4).
   bareGoHome: boolean;
   // Seconds a forager waits in a crowd at a pile without reaching it before it
@@ -177,6 +180,7 @@ export function defaultParams(): SimParams {
     homingEnabled: true,
     homingDrift: 0.04,
     pushOnSignal: 0.4,
+    foodSmellRadius: 16,
     bareGoHome: true,
     foodPatience: 5,
     mass: 1,
