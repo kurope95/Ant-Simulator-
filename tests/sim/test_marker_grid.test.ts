@@ -12,10 +12,17 @@ import {
   homeAt,
   makeMarkerGrid,
 } from "../../src/sim/marker_grid.js";
-import { defaultParams, markerDecayFactor } from "../../src/sim/params.js";
+import { defaultParams, markerDecayFactor, type SimParams } from "../../src/sim/params.js";
 
 function near(actual: number, expected: number): void {
   assert.ok(Math.abs(actual - expected) < 1e-6, `${actual} vs ${expected}`);
+}
+
+// These tests pin the "highest wins" deposit rule; the adding-up rule has its own tests below.
+function oldRule(): SimParams {
+  const params = defaultParams();
+  params.trailRefresh = 1;
+  return params;
 }
 
 test("markers: cellIndex maps positions and rejects outside", () => {
@@ -34,7 +41,7 @@ test("markers: cellIndex maps positions and rejects outside", () => {
 
 test("markers: deposit claims free cells and keeps the strongest value", () => {
   const grid = makeMarkerGrid({ x: 64, y: 32 }, 8);
-  const params = defaultParams();
+  const params = oldRule();
   deposit(grid, 5, 0, MarkerChannel.ToHome, 0.4, params);
   // `owner` is derived by decayMarkers, not by deposit (see the owner test below).
   near(grid.toHome[5], 0.4);
@@ -46,7 +53,7 @@ test("markers: deposit claims free cells and keeps the strongest value", () => {
 });
 
 test("markers: two colonies share a cell", () => {
-  const params = defaultParams();
+  const params = oldRule();
   params.territoryRule = false;
   const grid = makeMarkerGrid({ x: 64, y: 32 }, 8, 2);
   deposit(grid, 5, 0, MarkerChannel.ToHome, 0.8, params);
@@ -58,7 +65,7 @@ test("markers: two colonies share a cell", () => {
 });
 
 test("markers: degrade halves only the depositor's own layer", () => {
-  const params = defaultParams();
+  const params = oldRule();
   params.territoryRule = false;
   const grid = makeMarkerGrid({ x: 64, y: 32 }, 8, 2);
   deposit(grid, 3, 0, MarkerChannel.ToHome, 0.8, params);
@@ -74,7 +81,7 @@ test("markers: degrade halves only the depositor's own layer", () => {
 
 test("markers: decay scales both channels and resets empty owners", () => {
   const grid = makeMarkerGrid({ x: 16, y: 8 }, 8);
-  const params = defaultParams();
+  const params = oldRule();
   deposit(grid, 0, 0, MarkerChannel.ToHome, 0.5, params);
   deposit(grid, 0, 0, MarkerChannel.ToFood, 0.25, params);
   deposit(grid, 1, 2, MarkerChannel.ToFood, 1e-5, params);
@@ -100,7 +107,7 @@ test("markers: owner is the stronger colony after decay", () => {
 });
 
 test("territory: a foreign deposit wears rival layers but never blocks the depositor", () => {
-  const params = defaultParams();
+  const params = oldRule();
   params.territoryRule = true;
   params.foreignErasureFactor = 0.5;
   const grid = makeMarkerGrid({ x: 48, y: 48 }, 8, 2);
@@ -115,7 +122,7 @@ test("territory: a foreign deposit wears rival layers but never blocks the depos
 });
 
 test("territory: with the rule off a foreign deposit changes nothing", () => {
-  const params = defaultParams();
+  const params = oldRule();
   params.territoryRule = false;
   const grid = makeMarkerGrid({ x: 48, y: 48 }, 8, 2);
   const cell = grid.cellIndex({ x: 4, y: 4 });
@@ -126,7 +133,7 @@ test("territory: with the rule off a foreign deposit changes nothing", () => {
 });
 
 test("markers: the decay factor halves per half-life and is frame-rate independent", () => {
-  const params = defaultParams();
+  const params = oldRule();
   const f60 = markerDecayFactor(params, 1 / 60);
   assert.ok(Math.abs(f60 - Math.pow(2, -1 / 60 / params.markerHalfLife)) < 1e-12, `factor ${f60}`);
   // The M1 default of a 7.7 s half-life was the original 0.9985 per tick.
@@ -140,7 +147,7 @@ test("trails: an exhausted food's trail fades below markerDetectMin within 150 s
   // A full-strength deposit is what an ant lays at the instant it picks up, so
   // the cell at a food source holds one; once the source is empty nothing
   // refreshes it and only decay is left (spec §4.2, §5.4).
-  const params = defaultParams();
+  const params = oldRule();
   const grid = makeMarkerGrid({ x: 64, y: 32 }, 8);
   const cell = grid.cellIndex({ x: 4, y: 4 });
   deposit(grid, cell, 0, MarkerChannel.ToFood, 1, params);
@@ -153,7 +160,7 @@ test("trails: an exhausted food's trail fades below markerDetectMin within 150 s
 });
 
 test("owner: a rival's traffic flips a cell once it is clearly stronger", () => {
-  const params = defaultParams();
+  const params = oldRule();
   const grid = makeMarkerGrid({ x: 16, y: 8 }, 8, 2);
   deposit(grid, 0, 0, MarkerChannel.ToFood, 1, params);
   decayMarkers(grid, 1, 1e-4, params.flipMargin);
@@ -180,8 +187,38 @@ test("owner: hysteresis keeps the owner until a rival is 25% stronger", () => {
 });
 
 test("markers: emission strength falls off with time since the anchor", () => {
-  const params = defaultParams();
+  const params = oldRule();
   assert.equal(emissionStrength(0, params), 1);
   assert.ok(Math.abs(emissionStrength(20, params) - Math.exp(-20 * params.emissionDecay)) < 1e-9);
   assert.ok(emissionStrength(200, params) < params.markerEps);
+});
+
+test("markers: one ant closes only its share of the gap; a busy trail nears full", () => {
+  const params = defaultParams();
+  params.trailRefresh = 0.3;
+  const grid = makeMarkerGrid({ x: 100, y: 100 }, params.markerCell, 1);
+  const cell = grid.cellIndex({ x: 50, y: 50 });
+  deposit(grid, cell, 0, MarkerChannel.ToFood, 1, params);
+  assert.ok(Math.abs(foodAt(grid, 0, cell) - 0.3) < 1e-6, "one ant leaves a faint trail");
+  for (let i = 0; i < 9; i++) deposit(grid, cell, 0, MarkerChannel.ToFood, 1, params);
+  assert.ok(foodAt(grid, 0, cell) > 0.95 && foodAt(grid, 0, cell) < 1, "ten ants nearly fill it");
+  deposit(grid, cell, 0, MarkerChannel.ToFood, 0.2, params);
+  assert.ok(foodAt(grid, 0, cell) > 0.95, "a weaker ant never lowers it");
+});
+
+test("markers: a trail nobody of its colony walks for trailUnusedLife is gone, a walked one stays", () => {
+  const params = defaultParams();
+  const grid = makeMarkerGrid({ x: 100, y: 100 }, params.markerCell, 1);
+  const walked = grid.cellIndex({ x: 20, y: 20 });
+  const left = grid.cellIndex({ x: 80, y: 80 });
+  const maxAge = 100;
+  for (let tick = 1; tick <= 250; tick++) {
+    grid.now = tick;
+    if (tick === 1) deposit(grid, left, 0, MarkerChannel.ToFood, 1, params);
+    if (tick % 10 === 0) deposit(grid, walked, 0, MarkerChannel.ToFood, 1, params);
+    decayMarkers(grid, 0.9999, params.markerEps, params.flipMargin, maxAge);
+    if (tick === 100) assert.ok(foodAt(grid, 0, left) > 0.9, "still there before its time");
+  }
+  assert.equal(foodAt(grid, 0, left), 0, "gone after maxAge ticks unwalked");
+  assert.ok(foodAt(grid, 0, walked) > 0.9, "a walked trail stays");
 });

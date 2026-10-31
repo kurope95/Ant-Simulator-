@@ -67,7 +67,7 @@ test("think: a low-energy forager turns back unless food is sensed", () => {
   assert.equal(hungry.world.ants.state[hungry.index], AntState.ReturningExhausted);
 
   const fed = makeThinkWorld({ x: 100, y: 100 });
-  fed.world.ants.energy[fed.index] = 20;
+  fed.world.ants.energy[fed.index] = 40; // tired, but above half of exhaustedAt: a strong smell still keeps it out
   const cell = fed.world.markers.cellIndex({ x: 120, y: 100 });
   fed.world.markers.owner[cell] = 0;
   fed.world.markers.toFood[cell] = 0.8;

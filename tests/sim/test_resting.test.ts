@@ -179,3 +179,31 @@ test("resting: crumbs from a nearly bare pile call nobody out", () => {
   assert.equal(colony.deliveredTotal, 1);
   assert.equal(colony.resting, 1, "nobody was called out");
 });
+
+test("resting: a forager that reaches a bare pile goes home and rests", () => {
+  const world = restWorld();
+  const colony = world.colonies[0];
+  world.food.items.push({ uid: 1, pos: { x: 300, y: 200 }, amount: 0.5, capacity: 600, infinite: false, kind: 0 });
+  const ant = addAnt(world, { x: 300, y: 200 });
+  stepWorld(world);
+  assert.equal(world.ants.state[ant], AntState.ReturningExhausted, "nothing here: it turns for home");
+  world.ants.posX[ant] = 200;
+  world.ants.posY[ant] = 200;
+  stepWorld(world);
+  assert.equal(world.ants.state[ant], AntState.Resting);
+  assert.equal(colony.resting, 1);
+});
+
+test("resting: a strong food smell keeps a tired forager out only until half its energy is gone", () => {
+  const world = restWorld();
+  const grid = world.markers;
+  // Strong food scent all around the ant.
+  for (let i = 0; i < grid.toFood.length; i++) grid.toFood[i] = 1;
+  const ant = addAnt(world, { x: 300, y: 300 });
+  world.ants.energy[ant] = world.params.exhaustedAt - 1;
+  stepWorld(world);
+  assert.equal(world.ants.state[ant], AntState.Foraging, "a strong smell keeps it going");
+  world.ants.energy[ant] = 0.5 * world.params.exhaustedAt - 1;
+  stepWorld(world);
+  assert.equal(world.ants.state[ant], AntState.ReturningExhausted, "below half, it goes home whatever it smells");
+});

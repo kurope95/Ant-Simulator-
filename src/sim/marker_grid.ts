@@ -20,6 +20,10 @@ export interface MarkerGrid {
   toHome: Float32Array;
   toFood: Float32Array;
   battle: Float32Array;
+  // Tick of the last deposit on each colony's cell, and the current tick, set by
+  // the world each step: a cell nobody of its colony has walked for long dies.
+  visited: Uint32Array;
+  now: number;
   resize(worldSize: Vec2, cellSize: number, colonies?: number): void;
   cellIndex(pos: Vec2): number;
 }
@@ -34,6 +38,8 @@ export function makeMarkerGrid(worldSize: Vec2, cellSize: number, colonies = 1):
     toHome: new Float32Array(0),
     toFood: new Float32Array(0),
     battle: new Float32Array(0),
+    visited: new Uint32Array(0),
+    now: 0,
     resize(size: Vec2, cell: number, layers = 1): void {
       this.cell = cell;
       this.width = Math.ceil(size.x / cell);
@@ -45,6 +51,7 @@ export function makeMarkerGrid(worldSize: Vec2, cellSize: number, colonies = 1):
       this.toHome = new Float32Array(cells * this.colonies);
       this.toFood = new Float32Array(cells * this.colonies);
       this.battle = new Float32Array(cells * this.colonies);
+      this.visited = new Uint32Array(cells * this.colonies);
     },
     cellIndex(pos: Vec2): number {
       if (pos.x < 0 || pos.y < 0 || pos.x >= this.width * this.cell || pos.y >= this.height * this.cell) {
@@ -106,7 +113,16 @@ export function deposit(
   }
   const values = channel === MarkerChannel.ToHome ? grid.toHome : grid.toFood;
   const index = colony * cells + cell;
-  values[index] = Math.max(values[index], strength);
+  grid.visited[index] = grid.now;
+  if (params.trailRefresh < 1) {
+    // Each ant moves the cell part of the way toward its own strength (spec
+    // §4.2): one ant slows the fading by its share, a busy column stays near
+    // full, and no ant makes a trail stronger than its own scent.
+    const value = values[index];
+    if (strength > value) values[index] = value + params.trailRefresh * (strength - value);
+  } else {
+    values[index] = Math.max(values[index], strength);
+  }
 }
 
 export function degrade(
@@ -137,9 +153,18 @@ export function decayBattle(grid: MarkerGrid, factor: number, eps: number): void
 // Each colony's strength on the cell being recomputed by decayMarkers: the larger of its two channels.
 let strengthScratch = new Float64Array(0);
 
-export function decayMarkers(grid: MarkerGrid, factor: number, eps: number, flipMargin: number): void {
+// maxAgeTicks > 0: a cell no ant of its colony has deposited on for longer is
+// wiped, however strong it still was (spec §4.2). 0 keeps fading only.
+export function decayMarkers(
+  grid: MarkerGrid,
+  factor: number,
+  eps: number,
+  flipMargin: number,
+  maxAgeTicks = 0,
+): void {
   const cells = grid.width * grid.height;
-  const { colonies, owner, toHome, toFood } = grid;
+  const { colonies, owner, toHome, toFood, visited, now } = grid;
+  const aged = maxAgeTicks > 0 && now > maxAgeTicks;
   if (colonies === 1) {
     // The overwhelmingly common case: one layer, so the argmax is trivial and
     // the loop stays one pass over the cells.
@@ -148,6 +173,10 @@ export function decayMarkers(grid: MarkerGrid, factor: number, eps: number, flip
       let food = toFood[cell] * factor;
       if (home < eps) home = 0;
       if (food < eps) food = 0;
+      if (aged && now - visited[cell] > maxAgeTicks) {
+        home = 0;
+        food = 0;
+      }
       toHome[cell] = home;
       toFood[cell] = food;
       owner[cell] = home === 0 && food === 0 ? kNoOwner : 0;
@@ -177,6 +206,10 @@ export function decayMarkers(grid: MarkerGrid, factor: number, eps: number, flip
       let food = toFood[index] * factor;
       if (home < eps) home = 0;
       if (food < eps) food = 0;
+      if (aged && now - visited[index] > maxAgeTicks) {
+        home = 0;
+        food = 0;
+      }
       toHome[index] = home;
       toFood[index] = food;
       const value = home > food ? home : food;

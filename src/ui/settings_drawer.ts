@@ -34,6 +34,7 @@ interface GroupParts {
 }
 
 const kGroups: readonly GroupParts[] = [
+  { key: "behaviour", title: "Behaviour" },
   { key: "movement", title: "Movement" },
   { key: "trails", title: "Trails" },
   { key: "colony", title: "Colony" },

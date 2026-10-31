@@ -149,6 +149,10 @@ This rule is implemented in `src/sim/marker_grid.ts` (`deposit`). The single-own
 
 All writes to the marker grid happen in the serial event phase (§5.2), in a fixed order.
 
+**Trail upkeep and extinction** (2026-10-31, Marek: "a path not upkept by its own kind should go extinct"):
+- `TRAIL_UNUSED_LIFE` (90 s): a trail cell no ant of its colony has deposited on for this long is wiped, however strong it still was, so abandoned trails stop webbing the map while busy ones, however long, stay. Each layer cell keeps the tick of its last deposit (`MarkerGrid.visited`). 0 turns it off.
+- `TRAIL_REFRESH` (default 1, slider "Scent per passing ant"): a deposit closes this share of the gap between the cell and the ant's own strength; 1 is the original "highest wins" rule. Measured on the 1000 u reach (seeds 7, 1, 2, 3): with trails adding up per ant, or closing 30–50% of the gap, foraging fell to a quarter to a half in minutes 6–8 (old 814–1,104 deliveries; 0.5: 214–858; 0.3: 162–411), because a weaker new trail recruits fewer ants, which keeps it weak. Making it work would mean retuning sensing and steering around it; until then 1 stays the default.
+
 ### 4.3 Obstacles
 - A 4 u grid with one byte per cell: `0` empty, `1` Rock, `2` Water, `3` Sand, `4` Mud. The builder paints or erases cells with a circular brush; presets seed the grid.
 - **Rock and Water are solid.** Only their border cells are collidable: a border cell is Rock/Water and has at least one of its four direct neighbours out of bounds or not Rock/Water. Interior cells are never tested, which keeps the original "hollow collider" optimisation. Border flags are rebuilt only in the area around an edit.
@@ -163,7 +167,7 @@ All writes to the marker grid happen in the serial event phase (§5.2), in a fix
 - Food sources are discrete circles with a position, an `amount` in units, a stable `uid` and a `kind` (Seeds, Berries or Leaves); they may be flagged `infinite` for stress tests.
 - Radius = `FOOD_BASE_R × sqrt(amount / FOOD_REF_AMOUNT)`, with a minimum.
 - They are placed with the Food tool, whose capacity and kind are chosen in the builder.
-- **Regrowth** (added 2026-10-31 at Marek's request): every source grows back toward its starting amount (its `capacity`) at `capacity / FOOD_REGROW_TIME` units per second, in the Events phase. A source with less than one unit left is bare ground: it cannot be seen, touched or taken, and draws no pieces, but it stays in place and regrows. With `FOOD_REGROW_TIME` 0 there is no regrowth and an empty source disappears, as before.
+- **Living food** (2026-10-31, Marek: food as "its own organism"; replaces a flat regrowth tried earlier the same day, which fed any colony size forever): a source grows like a population, logistically, by `FOOD_GROWTH_RATE × amount × (1 − amount / capacity)` per minute, in the Events phase; `capacity` is its starting amount, so it never grows past it. The less is left, the less it adds: a colony that keeps a pile half-eaten gets the most from it, one that strips it loses it. Eaten under one piece (by taking or by meals, §5.6), a source is **dead**: it never grows again, lies bare for `kDeadPileLinger` (60 s) so ants arriving on its trail find it empty (§5.4), and is then removed. A source that never grew (capacity 0, or growth 0) is removed when empty, as before.
 - All colonies share all food sources.
 - **Visible pieces:** one piece per 100 units, 1–48 pieces; an infinite source always shows 48. Pieces sit on a deterministic golden-angle spiral, inner-first, so each 100 units consumed removes only the outer pieces. This is rendering state; it uses a visual hash, never `randU32`.
 
@@ -270,6 +274,10 @@ Starting values are below. Tune them so Explorers leave an established highway r
 
 **Randomness.** Every random number comes from a counter-based hash, `rand(seed, uid, tick, stream)`. There is no shared random-number state, so results don't depend on how threads are scheduled.
 
+**Empty and crowded sources** (2026-10-31, Marek saw hundreds of ants milling at a source while a few carried):
+- A forager that touches a dead source turns for home (`BARE_GO_HOME`); with the colony balancing itself (§5.8) it rests.
+- **Patience:** a forager within `ZONE_MARGIN` of a source and crowded (`CROWD_LIMIT` nestmates within `CROWD_RADIUS_FACTOR` radii) without reaching it for `FOOD_PATIENCE` seconds goes home. A piece won after waiting in a crowd (over 1 s) calls nobody out (§5.8), so a jam drains instead of being fed by recruitment.
+
 ### 5.5 Stuck detection and blocked routes
 An ant is stuck when `time_since_last_marker > STUCK_TIMEOUT` (2.5 s), meaning it hasn't advanced `MARKER_DROP_DIST` in that time. Then:
 
@@ -283,7 +291,8 @@ An ant is stuck when `time_since_last_marker > STUCK_TIMEOUT` (2.5 s), meaning i
 
 ### 5.6 Energy and life cycle
 - Energy starts at `ENERGY_MAX` (100) and burns at `ENERGY_BURN` (0.5 per second), which gives about 200 s of autonomy.
-- It refills to 100 when the ant touches its own nest or any food source.
+- It refills to 100 when the ant touches its own nest or any food source. With the life cycle on, neither meal is free: at home it costs stored food, at a source it is eaten off the pile, both at `FOOD_PER_ENERGY` (2026-10-31: free meals at a pile let a swarm live off crumbs). Picking up a body (fight branch) does not feed the carrier.
+- A strong food smell keeps a tired forager out (`PUSH_ON_SIGNAL`) only until half of `EXHAUSTED_AT` is gone; then it heads home whatever it smells.
 - At 0 the ant dies of hunger (removed in phase 5).
 
 **Life cycle** (`LIFE_CYCLE`, default on; added 2026-10-31 at Marek's request). A colony grows only while food comes in faster than it is eaten, and shrinks when it does not:
@@ -535,7 +544,8 @@ Rules:
 | `LAY_INCOME_NONE` / `LAY_INCOME_FULL` | 3 / 6 | food per ant per minute | §5.8; sliders "Queen stops laying below", "Queen lays fully from" |
 | `NEST_BASE_R` / `NEST_GROWTH` | 20 / 0.4 | u | r = base + growth × √population |
 | `FOOD_BASE_R` / `FOOD_REF_AMOUNT` | 12 / 500 | u / units | |
-| `FOOD_REGROW_TIME` | 600 | s | an emptied source is full again after this long; 0 = no regrowth (§4.4). Settings slider "Food grows back in" (minutes) |
+| `FOOD_GROWTH_RATE` | 0.4 | share of own size per minute | living food, logistic up to the starting amount; 0 = no growth (§4.4). Slider "Food growth" (%/min) |
+| `BARE_GO_HOME` / `FOOD_PATIENCE` | on / 5 | – / s | §5.4 |
 | `FOOD_MIN_R` | 4 | u | smallest drawn and touchable food radius |
 | `MAX_COLONIES` / `NEW_COLONY_ANTS` | 8 / 200 | | |
 | `MAX_ANTS_TOTAL` | 50,000 | | |

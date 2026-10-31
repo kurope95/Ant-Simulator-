@@ -19,6 +19,8 @@ export enum ContactKind {
   Nest,
   // target is the index in world.corpses.items.
   Corpse,
+  // A forager reached a pile with nothing left on it (spec §5.4): it goes home.
+  BarePile,
 }
 
 export interface ContactEvent {
