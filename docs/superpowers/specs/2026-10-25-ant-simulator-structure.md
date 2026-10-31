@@ -124,7 +124,7 @@ randRange(seed, uid, tick, stream, lo, hi): number        // [lo, hi)
 class FixedStepClock {
   constructor(stepSeconds: number, maxStepsPerFrame: number)
   advance(frameSeconds: number, speed: number): number   // steps to run now
-  dropBacklog(): void   // keeps under one step of backlog; the controller calls it when its per-frame step budget (kStepBudgetMs, 22 ms) runs out, so a slow world runs slower than real time instead of the frame rate collapsing
+  dropBacklog(): void   // keeps under one step of backlog; the controller calls it when its per-frame step budget (22 ms x the chosen speed, at most 90 ms; Max 90 ms) runs out, so a slow world runs slower than real time instead of the frame rate collapsing
   alpha(): number                                        // [0, 1)
   stepSeconds(): number
   reset(): void
