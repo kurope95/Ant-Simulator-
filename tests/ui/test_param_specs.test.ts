@@ -63,7 +63,7 @@ test("param specs: explorer ratio is edited as a percentage", () => {
 test("param specs: trail fade edits the emission decay in thousandths", () => {
   const spec = paramSpecs().find((candidate) => candidate.key === "emissionDecay");
   assert.ok(spec);
-  assert.equal(spec.label, "Trail fade with distance");
+  assert.equal(spec.label, "Scent weakens on the way");
   assert.equal(spec.group, "trails");
   assert.equal(spec.min, 0.005);
   assert.equal(spec.max, 0.2);
@@ -99,7 +99,7 @@ test("every extreme still steps the sandbox without NaN", () => {
 test("param specs: degrade after is live and round-trips", () => {
   const spec = paramSpecs().find((candidate) => candidate.key === "degradeTime");
   assert.ok(spec);
-  assert.equal(spec.label, "Degrade after");
+  assert.equal(spec.label, "Stuck ants erase their trail for");
   assert.equal(spec.unit, "s");
   assert.equal(spec.min, 0.5);
   assert.equal(spec.max, 10);
@@ -122,4 +122,10 @@ test("param specs: avoidance look-ahead runs 0.25 to 2.5 s in 0.05 s steps", () 
   assert.equal(applySpecValue(spec, params, 9), 2.5);
   assert.equal(params.tHorizon, 2.5);
   assert.equal(applySpecValue(spec, params, 0.5), 0.5);
+});
+
+test("param specs: every control explains itself in one plain sentence", () => {
+  for (const spec of paramSpecs()) {
+    assert.ok(spec.hint !== undefined && spec.hint.length > 20, `${spec.key} has no explanation`);
+  }
 });
