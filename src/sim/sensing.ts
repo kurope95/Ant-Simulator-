@@ -142,21 +142,26 @@ export function senseMarkers(
     }
     const x = posX + slotCos[slot] * sample.distance;
     const y = posY + slotSin[slot] * sample.distance;
-    if (isSolidCell(obstacles, Math.floor(x / obstacleCell), Math.floor(y / obstacleCell))) continue;
-    // Cheap line of sight: a wall at the halfway point blocks the sample too.
-    if (isSolidCell(obstacles, Math.floor(((posX + x) * 0.5) / obstacleCell), Math.floor(((posY + y) * 0.5) / obstacleCell))) {
-      continue;
-    }
     // grid.cellIndex inlined: same bounds, no object per sample.
     if (x < 0 || y < 0 || x >= gridW * markerCell || y >= gridH * markerCell) continue;
     const cell = Math.floor(y / markerCell) * gridW + Math.floor(x / markerCell);
     const index = layer + cell;
     const home = grid.toHome[index];
     const food = grid.toFood[index];
-    if (food > bestFoodSignal) bestFoodSignal = food;
     const own = channel === MarkerChannel.ToHome ? home : food;
+    // A sample with none of the own scent and no better food reading cannot
+    // change the answer (rival scent only lowers the signal), so it skips the
+    // wall checks below. Most samples off the trails end here.
+    if (own <= 0 && food <= bestFoodSignal) continue;
+    if (isSolidCell(obstacles, Math.floor(x / obstacleCell), Math.floor(y / obstacleCell))) continue;
+    // Cheap line of sight: a wall at the halfway point blocks the sample too.
+    if (isSolidCell(obstacles, Math.floor(((posX + x) * 0.5) / obstacleCell), Math.floor(((posY + y) * 0.5) / obstacleCell))) {
+      continue;
+    }
+    if (food > bestFoodSignal) bestFoodSignal = food;
     // The signal is the score: a cell only counts as found while the own scent beats the rival's.
-    const signal = contested ? own - aversion * rivalStrength(grid, colony, cell) : own;
+    // Without own scent the signal cannot be positive, so the rival lookup is skipped.
+    const signal = contested && own > 0 ? own - aversion * rivalStrength(grid, colony, cell) : own;
     const bias = Math.abs(sample.angleOffset);
     if (signal > 0 && (signal > bestSignal || (signal === bestSignal && bias < bestBias))) {
       bestSignal = signal;

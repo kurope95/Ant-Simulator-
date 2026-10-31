@@ -454,9 +454,10 @@ textarea {
   display: none;
 }
 
-/* Two slim rails down the sides leave the full height to the map. Collapsed
-   they show icons and numbers only; with the pointer on one (or keyboard focus inside
-   it) it slides open over the map and shows the labels. */
+/* Two slim rails down the sides leave the full height to the map. The left one
+   shows numbers only; with the pointer on it (or keyboard focus inside
+   it) it slides open over the map and shows the labels. The right one stays
+   slim: its buttons are icons with tooltips. */
 .hud__rail {
   position: absolute;
   top: 12px;
@@ -481,16 +482,16 @@ textarea {
   right: 12px;
 }
 
-.hud__rail:hover,
-.hud__rail:has(:focus-visible) {
+.hud__rail--left:hover,
+.hud__rail--left:has(:focus-visible) {
   width: var(--rail-open);
 }
 
-.hud__rail:not(:hover):not(:has(:focus-visible)) .rail__wide,
-.hud__rail:not(:hover):not(:has(:focus-visible)) .button:has(> .icon) > span,
-.hud__rail:not(:hover):not(:has(:focus-visible)) .chip__label,
-.hud__rail:not(:hover):not(:has(:focus-visible)) .legend > span:not(.legend__dot),
-.hud__rail:not(:hover):not(:has(:focus-visible)) .hud__legend-note {
+.hud__rail:not(.hud__rail--left:hover):not(.hud__rail--left:has(:focus-visible)) .rail__wide,
+.hud__rail:not(.hud__rail--left:hover):not(.hud__rail--left:has(:focus-visible)) .button:has(> .icon) > span,
+.hud__rail:not(.hud__rail--left:hover):not(.hud__rail--left:has(:focus-visible)) .chip__label,
+.hud__rail:not(.hud__rail--left:hover):not(.hud__rail--left:has(:focus-visible)) .legend > span:not(.legend__dot),
+.hud__rail:not(.hud__rail--left:hover):not(.hud__rail--left:has(:focus-visible)) .hud__legend-note {
   display: none;
 }
 
@@ -502,7 +503,7 @@ textarea {
   white-space: nowrap;
 }
 
-.hud__rail:not(:hover):not(:has(:focus-visible)) .button {
+.hud__rail:not(.hud__rail--left:hover):not(.hud__rail--left:has(:focus-visible)) .button {
   justify-content: center;
   padding: 0;
 }
@@ -546,7 +547,7 @@ textarea {
   text-align: center;
 }
 
-.hud__rail:is(:hover, :has(:focus-visible)) .chip {
+.hud__rail--left:is(:hover, :has(:focus-visible)) .chip {
   align-items: flex-start;
   padding: 6px 10px;
   text-align: left;
@@ -563,7 +564,7 @@ textarea {
   margin-top: auto;
 }
 
-.hud__rail:is(:hover, :has(:focus-visible)) .hud__tools {
+.hud__rail--left:is(:hover, :has(:focus-visible)) .hud__tools {
   flex-direction: row;
 }
 
@@ -577,7 +578,7 @@ textarea {
   color: var(--muted);
 }
 
-.hud__rail:not(:hover):not(:has(:focus-visible)) .hud__legend {
+.hud__rail:not(.hud__rail--left:hover):not(.hud__rail--left:has(:focus-visible)) .hud__legend {
   align-items: center;
 }
 
