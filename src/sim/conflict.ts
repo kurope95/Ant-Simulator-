@@ -87,10 +87,14 @@ export function computeLookAround(world: World, look: LookAround): void {
 }
 
 // Hunger makes an ant bold, fear makes it careful (design §6); kept within 0..2.
+// The aggression dial scales it for every ant: at 0 nobody starts a fight,
+// answers battle smell or stands its ground when outnumbered (nests are still
+// defended); at 3 everyone is three times as bold.
 export function courage(world: World, ant: number): number {
   const params = world.params;
-  const value = 1 + params.boldStress * world.ants.stress[ant] - params.fearDamp * world.ants.fear[ant];
-  return value < 0 ? 0 : value > 2 ? 2 : value;
+  const mood = 1 + params.boldStress * world.ants.stress[ant] - params.fearDamp * world.ants.fear[ant];
+  const value = mood * params.aggression;
+  return value < 0 ? 0 : value > 3 ? 3 : value;
 }
 
 // A fixed per-ant draw: low values answer calls and engage first.

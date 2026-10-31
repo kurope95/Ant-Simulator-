@@ -79,6 +79,9 @@ export interface SimParams {
   birthBurst: number;
   // Colony conflict (docs/superpowers/specs/2026-10-31-colony-conflict-design.md).
   conflict: boolean;
+  // One dial on every ant's courage (conflict design §6): 1 as tuned, 0 never
+  // starts a fight, 3 three times as bold. Live: the run screen's right rail.
+  aggression: number;
   warriorRatio: number;
   warriorDamage: number;
   warriorArmor: number;
@@ -232,6 +235,7 @@ export function defaultParams(): SimParams {
     birthRatePerAnt: 0.004,
     birthBurst: 3,
     conflict: true,
+    aggression: 1,
     warriorRatio: 0.1,
     warriorDamage: 3,
     warriorArmor: 2,

@@ -473,6 +473,9 @@ export class AppController {
         this.settingsDrawer?.setOpen(this.settingsOpen);
         this.colonyPanel?.setOpen(false);
       },
+      onAggression: (percent: number) => {
+        this.applyParam("aggression", percent);
+      },
       onFit: () => {
         this.requestFit();
       },
@@ -918,6 +921,7 @@ export class AppController {
         coloniesOpen: this.coloniesOpen,
         settingsOpen: this.settingsOpen,
         breachAvailable: this.setup.breach.length > 0,
+        aggression: Math.round(this.params.aggression * 100),
       };
       this.runHud.update(this.runWorld, 1000 / Math.max(this.frameMs, 0.001), state, this.achievedSpeed);
     }

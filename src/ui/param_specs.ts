@@ -22,6 +22,7 @@ export type ParamKey =
   | "foreignErasureFactor"
   | "foreignAversion"
   | "tHorizon"
+  | "aggression"
   | "warriorRatio"
   | "warriorCall"
   | "guardEdge"
@@ -74,6 +75,7 @@ const kSpecs: readonly ParamSpec[] = [
   // Living food: growth as a share of the pile's own size per minute; 0 turns it off.
   { key: "foodGrowthRate", label: "Food grows by", unit: "%/min", min: 0, max: 200, step: 5, scale: 100, group: "behaviour" },
   // Colony conflict (fight branch). Warrior share applies to ants born from now on.
+  { key: "aggression", label: "Aggression", unit: "%", min: 0, max: 300, step: 10, scale: 100, group: "behaviour" },
   { key: "warriorRatio", label: "Warriors among newborns", unit: "%", min: 0, max: 40, step: 1, scale: 100, group: "fighting" },
   { key: "warriorCall", label: "Warriors answering a fight", unit: "%", min: 0, max: 100, step: 5, scale: 100, group: "fighting" },
   { key: "guardEdge", label: "Guards keep to column edge", unit: "", min: 0, max: 0.9, step: 0.05, scale: 1, group: "fighting", digits: 2 },

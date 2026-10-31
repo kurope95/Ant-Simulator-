@@ -23,6 +23,8 @@ export interface HudState {
   coloniesOpen: boolean;
   settingsOpen: boolean;
   breachAvailable: boolean;
+  // Aggression of all colonies, % (fight branch).
+  aggression?: number;
 }
 
 export interface RunHudHooks {
@@ -35,6 +37,8 @@ export interface RunHudHooks {
   onSettings(): void;
   onFit(): void;
   onBreach(): void;
+  // The right rail's aggression dial (display value, %); absent hides it.
+  onAggression?(percent: number): void;
 }
 
 interface SpeedOption {
@@ -102,6 +106,8 @@ export class RunHud {
   private readonly coloniesButton: HTMLButtonElement;
   private readonly settingsButton: HTMLButtonElement;
   private readonly breachButton: HTMLButtonElement;
+  private readonly aggressionInput: HTMLInputElement | null = null;
+  private readonly aggressionValue: HTMLSpanElement | null = null;
   private readonly legend: HTMLElement;
   private readonly trailLegend: HTMLElement;
   private readonly colonyLegend: HTMLElement;
@@ -237,7 +243,30 @@ export class RunHud {
     bar.append(brand, chips, this.colonyCounts, tools, this.legend);
     const dock = el("nav", "hud__rail hud__rail--right glass");
     dock.setAttribute("aria-label", "Run controls");
-    dock.append(this.pauseButton, speeds, makeDivider(), reset, edit, this.breachButton, finish, rightTools);
+    dock.append(this.pauseButton, speeds, makeDivider());
+    if (hooks.onAggression !== undefined) {
+      // Aggression of all colonies, live: a vertical dial on the rail.
+      const onAggression = hooks.onAggression;
+      const box = el("div", "hud__dial");
+      box.title = "Aggression of all colonies: 100% as tuned, 0% nobody starts fights, 300% three times as bold";
+      const input = el("input", "hud__dial-input");
+      input.type = "range";
+      input.min = "0";
+      input.max = "300";
+      input.step = "10";
+      input.setAttribute("aria-label", "Aggression of all colonies");
+      const value = el("span", "hud__dial-value");
+      input.addEventListener("input", () => {
+        if (!Number.isFinite(input.valueAsNumber)) return;
+        onAggression(input.valueAsNumber);
+        setText(value, `${Math.round(input.valueAsNumber)}%`);
+      });
+      box.append(icon("breach"), input, value);
+      dock.append(box, makeDivider());
+      this.aggressionInput = input;
+      this.aggressionValue = value;
+    }
+    dock.append(reset, edit, this.breachButton, finish, rightTools);
 
     this.colonyPanelHost = el("aside", "hud__panel hud__panel--left");
     this.colonyPanelHost.setAttribute("aria-label", "Colonies");
@@ -279,6 +308,10 @@ export class RunHud {
       option.node.setAttribute("aria-pressed", String(option.value === state.speed));
     }
 
+    if (this.aggressionInput !== null && this.aggressionValue !== null && state.aggression !== undefined) {
+      if (document.activeElement !== this.aggressionInput) this.aggressionInput.value = String(state.aggression);
+      setText(this.aggressionValue, `${Math.round(Number(this.aggressionInput.value))}%`);
+    }
     this.coloniesButton.setAttribute("aria-pressed", String(state.coloniesOpen));
     this.settingsButton.setAttribute("aria-pressed", String(state.settingsOpen));
     this.breachButton.hidden = !state.breachAvailable;
