@@ -53,7 +53,10 @@ Edge's headless `--screenshot` writes no file on this PC (as the M5 report found
 - Bench on the laptop, plugged in (crowd and meadow), and the CLAUDE.md baseline.
 - Marek's manual collision checklist from the M4 plan.
 
-## Decision needed from Marek
+## Decision (Marek, 2026-10-31): option 1
+Keep the final defaults: ants stay spaced apart (overlap about 1%) and the streams stay mixed. The lanes ≥ 0.70 target is dropped for now; the lane rules stay in the code, off. A better lane rule can be designed later if tidy lanes matter. Still open: overlap on seed 7 (2.2%) and the speed target (proposed: get the rest from M4.5's workers; not decided yet).
+
+## The question that was asked
 Lanes ≥ 0.70 and overlap ≤ 1% did not pass together with any rule tried. Options:
 1. Keep the final defaults (overlap about 1%, reach passes) and relax the lanes target, or drop it until a different lane mechanism is designed.
 2. Turn lane keeping on (lanes about 0.66) and relax overlap to about 5%.
