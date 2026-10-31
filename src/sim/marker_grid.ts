@@ -157,6 +157,18 @@ export function decayMarkers(grid: MarkerGrid, factor: number, eps: number, flip
   if (strengthScratch.length < colonies) strengthScratch = new Float64Array(colonies);
   const strength = strengthScratch;
   for (let cell = 0; cell < cells; cell++) {
+    // Most of the map holds no scent at all: such a cell stays empty and unowned.
+    let any = false;
+    for (let index = cell; index < cells * colonies; index += cells) {
+      if (toHome[index] !== 0 || toFood[index] !== 0) {
+        any = true;
+        break;
+      }
+    }
+    if (!any) {
+      owner[cell] = kNoOwner;
+      continue;
+    }
     let strongest = 0;
     let strongestColony = kNoOwner;
     for (let colony = 0; colony < colonies; colony++) {

@@ -669,7 +669,8 @@ interface RunHudHooks { onPause(): void; onSpeed(speed): void; onReset(): void;
                         onSettings(): void; onFit(): void }
 // Two slim side rails (.hud__rail--left: brand, counters, colonies button, legend;
 // .hud__rail--right: pause, speeds, reset/edit/breach/finish, settings button) open
-// over the map on hover. The controller fits the map between them (kRunRailInsetCss).
+// over the map on hover (the left one only; the right stays slim, icons with tooltips).
+// The controller fits the map between them (kRunRailInsetCss).
 class RunHud { readonly root: HTMLElement; readonly colonyPanelHost: HTMLElement
                constructor(root, params: SimParams, hooks: RunHudHooks)
                update(world: World, fps: number, state: HudState, achievedSpeed?: number): void   // shows "Actual speed" only when the world runs below the chosen speed
