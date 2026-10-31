@@ -8,6 +8,8 @@ export interface AntSpawn {
   colony?: number;
   role?: AntRole;
   state?: AntState;
+  // Seconds the ant has left to live; Infinity when the life cycle is off.
+  lifeLeft?: number;
 }
 
 export class Ants {
@@ -38,6 +40,7 @@ export class Ants {
   homeErrY: Float32Array;
   avoidX: Float32Array;
   avoidY: Float32Array;
+  lifeLeft: Float32Array;
 
   private count = 0;
   private capacity: number;
@@ -72,6 +75,7 @@ export class Ants {
     this.homeErrY = new Float32Array(capacity);
     this.avoidX = new Float32Array(capacity);
     this.avoidY = new Float32Array(capacity);
+    this.lifeLeft = new Float32Array(capacity);
   }
 
   size(): number {
@@ -108,6 +112,7 @@ export class Ants {
     this.homeErrY[i] = 0;
     this.avoidX[i] = 0;
     this.avoidY[i] = 0;
+    this.lifeLeft[i] = a.lifeLeft ?? Infinity;
     this.indexByUid.set(uid, i);
     this.count += 1;
     return i;
@@ -147,6 +152,7 @@ export class Ants {
       this.homeErrY[index] = this.homeErrY[last];
       this.avoidX[index] = this.avoidX[last];
       this.avoidY[index] = this.avoidY[last];
+      this.lifeLeft[index] = this.lifeLeft[last];
       this.indexByUid.set(this.uid[index], index);
     }
     this.indexByUid.delete(removedUid);
@@ -188,6 +194,7 @@ export class Ants {
     this.homeErrY = grow(this.homeErrY, next);
     this.avoidX = grow(this.avoidX, next);
     this.avoidY = grow(this.avoidY, next);
+    this.lifeLeft = grow(this.lifeLeft, next);
     this.capacity = next;
   }
 }

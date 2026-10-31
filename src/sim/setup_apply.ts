@@ -1,8 +1,10 @@
-import { makeColony } from "./colony.js";
+import { randRange } from "../core/rng.js";
+import { colonyReserve, makeColony } from "./colony.js";
 import { obstacleGridFromCells } from "./obstacles.js";
 import type { SimParams } from "./params.js";
 import type { WorldSetup } from "./setup.js";
 import { spawnAtNest } from "./tick.js";
+import { RandStream } from "./types.js";
 import { makeWorld, type World } from "./world.js";
 
 export interface WorldFromSetupOptions {
@@ -13,7 +15,14 @@ export function spawnStartingAnts(world: World, setup: WorldSetup): void {
   const count = Math.min(setup.colonies.length, world.colonies.length);
   for (let i = 0; i < count; i++) {
     const ants = Math.max(0, Math.trunc(setup.colonies[i].startingAnts));
-    for (let n = 0; n < ants; n++) spawnAtNest(world, world.colonies[i]);
+    const colony = world.colonies[i];
+    for (let n = 0; n < ants; n++) {
+      // Life cycle: the founders are of mixed ages, a quarter to all of a full life
+      // left, and the colony starts with its reserve in the stores.
+      const share = randRange(world.seed, world.nextUid, 0, RandStream.StartingAge, 0.25, 1);
+      spawnAtNest(world, colony, share);
+    }
+    if (world.params.lifeCycle) colony.foodPool += colonyReserve(colony, world.params);
   }
 }
 

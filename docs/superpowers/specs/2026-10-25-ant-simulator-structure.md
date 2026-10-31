@@ -155,7 +155,7 @@ const kNoOwner = -1
 enum AntState { Foraging = 0, ReturningFood = 1, ReturningExhausted = 2 }
 enum AntRole { Follower = 0, Explorer = 1 }
 enum RandStream { WanderOffset = 1, WanderInterval, StuckTurn, SpawnHeading,
-                  SpawnRole, SpeedJitter, ContactTurn, HomingDrift }
+                  SpawnRole, SpeedJitter, ContactTurn, HomingDrift, Lifespan, StartingAge }
 
 // sim/params.ts
 interface SimParams { /* every tunable from spec §12; see defaultParams */ }
@@ -202,13 +202,14 @@ evaluateStuck(timeSinceLastMarker, inZone, nearby, params): StuckState
 inRestZone(world, ant): boolean   // inside its nest zone or any food zone (+ zoneMargin)
 
 // sim/ants.ts
-interface AntSpawn { pos: Vec2; heading?; colony?; role?; state? }
+interface AntSpawn { pos: Vec2; heading?; colony?; role?; state?; lifeLeft? }
 class Ants {   // SoA; every field is an array-like of the same length
   uid: Uint32Array; colony: Uint8Array; role: Uint8Array; state: Uint8Array
   posX, posY, prevX, prevY, velX, velY, heading, speed, mass: Float32Array
   energy, timeSinceAnchor, dropX, dropY, timeSinceLastMarker, degradeTimer: Float32Array
   lastMarkerCell: Int32Array; wanderOffset, wanderHeading, wanderTimer: Float32Array
   homeErrX, homeErrY: Float32Array   // path-integration estimate of the way home (§5.7)
+  lifeLeft: Float32Array             // seconds to live; Infinity with the life cycle off (§5.6)
   constructor(capacity?)
   size(): number
   spawn(a: AntSpawn, uid: number, speed: number, params: SimParams): number
@@ -248,8 +249,10 @@ interface Colony { id: ColonyId; nest: Vec2; color: number; foodPool: number; po
                    deliveredTotal: number; deliveredLastSample: number;
                    deliveredPerSecond: RingBuffer<number>;
                    populationPerSecond: RingBuffer<number>; foodPoolPerSecond: RingBuffer<number>;   // M5: observation only, sampled each second
-                   extinct: boolean }
+                   extinct: boolean;
+                   birthCredit: number; born: number; diedOfAge: number; diedOfHunger: number }   // life cycle, §5.6
 makeColony(id, nest, color?, historyCapacity?): Colony     // historyCapacity = 120
+colonyReserve(colony, params): number   // food the queen keeps back (§5.6)
 nestRadius(colony, params): number
 
 // sim/events.ts
@@ -280,7 +283,7 @@ updateWander(world, ant, dt): boolean        // true on the tick a new offset an
 // if the whole half turn is solid. Searching from the current heading is what
 // makes it follow a wall instead of oscillating against it (spec §5.3).
 thinkChunk(world, begin, end, out: ChunkEvents): void
-spawnAtNest(world, colony): number
+spawnAtNest(world, colony, lifeShare?): number   // lifeShare < 1: a founder part-way through its life
 resetChunkEvents(world): void
 applyEvents(world, events: readonly ChunkEvents[]): void
 clampToWorld(world): void
@@ -823,6 +826,7 @@ tests/core/   test_build_info.test.ts  test_fixed_step.test.ts  test_math.test.t
               test_ring_buffer.test.ts test_rng.test.ts         test_stats.test.ts
 tests/sim/    test_ants.test.ts               test_collide.test.ts    [M2]
               test_food_colony.test.ts        test_homing.test.ts     [M2]
+              test_life_cycle.test.ts
               test_marker_grid.test.ts        test_obstacles.test.ts
               test_obstacles_physics.test.ts  [M1.5]  test_params.test.ts
               test_pipeline.test.ts           test_presets.test.ts    [M1.5]

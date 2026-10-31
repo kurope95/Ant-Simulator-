@@ -171,7 +171,7 @@ All writes to the marker grid happen in the serial event phase (§5.2), in a fix
 - The builder sets each colony's colour and starting ants (10–600, default 200). All starting ants spawn at the nest edge before tick 0.
 - A run may have one or many colonies. `quickStartSetup` seeds a single Ember colony with 200 ants for tests and the bench.
 - Nest radius = `NEST_BASE_R + NEST_GROWTH × sqrt(population)`, so the nest grows as the colony grows.
-- **Spawning.** While `food_pool ≥ SPAWN_COST`:
+- **Spawning.** With `LIFE_CYCLE` on (the default), the queen lays at a steady rate and only from spare food (§5.6): each tick her egg credit grows by `(BIRTH_RATE_BASE + BIRTH_RATE_PER_ANT × population) / SIM_HZ`, capped at `BIRTH_BURST`, and while the credit is at least 1 and `food_pool − SPAWN_COST ≥ reserve` she spends one credit and `SPAWN_COST` food on one ant. With it off, the original rule: while `food_pool ≥ SPAWN_COST`:
   - subtract `SPAWN_COST` from `food_pool`,
   - spawn one ant at the nest edge facing outward. The ring position is sampled in golden-angle steps `a + k × 2.39996` (`k = 0..15`) and the first non-solid sample wins, so a rock overlapping the nest cannot swallow the ant; if all 16 are solid it spawns at the nest centre,
   - make it an Explorer with probability `EXPLORER_RATIO`, otherwise a Follower.
@@ -283,7 +283,15 @@ An ant is stuck when `time_since_last_marker > STUCK_TIMEOUT` (2.5 s), meaning i
 ### 5.6 Energy and life cycle
 - Energy starts at `ENERGY_MAX` (100) and burns at `ENERGY_BURN` (0.5 per second), which gives about 200 s of autonomy.
 - It refills to 100 when the ant touches its own nest or any food source.
-- At 0 the ant dies (removed in phase 5).
+- At 0 the ant dies of hunger (removed in phase 5).
+
+**Life cycle** (`LIFE_CYCLE`, default on; added 2026-10-31 at Marek's request). A colony grows only while food comes in faster than it is eaten, and shrinks when it does not:
+- **Meals at home cost food.** Eating at the own nest takes `FOOD_PER_ENERGY` (0.01) stored food per unit of energy, so a full meal from empty costs 1 food and an ant eats about 0.3 food a minute. When the stores run short the ant eats what is left; with empty stores it gets nothing and, in time, starves. Eating at a food source stays free: the ant feeds where it finds food.
+- **Old age.** Each ant lives `ANT_LIFESPAN` (600 s) × a factor drawn once from `[1 − LIFESPAN_JITTER, 1 + LIFESPAN_JITTER]` (stream `Lifespan`). The starting ants begin part-way through their lives, with ¼ to all of a life left (stream `StartingAge`), so the first generation does not die all at once. An ant whose life runs out dies in phase 5.
+- **Births.** The queen lays at `BIRTH_RATE_BASE + BIRTH_RATE_PER_ANT × population` eggs per second (more ants, more nurses) and only from food above the **reserve**: `RESERVE_SECONDS` of the colony's eating at home, `RESERVE_SECONDS × ENERGY_BURN × FOOD_PER_ENERGY × population`. Each colony starts with its reserve in the stores. See §4.5.
+- **Why a reserve** (with future fighting in mind): the reserve feeds the colony through a lean spell and lets it rebuild after losing ants, because the reserve shrinks with the population and the food above it goes back into eggs. A colony that loses its food sources loses its income and shrinks by age and hunger. Deaths are counted by cause per colony (`born`, `diedOfAge`, `diedOfHunger`), so deaths in fights can be added as a third cause.
+- Ants that die leave nothing behind yet; on the fighting branch, dead ants may be carried home as food.
+- With `LIFE_CYCLE` off, ants never age, meals are free and births are instant (the rules before 2026-10-31). The legacy checksum test runs with it off.
 - Scenarios may override the burn rate (§10's maze sets 0.2, so an ant has 200 s to search instead of 133 s and can reach food 157 s away).
 
 ### 5.7 Homing memory (path integration)
@@ -433,7 +441,7 @@ A preset is a named `WorldSetup`: size, seed, colonies (nest, palette colour, st
 | **Dunes** | 1920×1080 | Ember and Azure, a central Leaves pile, exposed rock, a mud oasis, broad sand |
 | **Creek** | 2240×1200 | Fern and Rose, a river with two rock crossings, sandy banks, food on both banks |
 | **Boulder field** | 1920×1080 | one Gold colony, many boulder clusters, moss tufts, two food piles |
-| **Maze** | 1920×1080 | one colony at (90, 960), 20 000 food at (90, 120), three 24 u rock walls with alternating 160 u gaps, a route of about 7 800 u; `breach` holds the left ends of the outer walls; `paramOverrides` sets `energyBurn` 0.2 |
+| **Maze** | 1920×1080 | one colony at (90, 960), 20 000 food at (90, 120), three 24 u rock walls with alternating 160 u gaps, a route of about 7 800 u; `breach` holds the left ends of the outer walls; `paramOverrides` sets `energyBurn` 0.2, and for the life cycle `antLifespan` 1800 and `reserveSeconds` 900, so the colony outlasts the ten minutes before the breach |
 | **Blank canvas** | 1920×1080 | no colonies, food or obstacles; the builder starts empty |
 
 The maze's outer walls (y = 270 and 810) open at their right ends (x 1760–1920) and the middle wall (y = 540) at its left end (x 0–160). Opening the breach — the run HUD's "Breach shortcut" button, `?breach=<tick>` or `--breach-tick` — clears the left ends of the outer walls, leaving a straight route of about 840 u up the left side (acceptance evidence in §15).
@@ -505,6 +513,11 @@ Rules:
 | `PUSH_ON_SIGNAL` | 0.4 | | |
 | `MASS` / carrying | 1 / 3 | | |
 | `SPAWN_COST` | 5 | food | |
+| `LIFE_CYCLE` | on | | §5.6; off restores free meals, no old age and instant births |
+| `ANT_LIFESPAN` / `LIFESPAN_JITTER` | 600 / 0.25 | s / ± fraction | §5.6 |
+| `FOOD_PER_ENERGY` | 0.01 | food per energy | a full meal from empty costs 1 food |
+| `RESERVE_SECONDS` | 120 | s | stores the queen keeps back, in seconds of the colony's eating |
+| `BIRTH_RATE_BASE` / `BIRTH_RATE_PER_ANT` / `BIRTH_BURST` | 1 / 0.004 / 3 | eggs per s / per ant per s / eggs | §4.5 |
 | `NEST_BASE_R` / `NEST_GROWTH` | 20 / 0.4 | u | r = base + growth × √population |
 | `FOOD_BASE_R` / `FOOD_REF_AMOUNT` | 12 / 500 | u / units | |
 | `FOOD_MIN_R` | 4 | u | smallest drawn and touchable food radius |

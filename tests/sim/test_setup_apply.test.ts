@@ -38,7 +38,9 @@ test("setup apply: a preview world has colonies but no ants", () => {
 });
 
 test("setup apply: colonies deliver only to their own nest", () => {
-  const world = worldFromSetup(twoColonySetup(), defaultParams());
+  const params = defaultParams();
+  params.lifeCycle = false; // no meal costs or starting stores, so the pools count deliveries only
+  const world = worldFromSetup(twoColonySetup(), params);
   let index = -1;
   for (let i = 0; i < world.ants.size(); i++) if (world.ants.colony[i] === 1) { index = i; break; }
   const nest = world.colonies[1].nest;

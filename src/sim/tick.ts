@@ -2,7 +2,7 @@ import { wrapAngle } from "../core/math.js";
 import { randRange, randUnit } from "../core/rng.js";
 import { fromAngle } from "../core/vec2.js";
 import { slideHeadingAlongNormal } from "./collide.js";
-import { nestRadius, type Colony } from "./colony.js";
+import { colonyReserve, nestRadius, type Colony } from "./colony.js";
 import { ContactKind, makeChunkEvents, type ChunkEvents } from "./events.js";
 import { degrade, deposit, emissionStrength, foodAt, homeAt, MarkerChannel } from "./marker_grid.js";
 import { isSolidAt, speedFactorAt, freeDistance } from "./obstacles.js";
@@ -106,6 +106,7 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
 
   for (let ant = begin; ant < end; ant++) {
     ants.energy[ant] -= params.energyBurn * dt;
+    ants.lifeLeft[ant] -= dt;
     ants.timeSinceAnchor[ant] += dt;
     ants.timeSinceLastMarker[ant] += dt;
     ants.degradeTimer[ant] = Math.max(0, ants.degradeTimer[ant] - dt);
@@ -254,9 +255,23 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
   }
 }
 
-export function spawnAtNest(world: World, colony: Colony): number {
+// lifeShare < 1 spawns an ant part-way through its life: the starting ants get
+// staggered ages so the first generation does not die of old age all at once.
+export function spawnAtNest(world: World, colony: Colony, lifeShare = 1): number {
   const params = world.params;
   const uid = world.nextUid++;
+  const lifeLeft = params.lifeCycle
+    ? params.antLifespan *
+      lifeShare *
+      randRange(
+        world.seed,
+        uid,
+        world.tick,
+        RandStream.Lifespan,
+        1 - params.lifespanJitter,
+        1 + params.lifespanJitter,
+      )
+    : Infinity;
   const angle = randRange(world.seed, uid, world.tick, RandStream.SpawnHeading, -Math.PI, Math.PI);
   const role =
     randUnit(world.seed, uid, world.tick, RandStream.SpawnRole) < params.explorerRatio
@@ -292,12 +307,14 @@ export function spawnAtNest(world: World, colony: Colony): number {
       heading: angle,
       colony: colony.id,
       role,
+      lifeLeft,
     },
     uid,
     speed,
     params,
   );
   colony.population += 1;
+  colony.born += 1;
   return index;
 }
 
@@ -359,7 +376,7 @@ export function applyEvents(world: World, events: readonly ChunkEvents[]): void 
         } else if (state === AntState.ReturningExhausted) {
           ants.state[ant] = AntState.Foraging;
         }
-        ants.energy[ant] = params.energyMax;
+        eatAtNest(colony, ant, world);
         ants.timeSinceAnchor[ant] = 0;
         if (state === AntState.ReturningFood || state === AntState.ReturningExhausted) {
           ants.heading[ant] = wrapAngle(ants.heading[ant] + Math.PI);
@@ -374,10 +391,55 @@ export function applyEvents(world: World, events: readonly ChunkEvents[]): void 
 
   world.food.removeEmpty();
   for (const colony of world.colonies) {
-    while (colony.foodPool >= params.spawnCost && ants.size() < params.maxAntsTotal) {
-      colony.foodPool -= params.spawnCost;
-      spawnAtNest(world, colony);
+    if (!params.lifeCycle) {
+      while (colony.foodPool >= params.spawnCost && ants.size() < params.maxAntsTotal) {
+        colony.foodPool -= params.spawnCost;
+        spawnAtNest(world, colony);
+      }
+      continue;
     }
+    layEggs(world, colony);
+  }
+}
+
+// An ant at its own nest eats from the stores up to a full stomach. With the life
+// cycle on the meal costs foodPerEnergy per unit of energy; when the stores run
+// short it eats what is left, and an ant that cannot eat at all starves.
+function eatAtNest(colony: Colony, ant: number, world: World): void {
+  const ants = world.ants;
+  const params = world.params;
+  const hunger = params.energyMax - ants.energy[ant];
+  if (!params.lifeCycle || params.foodPerEnergy <= 0) {
+    ants.energy[ant] = params.energyMax;
+    return;
+  }
+  if (hunger <= 0) return;
+  const cost = hunger * params.foodPerEnergy;
+  if (colony.foodPool >= cost) {
+    colony.foodPool -= cost;
+    ants.energy[ant] = params.energyMax;
+  } else {
+    ants.energy[ant] += colony.foodPool / params.foodPerEnergy;
+    colony.foodPool = 0;
+  }
+}
+
+// The queen lays at a steady rate that grows with the colony (more nurses), and
+// only from food above the reserve, so a colony grows while food comes in faster
+// than it is eaten and stops when it does not. The reserve is what lets a colony
+// rebuild after losing ants.
+function layEggs(world: World, colony: Colony): void {
+  const params = world.params;
+  const rate = params.birthRateBase + params.birthRatePerAnt * colony.population;
+  colony.birthCredit = Math.min(params.birthBurst, colony.birthCredit + rate / params.simHz);
+  while (
+    colony.birthCredit >= 1 &&
+    colony.foodPool - params.spawnCost >= colonyReserve(colony, params) &&
+    world.ants.size() < params.maxAntsTotal
+  ) {
+    colony.birthCredit -= 1;
+    colony.foodPool -= params.spawnCost;
+    spawnAtNest(world, colony);
   }
 }
 
@@ -407,9 +469,15 @@ export function clampToWorld(world: World): void {
 export function removeDead(world: World): void {
   const ants = world.ants;
   for (let index = ants.size() - 1; index >= 0; index--) {
-    if (ants.energy[index] > 0) continue;
+    const starved = ants.energy[index] <= 0;
+    const old = world.params.lifeCycle && ants.lifeLeft[index] <= 0;
+    if (!starved && !old) continue;
     const colony = world.colonies[ants.colony[index]];
-    if (colony !== undefined) colony.population -= 1;
+    if (colony !== undefined) {
+      colony.population -= 1;
+      if (starved) colony.diedOfHunger += 1;
+      else colony.diedOfAge += 1;
+    }
     ants.removeSwap(index);
   }
 }

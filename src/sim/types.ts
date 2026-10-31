@@ -22,4 +22,6 @@ export enum RandStream {
   SpeedJitter,
   ContactTurn,
   HomingDrift,
+  Lifespan,
+  StartingAge,
 }

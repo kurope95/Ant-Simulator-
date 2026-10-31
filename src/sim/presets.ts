@@ -143,7 +143,10 @@ function maze(seed: number): WorldSetup {
   // The route is long enough that an ant on the default burn gives up looking
   // before it arrives: the search budget is (energyMax - exhaustedAt) / burn,
   // and the food lies 157 s away.
-  setup.paramOverrides = { energyBurn: 0.2 };
+  // The colony must also last the ten minutes before the breach with no food
+  // coming in: ants live 30 minutes here and the starting stores feed the
+  // whole colony for 15 (spec §5.6).
+  setup.paramOverrides = { energyBurn: 0.2, antLifespan: 1800, reserveSeconds: 900 };
   return setup;
 }
 

@@ -16,6 +16,8 @@ function makePipelineWorld(nest: Vec2 = { x: 10, y: 10 }): { world: World; param
   params.worldH = 400;
   params.wanderAngleFollower = 0;
   params.wanderAngleExplorer = 0;
+  // These tests pin the original rules; test_life_cycle covers meals, age and births.
+  params.lifeCycle = false;
   const world = makeWorld(params, 1);
   world.colonies.push(makeColony(0, nest));
   return { world, params };

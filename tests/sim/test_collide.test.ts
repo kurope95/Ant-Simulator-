@@ -376,6 +376,7 @@ test("collide: antCollisions false restores the old behaviour", { timeout: 60_00
   // Recorded on commit 8b3137c (before M4): meadow, seed 7, 300 ticks.
   const params = defaultParams();
   params.antCollisions = false;
+  params.lifeCycle = false;
   const world = worldFromSetup(quickStartSetup(7), params);
   for (let tick = 0; tick < 300; tick++) stepWorld(world);
   assert.equal(worldChecksum(world), 2915110820);

@@ -50,6 +50,20 @@ export interface SimParams {
   mass: number;
   massCarrying: number;
   spawnCost: number;
+  // Life cycle (spec §5.6). Off: free meals at home, no old age, a birth the moment food allows.
+  lifeCycle: boolean;
+  // Average life of an ant in seconds, varied per ant by ±lifespanJitter.
+  antLifespan: number;
+  lifespanJitter: number;
+  // Stored food one unit of energy costs when an ant eats at its own nest.
+  foodPerEnergy: number;
+  // Seconds of the colony's eating the queen keeps back before she lays.
+  reserveSeconds: number;
+  // Eggs per second: a base rate plus a share per living ant (the nurses).
+  birthRateBase: number;
+  birthRatePerAnt: number;
+  // Births that can bank up while the stores are low.
+  birthBurst: number;
   nestBaseR: number;
   nestGrowth: number;
   foodBaseR: number;
@@ -127,6 +141,14 @@ export function defaultParams(): SimParams {
     mass: 1,
     massCarrying: 3,
     spawnCost: 5,
+    lifeCycle: true,
+    antLifespan: 600,
+    lifespanJitter: 0.25,
+    foodPerEnergy: 0.01,
+    reserveSeconds: 120,
+    birthRateBase: 1,
+    birthRatePerAnt: 0.004,
+    birthBurst: 3,
     nestBaseR: 20,
     nestGrowth: 0.4,
     foodBaseR: 12,
