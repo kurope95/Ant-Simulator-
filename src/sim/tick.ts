@@ -675,16 +675,34 @@ function layEggs(world: World, colony: Colony): void {
   }
 }
 
-// The queen's laying multiplier from the food coming in per ant (spec §5.8):
-// 0 at or below layIncomeNone per ant per minute, 1 from layIncomeFull. When
-// more ants no longer bring in more food, the share per ant falls and so do
-// births; the colony settles where its food income supports it.
+// The queen's laying multiplier (spec §5.8), the larger of two signals she
+// senses in the nest:
+// - food coming in per ant: 0 at or below layIncomeNone per ant per minute, 1
+//   from layIncomeFull. When more ants no longer bring in more food, the share
+//   per ant falls and so do births; the colony settles where its food supports it.
+// - an empty nest: when nearly every ant has been called out to work (resting
+//   share below layEmptyBelow, fading out by layEmptyUntil) there is more work
+//   than workers. This is what grows a colony on far but rich food, where long
+//   trips keep the food per ant low.
 export function layingFactor(colony: Colony, params: SimParams): number {
   if (!params.restAtHome || colony.population <= 0) return 1;
   const perAnt = colony.incomePerMinute / colony.population;
-  const span = params.layIncomeFull - params.layIncomeNone;
-  if (!(span > 0)) return perAnt >= params.layIncomeFull ? 1 : 0;
-  return Math.min(1, Math.max(0, (perAnt - params.layIncomeNone) / span));
+  const incomeSpan = params.layIncomeFull - params.layIncomeNone;
+  const income =
+    incomeSpan > 0
+      ? clamp01((perAnt - params.layIncomeNone) / incomeSpan)
+      : perAnt >= params.layIncomeFull
+        ? 1
+        : 0;
+  const share = colony.resting / colony.population;
+  const emptySpan = params.layEmptyUntil - params.layEmptyBelow;
+  const empty =
+    emptySpan > 0 ? clamp01((params.layEmptyUntil - share) / emptySpan) : share < params.layEmptyBelow ? 1 : 0;
+  return Math.max(income, empty);
+}
+
+function clamp01(value: number): number {
+  return value < 0 ? 0 : value > 1 ? 1 : value;
 }
 
 // One tick of the smoothed income: an exponential average over kIncomeWindow s.
