@@ -7,9 +7,11 @@ import {
   rebuildBorder,
 } from "../../src/sim/obstacles.js";
 import { defaultParams, type SimParams } from "../../src/sim/params.js";
-import { loadPreset } from "../../src/sim/presets.js";
-import { addColony, FoodKind, addFood, makeSetup, ObstacleKind, paintCells } from "../../src/sim/setup.js";
+import { loadPreset, quickStartSetup } from "../../src/sim/presets.js";
+import { addColony, FoodKind, addFood, makeSetup, ObstacleKind, paintCells, paintRect } from "../../src/sim/setup.js";
 import { worldFromSetup } from "../../src/sim/setup_apply.js";
+import { resolveAntOverlaps } from "../../src/sim/collide.js";
+import { worldChecksum } from "../../src/sim/checksum.js";
 import { spawnAtNest } from "../../src/sim/tick.js";
 import { stepWorld, type World } from "../../src/sim/world.js";
 
@@ -236,4 +238,145 @@ test("steer: few ants touch solid ground on the boulder preset", { timeout: 120_
   }
   const average = sum / samples;
   assert.ok(average < 0.05, `fractionTouchingSolid averaged ${average.toFixed(4)}`);
+});
+
+// --- M4: ant-to-ant collisions -------------------------------------------
+
+function minPairDistance(world: World): number {
+  const ants = world.ants;
+  let best = Infinity;
+  for (let i = 0; i < ants.size(); i++) {
+    for (let j = i + 1; j < ants.size(); j++) {
+      const d = Math.hypot(ants.posX[i] - ants.posX[j], ants.posY[i] - ants.posY[j]);
+      if (d < best) best = d;
+    }
+  }
+  return best;
+}
+
+function rebuildHash(world: World): void {
+  world.spatialHash.build(
+    world.ants.posX,
+    world.ants.posY,
+    world.ants.size(),
+    world.size,
+    world.params.hashCell,
+  );
+}
+
+// Deterministic scatter inside a disc, without touching the simulation's RNG.
+function scatter(index: number, centre: { x: number; y: number }, radius: number): { x: number; y: number } {
+  const a = index * 2.39996;
+  const r = radius * Math.sqrt(((index * 0.618034) % 1));
+  return { x: centre.x + Math.cos(a) * r, y: centre.y + Math.sin(a) * r };
+}
+
+test("collide: a packed cluster separates", { timeout: 60_000 }, () => {
+  const { world, params } = wallWorld();
+  // This test is about the PBD pass alone, so avoidance steering is switched
+  // off (its cap is 0). With avoidance on the cluster ends at 4.05 u.
+  world.params.avoidMaxSpeedFactor = 0;
+  for (let i = 0; i < 200; i++) {
+    const p = scatter(i, { x: 200, y: 150 }, 40);
+    spawn(world, p.x, p.y);
+  }
+  for (let tick = 0; tick < 120; tick++) stepWorld(world);
+  const minimum = minPairDistance(world);
+  assert.ok(
+    minimum >= 2 * params.antRadius - 0.5,
+    `closest pair ${minimum.toFixed(2)} u apart`,
+  );
+});
+
+test("collide: carriers are pushed less", () => {
+  const { world, params } = wallWorld();
+  const light = spawn(world, 200, 150);
+  const heavy = spawn(world, 200 + 2 * params.antRadius - 2, 150);
+  world.ants.mass[light] = 1;
+  world.ants.mass[heavy] = 3;
+  const x0 = [world.ants.posX[light], world.ants.posX[heavy]];
+  rebuildHash(world);
+  resolveAntOverlaps(world, world.collisionScratch);
+  const moveLight = Math.abs(world.ants.posX[light] - x0[0]);
+  const moveHeavy = Math.abs(world.ants.posX[heavy] - x0[1]);
+  assert.ok(moveHeavy > 0, "the heavy ant moved too");
+  assert.ok(Math.abs(moveLight / moveHeavy - 3) <= 0.15, `ratio ${(moveLight / moveHeavy).toFixed(3)}`);
+});
+
+test("collide: coincident ants separate deterministically and never produce NaN", () => {
+  const build = (): World => {
+    const { world } = wallWorld();
+    for (let i = 0; i < 50; i++) spawn(world, 200, 150);
+    return world;
+  };
+  const a = build();
+  const b = build();
+  for (let tick = 0; tick < 60; tick++) {
+    stepWorld(a);
+    stepWorld(b);
+    for (let i = 0; i < a.ants.size(); i++) {
+      assert.ok(Number.isFinite(a.ants.posX[i]) && Number.isFinite(a.ants.posY[i]));
+    }
+  }
+  assert.ok(minPairDistance(a) > 0.5, `closest pair ${minPairDistance(a).toFixed(3)} u`);
+  for (let i = 0; i < a.ants.size(); i++) {
+    assert.equal(a.ants.posX[i], b.ants.posX[i]);
+    assert.equal(a.ants.posY[i], b.ants.posY[i]);
+  }
+});
+
+test("collide: walls win against a packed crowd", { timeout: 60_000 }, () => {
+  const { world } = wallWorld((setup) =>
+    paintRect(setup, ObstacleKind.Rock, { pos: { x: 140, y: 0 }, size: { x: 4, y: 300 } }),
+  );
+  for (let i = 0; i < 300; i++) {
+    const p = scatter(i, { x: 110, y: 150 }, 30);
+    spawn(world, p.x, p.y);
+  }
+  for (let tick = 0; tick < 300; tick++) stepWorld(world);
+  for (let i = 0; i < world.ants.size(); i++) {
+    const x = world.ants.posX[i];
+    const y = world.ants.posY[i];
+    assert.ok(!isSolidAt(world.obstacles, { x, y }), `ant ${i} inside rock at ${x.toFixed(1)},${y.toFixed(1)}`);
+    assert.ok(x < 140, `ant ${i} crossed the wall to x=${x.toFixed(1)}`);
+  }
+});
+
+test("collide: ants inside their own nest radius don't collide", () => {
+  const { world, params } = wallWorld();
+  for (let i = 0; i < 50; i++) spawn(world, 20 + 0.1 * i, 20);
+  const x0 = Float32Array.from(world.ants.posX.subarray(0, 50));
+  const y0 = Float32Array.from(world.ants.posY.subarray(0, 50));
+  rebuildHash(world);
+  resolveAntOverlaps(world, world.collisionScratch);
+  for (let i = 0; i < 50; i++) {
+    assert.equal(world.ants.posX[i], x0[i], `ant ${i} x moved`);
+    assert.equal(world.ants.posY[i], y0[i], `ant ${i} y moved`);
+  }
+  assert.equal(params.nestExemptFactor, 1.0);
+});
+
+test("collide: velocity is the actual movement, pushes included", () => {
+  const { world, params } = wallWorld();
+  spawn(world, 200, 150);
+  spawn(world, 201, 150.5);
+  stepWorld(world);
+  let pushed = false;
+  for (let i = 0; i < world.ants.size(); i++) {
+    const ants = world.ants;
+    assert.equal(ants.velX[i], Math.fround((ants.posX[i] - ants.prevX[i]) * params.simHz));
+    assert.equal(ants.velY[i], Math.fround((ants.posY[i] - ants.prevY[i]) * params.simHz));
+    const intendedX = Math.cos(ants.heading[i]) * ants.speed[i];
+    if (Math.abs(ants.velX[i] - intendedX) > 1e-3) pushed = true;
+  }
+  assert.ok(pushed, "at least one ant moved differently from its intended velocity");
+});
+
+test("collide: antCollisions false restores the old behaviour", { timeout: 60_000 }, () => {
+  // Recorded on commit 8b3137c (before M4): meadow, seed 7, 300 ticks.
+  const params = defaultParams();
+  params.antCollisions = false;
+  const world = worldFromSetup(quickStartSetup(7), params);
+  for (let tick = 0; tick < 300; tick++) stepWorld(world);
+  assert.equal(worldChecksum(world), 2915110820);
 });

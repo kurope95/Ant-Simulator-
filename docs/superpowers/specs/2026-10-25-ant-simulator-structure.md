@@ -189,6 +189,8 @@ class SpatialHash {   // counting sort over occupied cells only; O(ants) per bui
   cellStart: Uint32Array; cellEnd: Uint32Array; items: Uint32Array // ranges into items, per occupied cell
   build(xs: Float32Array, ys: Float32Array, count, worldSize: Vec2, cell: number): void
   countWithin(x, y, radius, xs, ys, exclude): number  // excludes one index (the asker itself)
+  queryWithin(x, y, radius, xs, ys, exclude, out: Uint32Array): number  // writes neighbour indices into out, up to out.length (M4)
+  nearestWithin(x, y, radius, xs, ys, exclude, k, outIdx, outDistSq): number  // k nearest, sorted by distance then index (M4)
 }
 
 // sim/stuck.ts
@@ -312,7 +314,15 @@ freeDistance(grid, origin, angle, maxDist): number // DDA: distance to the first
 freeDistanceDir(grid, origin, unitX, unitY, maxDist): number // the same walk for a unit direction already in hand
 nearestFreePoint(grid, pos, maxCells): Vec2 | null // BFS from the cell holding pos to the closest open cell centre; null once maxCells solid cells are expanded
 
+// sim/avoidance.ts (M4)
+timeToCollision(dpx, dpy, dvx, dvy, radiusSum): number | null  // earliest t > 0 at which two circles touch
+computeAvoidance(world, scratch: AvoidScratch): void  // pre-pass in Think; writes avoidX/avoidY for ants with (uid + tick) even
+makeAvoidScratch(): AvoidScratch
+
 // sim/collide.ts
+resolveAntOverlaps(world, scratch: CollisionScratch): void  // Jacobi PBD pass over ant pairs (M4)
+exemptAtNest(world, index): boolean      // inside own nest radius × nestExemptFactor (M4)
+makeCollisionScratch(): CollisionScratch
 resolveObstacles(world): void              // pushes ants out of Rock/Water, both axes; teleports ants buried in a solid interior to the nearest open cell (energy 0 when none is found)
 slideHeadingAlongNormal(ants, index, nx, ny): void  // removes the into-wall part of a heading
 
@@ -567,7 +577,7 @@ type ParamKey = "antSpeed" | "turnRate" | "sensorRadius" | "sensorHalfFovDeg" | 
 type ParamGroup = "movement" | "trails" | "colony"
 interface ParamSpec { key: ParamKey; label: string; unit: string; min: number; max: number;
                       step: number; scale: number; group: ParamGroup; digits?: number }
-paramSpecs(): readonly ParamSpec[]      // thirteen live rows (M1.7 adds foreignErasureFactor and foreignAversion; M5 adds degradeTime)
+paramSpecs(): readonly ParamSpec[]      // fourteen live rows (M1.7 adds foreignErasureFactor and foreignAversion; M4 adds tHorizon; M5 adds degradeTime)
 specValue(spec, params): number
 applySpecValue(spec, params, displayValue): number
 formatSpecValue(spec, displayValue): string
@@ -715,6 +725,11 @@ runInteractive(options, canvas: HTMLCanvasElement, uiRoot: HTMLElement,
 runHeadless(options, canvas: HTMLCanvasElement,
             log?: (line: string) => void): number     // 0 ok, 1 on renderer/preset error
 
+// app/bench_scenarios.ts (M4, hidden; bench and reach only)
+crowdWorld(seed, count): World            // highway map, fixed count, infinite food, no births or burn; even uids east, odd uids west
+laneScore(samples, centreY): number       // mean share of east movers below and west movers above the centre line
+crowdMetrics(world): CrowdMetrics         // { lanes, overlap, inCorridor }
+
 // app/bench.ts
 interface BenchReport { preset: string; ticks: number; threads: number; ants: number;
                         phases: SampleSummary[]; total: SampleSummary;
@@ -785,7 +800,8 @@ a phase may write only its own ants' slots, and anything cross-ant goes through 
 | M1.6 Camera and looks | `app/camera_input`; `render/{terrain_mask,terrain_shader}`; map-style pan and zoom; glowing trails; procedural terrain; anthill mounds; ant and food shadows | [plans/2026-10-25-m1.6-camera-looks.md](../plans/2026-10-25-m1.6-camera-looks.md) |
 | M2 Navigation and foraging | `sim/{spatial_hash,stuck}`; `app/{reach,reach_cli}`; wander fix; wall sliding; look-ahead and fallback rays; stuck detection and degrading; spawn safety; retuned defaults; homing memory; per-colony trail layers; maze preset and breach | [plans/2026-10-25-m2-navigation-foraging.md](../plans/2026-10-25-m2-navigation-foraging.md) |
 | M3 Colonies | **closed** — multi-colony setup, palette, territory and the colony heatmap shipped in M1.5. Only the open hostilities topic (main spec §14) remains, unscheduled | — |
-| M4 Crowds and scale | `core/worker_pool`; ant-to-ant PBD in `collide`; `sim/avoidance`; stress preset; determinism test with 1 and N workers; worker-scale neighbour queries through the spatial hash | later |
+| M4 Ant collisions and avoidance | `sim/avoidance`; ant-to-ant PBD in `collide`; spatial-hash `queryWithin`/`nearestWithin`; `presets` highway; `app/bench_scenarios` (crowd); reach lanes/overlap rows; settings switch and look-ahead | [plans/2026-10-25-m4-ant-collisions.md](../plans/2026-10-25-m4-ant-collisions.md) |
+| M4.5 Scale | `core/worker_pool`; shared memory; workers; 20,000-ant stress; determinism with 1 and N workers | later |
 | M5 Inspector **(built 2026-10-26)** | `sim/{picking,names,inspect}`; `ui/{inspector_panel,sparkline}`; `render/inspector_overlay`; click, follow and sensors in `app/controller`; `--inspect/--follow/--sensors`; live `degradeTime` row | [plans/2026-10-26-m5-inspector-telemetry.md](../plans/2026-10-26-m5-inspector-telemetry.md) |
 | M6 Tuning and hardening | parameter tuning, performance passes, edge cases, README | later |
 

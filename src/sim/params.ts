@@ -62,6 +62,8 @@ export interface SimParams {
   maxNeighbours: number;
   avoidMaxSpeedFactor: number;
   pbdIterations: number;
+  antCollisions: boolean;
+  nestExemptFactor: number;
   legsMinPx: number;
   stepThreshold: number;
   stepDuration: number;
@@ -133,6 +135,8 @@ export function defaultParams(): SimParams {
     maxNeighbours: 16,
     avoidMaxSpeedFactor: 0.5,
     pbdIterations: 2,
+    antCollisions: true,
+    nestExemptFactor: 1.0,
     legsMinPx: 18,
     stepThreshold: 3.0,
     stepDuration: 0.08,

@@ -89,7 +89,7 @@ test("options: --preset and the --scenario sandbox alias", () => {
   assert.equal(parseOptions(["--preset", "dunes"]).options.preset, "dunes");
   assert.equal(parseOptions(["--preset", "maze"]).options.preset, "maze");
   assert.equal(parseOptions(["--scenario", "sandbox"]).options.preset, "meadow");
-  assert.match(parseOptions(["--preset", "arena"]).error, /meadow, dunes, creek, boulder, maze, blank/);
+  assert.match(parseOptions(["--preset", "arena"]).error, /meadow, dunes, creek, boulder, maze, highway, blank/);
 });
 
 test("options: --breach-tick and ?breach= schedule the maze breach", () => {

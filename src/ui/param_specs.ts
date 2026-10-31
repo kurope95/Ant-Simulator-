@@ -13,7 +13,8 @@ export type ParamKey =
   | "energyBurn"
   | "spawnCost"
   | "foreignErasureFactor"
-  | "foreignAversion";
+  | "foreignAversion"
+  | "tHorizon";
 
 export type ParamGroup = "movement" | "trails" | "colony";
 
@@ -36,6 +37,8 @@ const kSpecs: readonly ParamSpec[] = [
   { key: "sensorRadius", label: "Sensor range", unit: "u", min: 10, max: 80, step: 1, scale: 1, group: "movement" },
   { key: "sensorHalfFovDeg", label: "Sensor angle", unit: "°", min: 20, max: 90, step: 1, scale: 1, group: "movement" },
   { key: "explorerRatio", label: "Explorers", unit: "%", min: 0, max: 100, step: 1, scale: 100, group: "movement" },
+  // How far ahead an ant looks for a head-on meeting (spec §6.1). Changing it takes effect on the next tick.
+  { key: "tHorizon", label: "Avoidance look-ahead", unit: "s", min: 0.25, max: 2.5, step: 0.05, scale: 1, group: "movement", digits: 2 },
   { key: "markerHalfLife", label: "Trail half-life", unit: "s", min: 1, max: 30, step: 0.1, scale: 1, group: "trails" },
   { key: "emissionDecay", label: "Trail fade with distance", unit: "", min: 0.005, max: 0.2, step: 0.005, scale: 1, group: "trails", digits: 3 },
   { key: "markerDropDist", label: "Mark every", unit: "u", min: 2, max: 24, step: 1, scale: 1, group: "trails" },

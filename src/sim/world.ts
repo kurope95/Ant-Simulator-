@@ -1,7 +1,13 @@
 import type { Vec2 } from "../core/vec2.js";
 import { stopwatch } from "../core/stopwatch.js";
 import { Ants } from "./ants.js";
-import { resolveObstacles } from "./collide.js";
+import { computeAvoidance, makeAvoidScratch, type AvoidScratch } from "./avoidance.js";
+import {
+  makeCollisionScratch,
+  resolveAntOverlaps,
+  resolveObstacles,
+  type CollisionScratch,
+} from "./collide.js";
 import type { Colony } from "./colony.js";
 import type { ChunkEvents } from "./events.js";
 import { makeFoodSources, type FoodSources } from "./food.js";
@@ -32,6 +38,8 @@ export interface World {
   colonies: Colony[];
   food: FoodSources;
   spatialHash: SpatialHash;
+  collisionScratch: CollisionScratch;
+  avoidScratch: AvoidScratch;
   chunkEvents: ChunkEvents[];
   nextUid: number;
 }
@@ -71,9 +79,39 @@ export function makeWorld(params: SimParams, seed: number, size?: Vec2): World {
     colonies: [],
     food: makeFoodSources(),
     spatialHash: new SpatialHash(),
+    collisionScratch: makeCollisionScratch(),
+    avoidScratch: makeAvoidScratch(),
     chunkEvents: [],
     nextUid: 0,
   };
+}
+
+// Spec §5.2 step 4. With antCollisions off this is the pre-M4 pass exactly: one
+// clamp, one wall resolve, one clamp. With it on, the hash is rebuilt from the
+// positions Think just wrote, and each PBD iteration resolves ants against
+// each other and then against walls, so walls always win.
+function collisionPhase(world: World): void {
+  const ants = world.ants;
+  const params = world.params;
+  if (!params.antCollisions) {
+    clampToWorld(world);
+    resolveObstacles(world);
+    clampToWorld(world);
+    return;
+  }
+  world.spatialHash.build(ants.posX, ants.posY, ants.size(), world.size, params.hashCell);
+  for (let it = 0; it < params.pbdIterations; it++) {
+    resolveAntOverlaps(world, world.collisionScratch);
+    clampToWorld(world);
+    resolveObstacles(world);
+    clampToWorld(world);
+  }
+  // Velocity is the movement that actually happened, pushes included.
+  const simHz = params.simHz;
+  for (let i = 0; i < ants.size(); i++) {
+    ants.velX[i] = (ants.posX[i] - ants.prevX[i]) * simHz;
+    ants.velY[i] = (ants.posY[i] - ants.prevY[i]) * simHz;
+  }
 }
 
 export function stepWorld(world: World): void {
@@ -97,6 +135,9 @@ export function stepWorld(world: World): void {
     ),
   );
   timed(Phase.Think, () => {
+    // The avoidance pre-pass runs first, on start-of-tick state, so the think
+    // loop below sees the same avoidance whatever order its chunks run in.
+    if (world.params.antCollisions) computeAvoidance(world, world.avoidScratch);
     resetChunkEvents(world);
     const chunkSize = world.params.chunkSize;
     const lists = world.chunkEvents;
@@ -108,11 +149,7 @@ export function stepWorld(world: World): void {
     }
   });
   timed(Phase.Events, () => applyEvents(world, world.chunkEvents));
-  timed(Phase.Collisions, () => {
-    clampToWorld(world);
-    resolveObstacles(world);
-    clampToWorld(world);
-  });
+  timed(Phase.Collisions, () => collisionPhase(world));
   timed(Phase.Removals, () => removeDead(world));
   timed(Phase.Decay, () =>
     decayMarkers(

@@ -490,6 +490,11 @@ export class AppController {
         this.params.homingEnabled = enabled;
         if (this.runWorld !== null) this.runWorld.params.homingEnabled = enabled;
       },
+      onAntCollisions: () => {
+        const enabled = !this.params.antCollisions;
+        this.params.antCollisions = enabled;
+        if (this.runWorld !== null) this.runWorld.params.antCollisions = enabled;
+      },
       onFit: () => {
         this.requestFit();
       },

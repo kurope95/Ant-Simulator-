@@ -35,6 +35,12 @@ export function worldChecksum(world: World): number {
     foldFloat(ants.wanderHeading[i]);
     foldFloat(ants.homeErrX[i]);
     foldFloat(ants.homeErrY[i]);
+    // Avoidance only exists while collisions are on, so it is folded only then.
+    // That keeps a collisions-off world's checksum equal to the pre-M4 one.
+    if (world.params.antCollisions) {
+      foldFloat(ants.avoidX[i]);
+      foldFloat(ants.avoidY[i]);
+    }
   }
 
   const markers = world.markers;

@@ -31,10 +31,10 @@ function assertFiniteWorld(world: World): void {
   }
 }
 
-test("param specs: thirteen live controls with valid ranges and defaults", () => {
+test("param specs: fourteen live controls with valid ranges and defaults", () => {
   const specs = paramSpecs();
-  assert.equal(specs.length, 13);
-  assert.equal(new Set(specs.map((spec) => spec.key)).size, 13);
+  assert.equal(specs.length, 14);
+  assert.equal(new Set(specs.map((spec) => spec.key)).size, 14);
   assert.ok(specs.some((spec) => spec.key === "degradeTime"));
   const defaults = defaultParams();
   for (const spec of specs) {
@@ -110,4 +110,16 @@ test("param specs: degrade after is live and round-trips", () => {
   assert.equal(applySpecValue(spec, params, 4.2), 4);
   assert.equal(params.degradeTime, 4);
   assert.equal(formatSpecValue(spec, 4), "4.0 s");
+});
+
+test("param specs: avoidance look-ahead runs 0.25 to 2.5 s in 0.05 s steps", () => {
+  const spec = paramSpecs().find((candidate) => candidate.key === "tHorizon");
+  assert.ok(spec);
+  assert.equal(spec.min, 0.25);
+  assert.equal(spec.max, 2.5);
+  assert.equal(spec.step, 0.05);
+  const params = defaultParams();
+  assert.equal(applySpecValue(spec, params, 9), 2.5);
+  assert.equal(params.tHorizon, 2.5);
+  assert.equal(applySpecValue(spec, params, 0.5), 0.5);
 });

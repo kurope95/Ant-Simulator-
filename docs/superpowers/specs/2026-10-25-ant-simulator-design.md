@@ -202,7 +202,7 @@ Each field is one contiguous array, indexed by ant index `i`:
 ### 5.2 Tick pipeline
 The simulation uses a fixed time step: `dt = 1/60 s`. Each tick runs these phases:
 
-1. **Build the spatial hash.** Counting-sort the ant indices into 6 u cells (`cell_start[]`, `cell_items[]`).
+1. **Build the spatial hash.** Counting-sort the ant indices into 6 u cells (`cell_start[]`, `cell_items[]`). With ant collisions on (M4), the avoidance pre-pass (§6.1) then runs over these start-of-tick positions and last tick's velocities, before any ant is thought about.
 2. **Think and move.** Runs in parallel over chunks of ants. It reads the world and writes only the ant's own fields plus its chunk's event list.
    1. Timers: `energy −= ENERGY_BURN × dt`; `time_since_anchor` and `time_since_last_marker` increase by dt; `degrade_timer` decreases by dt.
    2. Stuck check (§5.5).
@@ -225,7 +225,7 @@ The simulation uses a fixed time step: `dt = 1/60 s`. Each tick runs these phase
      - RETURNING_EXHAUSTED: `energy = 100`; switch to FORAGING; `time_since_anchor = 0`.
      - FORAGING: `energy = 100`; `time_since_anchor = 0`.
    - Spawning (§4.5).
-4. **Collisions (PBD).** Rebuild the hash, then run `PBD_ITERATIONS` (2) passes. Each pass resolves ant-against-ant overlaps first, then ant-against-wall, and walls always win (§6.2). Finally set `vel = (pos − prev) / dt`.
+4. **Collisions (PBD).** With ant collisions on (M4), rebuild the hash from the positions Think wrote, then run `PBD_ITERATIONS` passes. Each pass resolves ant-against-ant overlaps first, then ant-against-wall, and walls always win (§6.2). Finally set `vel = (pos − prev) / dt`. With ant collisions off, the pass is the pre-M4 one: a single clamp, wall resolve and clamp.
 5. **Removals.** Ants with `energy ≤ 0` are removed. The hash is rebuilt next tick, so no "ghost collider" of a dead ant can survive.
 6. **Marker decay.** Runs in parallel over grid rows.
 7. **Stats.** Food delivered per colony goes into ring buffers for the sparklines.
@@ -317,6 +317,8 @@ Based on Weiss et al., *Position-Based Multi-Agent Dynamics for Real-Time Crowd 
   4. scale by the urgency `(1 − t / T_HORIZON)` and by `m_j / (m_i + m_j)`, so unloaded ants give way to ants carrying food.
 - **Exactly head-on** (tangential part ≈ 0): both ants sidestep to their own right *(Claude's call: always picking the same side makes lanes form)*.
 - **Output.** A sideways velocity, capped at `AVOID_MAX_SPEED` and blended into steering. It is never a position jump.
+- **Implemented in M4 (Claude's call, replacing the projection step above):** for each neighbour that will touch within `T_HORIZON`, take the lateral part of the relative miss at contact (the part across the relative motion, pointing away from the other ant). Exactly head-on, that part is zero, so both ants sidestep to their own right. Scale by `sp × urgency × m_j / (m_i + m_j)`, sum over neighbours, cap at `AVOID_MAX_SPEED`, then blend into the heading before the wall check, so walls still win. Ants inside their own nest radius are skipped.
+- **Open (M4 finding):** the away-from-the-other-ant rule is mirror-symmetric, so off-axis pairs repel instead of forming lanes. Always sidestepping to the own right raised the `lanes` score only from 0.47 to 0.56 and doubled overlap, so it was not adopted. A lane rule needs a decision from Marek; see the M4 report.
 
 ### 6.2 Hard collisions (PBD)
 - Run 2 Jacobi iterations per tick.
@@ -324,6 +326,8 @@ Based on Weiss et al., *Position-Based Multi-Agent Dynamics for Real-Time Crowd 
   - Then apply all scratch corrections at once.
 - After the ant-against-ant pass, push ants out of border obstacle boxes. Walls always win.
 - Velocity is recomputed from the corrected movement.
+- **Nest exemption (M4):** an ant within `nestRadius × NEST_EXEMPT_FACTOR` of its own nest neither pushes nor is pushed by ant-to-ant corrections, so entrance pile-ups do not block deliveries. Walls still apply.
+- **Coincident ants (M4):** two ants at the same point separate along a fixed direction per pair, derived from a hash of their uids, antisymmetric between the pair, so the result is deterministic and never NaN.
 
 ### 6.3 Determinism and threading rules
 - Ants are processed in **fixed-size chunks** (`CHUNK_SIZE`, 1024), whatever the thread count.
@@ -493,6 +497,7 @@ Rules:
 | `STUCK_TURN_JITTER` / `CROWD_RADIUS_FACTOR` / `ZONE_MARGIN` | 0.6 / 3 / 16 | rad / × `ANT_RADIUS` / u | the ±0.6 turn, the "3 ×" crowd radius and the nest/food zone margin from §5.5 |
 | `ENERGY_MAX` / `ENERGY_BURN` / `EXHAUSTED_AT` | 100 / 0.5 / 60 | – / per s / – | the maze overrides the burn to 0.2 (§10) |
 | `HOMING_ENABLED` / `HOMING_DRIFT` | on / 0.04 | – / fraction of a leg | Settings switch "Homing memory"; §5.7 |
+| `ANT_COLLISIONS` / `NEST_EXEMPT_FACTOR` | on / 1.0 | – / × nest radius | Settings switch "Ant collisions" (off restores the pre-M4 ghost ants); §6.2 |
 | `PUSH_ON_SIGNAL` | 0.4 | | |
 | `MASS` / carrying | 1 / 3 | | |
 | `SPAWN_COST` | 5 | food | |
@@ -560,7 +565,8 @@ Each milestone ends with a running app and the checks listed.
 | M1.7 | Colony identity and scent competition. Trails, ants and nests take their colony's colour, and Colonies is the default view. Scents compete per cell: Territory pressure, a flip margin with hysteresis, and foreign-scent aversion. | Screenshots with four or five colonies at fit zoom, zoom 6 on ants, a nest close-up and a contested border look right; the reach guard holds (contest colony B at least 63 deliveries in minute 3); tests pass. **Built 2026-10-26 on `claude/m1-7-colony-identity`; not merged.** Evidence: 258 tests; reach contest colony B 1 / 58 / 122 per minute (M2: 1 / 58 / 84); single-colony reach rows unchanged. The bench runs were on battery and are not quoted. See the M1.7 report. |
 | M2 | Navigation and foraging. Wander fix; sliding along walls and edges; look-ahead steering and fallback rays; spatial hash; stuck detection with dead-end trail erasure; spawn safety; reach harness; retuned trail and energy defaults; homing memory; one trail layer per colony; maze preset with a breach control | On the boulder preset fewer than 5% of ants touch rocks (or 3x fewer than before); reach harness: at 1000 u the first delivery comes within 60 s, and at 1500 u ants deliver in minute 3; the far colony in the contest delivers; in the maze, deliveries per minute after the breach are at least 3x those before it. **Done 2026-10-25.** Evidence: boulder ants touching rock 0.0211 → 0.0007 (3.3% → 0.07%); reach first delivery 36.3 s at 1000 u, 84 deliveries in minute 3 at 1500 u; contest colony B 1 / 58 / 84 per minute (was 0); maze 4 deliveries in minutes 7–9 against 1016 in minutes 12–14 after the breach at 10:00 (ratio 254); 228 tests; bench 0.448–0.457 ms avg across runs, plugged in |
 | M3 | **Absorbed and closed.** Multi-colony setup, palette, territory and the colony heatmap shipped in M1.5. Only inter-colony hostilities (§14) remain, and they are not scheduled. | — |
-| M4 | **Crowds and scale.** PBD collisions, PBMAD avoidance, worker pool, stress scenario, bench mode | No overlapping ants; opposing streams form lanes; 20k-ant bench numbers recorded; determinism test passes with 1 and 8 workers |
+| M4 | **Ant collisions and avoidance (single thread).** Spatial-hash neighbour queries; PBD ant-to-ant collisions with walls winning; nest exemption; PBMAD-style sidestepping; collision settings; highway preset and crowd scenario | No overlap (≤ 1%); lanes ≥ 0.70; reach within 75% of M2; 2000 ants ≤ 6 ms per step plugged in. **Built 2026-10-25; targets not met, not counted as done.** See the M4 report. |
+| M4.5 | **Scale.** Worker pool over SharedArrayBuffer typed arrays, cross-origin isolation headers, a 20,000-ant stress scenario, determinism with 1 and N workers | 20,000-ant bench recorded; 1 and 8 workers give identical checksums; the page holds 60 Hz at 20,000 ants. Not started. |
 | M5 | **Inspector and telemetry. Built 2026-10-26; waiting on Marek's check.** Ant inspector with follow and names, sensor drawing, telemetry with sparklines, and the live `degradeTime` control once M2 makes degradation fire | Zoomed-in inspector screenshots look right; the inspector follows one ant through a food trip. Evidence: see the M5 report (tests, golden checksum, screenshots). |
 | M6 | **Tuning and hardening.** Tune the defaults toward the look of the videos, performance passes, edge cases (painting over nests or food, extinct colonies, ant caps) | User is happy with how it looks and feels |
 
