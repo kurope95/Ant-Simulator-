@@ -1720,3 +1720,106 @@ body.headless #log {
     transition-delay: 0ms !important;
   }
 }
+
+/* Inspector and sparklines (M5) ---------------------------------------- */
+
+.colony-row__sparks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.colony-row__spark {
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.colony-row__spark-label {
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.colony-row__spark svg {
+  width: 100%;
+  height: 22px;
+  overflow: visible;
+}
+
+.inspector-panel {
+  gap: 14px;
+}
+
+.inspector__who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.inspector__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(235, 241, 229, 0.06);
+}
+
+.inspector__energy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.inspector__energy-head,
+.inspector__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+}
+
+.inspector__energy-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(235, 241, 229, 0.08);
+  overflow: hidden;
+}
+
+.inspector__energy-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--secondary);
+}
+
+.inspector__details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inspector__label {
+  color: var(--muted);
+}
+
+.inspector__value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.inspector__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.inspector__actions .button.is-on {
+  border-color: var(--accent);
+  background: rgba(231, 179, 106, 0.18);
+  color: var(--accent-strong);
+}

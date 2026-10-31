@@ -7,11 +7,17 @@ import { cycleHeatmap, defaultViewSettings, type ViewSettings } from "../render/
 import {
   createWorldRenderCache,
   disposeWorldRenderCache,
+  drawSelection,
   drawWorld,
   refreshTerrain,
   type WorldRenderCache,
 } from "../render/world_view.js";
+import { GeometryBatch } from "../render/batch.js";
 import { obstacleGridFromCells } from "../sim/obstacles.js";
+import { inspectAnt, newSensorView, sensorView } from "../sim/inspect.js";
+import { pickAnt } from "../sim/picking.js";
+import { antName } from "../sim/names.js";
+import { colonyHex, colonyName } from "../sim/palette.js";
 import { defaultParams, type SimParams } from "../sim/params.js";
 import { loadPreset, presetInfo, quickStartSetup } from "../sim/presets.js";
 import { cloneSetup, type WorldSetup } from "../sim/setup.js";
@@ -20,6 +26,7 @@ import { stepWorld, applyBreach, type World } from "../sim/world.js";
 import { BuilderModel, BuilderTool, paintStepReached } from "../ui/builder_model.js";
 import { BuilderScreen, type BuilderHooks } from "../ui/builder_screen.js";
 import { ColonyPanel } from "../ui/colony_panel.js";
+import { InspectorPanel } from "../ui/inspector_panel.js";
 import { el } from "../ui/dom.js";
 import { FinishDialog } from "../ui/finish_dialog.js";
 import { HomeScreen } from "../ui/home_screen.js";
@@ -29,7 +36,7 @@ import { RunHud, type HudState, type RunHudHooks } from "../ui/run_hud.js";
 import { SettingsDrawer, type SettingsHooks } from "../ui/settings_drawer.js";
 import { formatClock, type SpeedSetting } from "../ui/view_models.js";
 import { makeAttractWorld, seedFromNow } from "./attract.js";
-import { CameraInput, kZoomKeyStep, type PressMode } from "./camera_input.js";
+import { CameraInput, classifyWheel, kZoomKeyStep, type PressMode } from "./camera_input.js";
 import { effectiveTicks, type AppOptions } from "./options.js";
 import {
   Screen,
@@ -46,6 +53,11 @@ import {
 
 const kMaxFrameSeconds = 0.25;
 const kSelectionRadiusPx = 24;
+// How close a click must land to pick an ant, in CSS pixels; the drag slop is the same 4 px the camera uses.
+const kPickRadiusPx = 12;
+const kClickSlopCss = 4;
+// The ring is drawn this far (CSS pixels) from the ant's centre.
+const kRingCss = 10;
 const kPanKeys = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "KeyW", "KeyA", "KeyS", "KeyD"]);
 
 function isBrushTool(tool: BuilderTool): boolean {
@@ -94,6 +106,14 @@ export class AppController {
   private pauseMenu: PauseMenu | null = null;
   private finishDialog: FinishDialog | null = null;
   private colonyPanel: ColonyPanel | null = null;
+  private inspector: InspectorPanel | null = null;
+  private selectedUid = -1;
+  private selectedGone = false;
+  private following = false;
+  private sensorsOn = false;
+  private clickStart: { id: number; css: Vec2 } | null = null;
+  private readonly overlayBatch = new GeometryBatch();
+  private readonly sensorBuffer = newSensorView();
   private settingsDrawer: SettingsDrawer | null = null;
   private coloniesOpen = false;
   private settingsOpen = false;
@@ -167,6 +187,17 @@ export class AppController {
       this.settingsHooks(),
     );
     this.settingsDrawer.sync(this.view);
+    this.inspector = new InspectorPanel(this.runHud.inspectorHost, {
+      onFollow: (on) => {
+        this.setFollowing(on);
+      },
+      onClose: () => {
+        this.deselect();
+      },
+      onSensors: (on) => {
+        this.sensorsOn = on;
+      },
+    });
     this.brushRing = el("div", "brush-ring");
     this.brushRing.hidden = true;
     this.uiRoot.append(this.brushRing);
@@ -218,6 +249,7 @@ export class AppController {
         this.session = started.state;
         this.showRun(world, started.state, true);
         this.breached = breached;
+        this.applyInspectOptions(world);
         break;
       }
       default:
@@ -252,6 +284,7 @@ export class AppController {
 
   private showHome(world: World, theme: Theme): void {
     this.closeOverlays();
+    this.deselect();
     this.session = { ...this.session, screen: Screen.Home, zen: false };
     this.activeWorld = world;
     this.activeTheme = theme;
@@ -264,6 +297,7 @@ export class AppController {
 
   private showBuilder(model: BuilderModel): void {
     this.closeOverlays();
+    this.deselect();
     if (this.builderScreen !== null && this.builderModel !== model) {
       this.builderScreen.root.remove();
       this.builderScreen = null;
@@ -292,6 +326,7 @@ export class AppController {
 
   private showRun(world: World, session: SessionState, resetZoom = false): void {
     this.closeOverlays();
+    this.deselect();
     this.runWorld = world;
     this.session = session;
     this.breached = false;
@@ -531,6 +566,103 @@ export class AppController {
     this.showHome(finished, this.runTheme);
   }
 
+  // --inspect, --follow and --sensors: applied once, after the warm-up, like --focus.
+  private applyInspectOptions(world: World): void {
+    this.sensorsOn = this.options.sensors;
+    const uid = this.options.inspect;
+    if (uid < 0) return;
+    if (world.ants.indexOf(uid) === null) {
+      this.log(`inspect: no ant with uid ${uid}`);
+      return;
+    }
+    this.selectAnt(uid);
+    this.setFollowing(this.options.follow);
+  }
+
+  private selectAnt(uid: number): void {
+    this.selectedUid = uid;
+    this.selectedGone = false;
+    this.following = false;
+  }
+
+  private deselect(): void {
+    this.selectedUid = -1;
+    this.selectedGone = false;
+    this.following = false;
+    this.inspector?.hide();
+  }
+
+  private setFollowing(on: boolean): void {
+    if (on && (this.selectedUid < 0 || this.selectedGone)) return;
+    this.following = on;
+  }
+
+  private pickRadiusWorld(): number {
+    const scale = this.camera.scale() / this.dpr();
+    return kPickRadiusPx / Math.max(scale, 0.001);
+  }
+
+  // Where the selected ant is drawn this frame (interpolated like the ants), or null.
+  // Marks it gone when its uid no longer resolves.
+  private selectedPosition(alpha: number): { x: number; y: number; heading: number } | null {
+    const world = this.runWorld;
+    if (this.session.screen !== Screen.Run || world === null || this.selectedUid < 0 || this.selectedGone) {
+      return null;
+    }
+    const i = world.ants.indexOf(this.selectedUid);
+    if (i === null) {
+      this.selectedGone = true;
+      this.following = false;
+      return null;
+    }
+    const ants = world.ants;
+    return {
+      x: ants.prevX[i] + (ants.posX[i] - ants.prevX[i]) * alpha,
+      y: ants.prevY[i] + (ants.posY[i] - ants.prevY[i]) * alpha,
+      heading: ants.heading[i],
+    };
+  }
+
+  private drawSelection(renderer: GlRenderer, world: World, focus: { x: number; y: number; heading: number }): void {
+    drawSelection(renderer, this.overlayBatch, {
+      ant: {
+        screen: this.camera.worldToScreen(focus),
+        ringPx: kRingCss * this.dpr(),
+        heading: focus.heading,
+      },
+      sensors: this.sensorsOn ? sensorView(world, this.selectedUid, this.sensorBuffer) : null,
+      scale: this.camera.scale(),
+      toScreen: (point) => this.camera.worldToScreen(point),
+    });
+  }
+
+  private updateInspector(): void {
+    const panel = this.inspector;
+    const world = this.runWorld;
+    if (panel === null) return;
+    const visible =
+      this.session.screen === Screen.Run && world !== null && this.selectedUid >= 0 && !this.settingsOpen;
+    if (!visible || world === null) {
+      panel.hide();
+      return;
+    }
+    if (this.selectedGone) {
+      panel.showGone(antName(this.selectedUid));
+      return;
+    }
+    const snap = inspectAnt(world, this.selectedUid);
+    if (snap === null) {
+      this.selectedGone = true;
+      this.following = false;
+      panel.showGone(antName(this.selectedUid));
+      return;
+    }
+    const colony = world.colonies[snap.colony];
+    const colonyLabel = colony !== undefined ? colonyName(colony.color) : "No colony";
+    const hex = colony !== undefined ? colonyHex(colony.color) : 0xffffff;
+    panel.show(snap, colonyLabel, hex, this.following, this.sensorsOn);
+  }
+
   private focusColony(id: number): void {
     const colony = this.runWorld?.colonies.find((candidate) => candidate.id === id);
     if (colony === undefined) return;
@@ -700,11 +832,15 @@ export class AppController {
     }
     if (this.session.screen === Screen.Run) this.applyScheduledBreach();
 
+    const focus = this.selectedPosition(alpha);
+    if (focus !== null && this.following) this.camera.centerOn(focus);
     drawWorld(renderer, cache, world, this.camera, this.view, this.activeTheme, alpha);
+    if (focus !== null && this.runWorld !== null) this.drawSelection(renderer, this.runWorld, focus);
     this.updateBrushRing();
     this.updateCursor();
     renderer.present();
     this.updateOverlays();
+    this.updateInspector();
 
     if (
       this.session.screen === Screen.Run &&
@@ -809,6 +945,8 @@ export class AppController {
   private readonly onWheel = (event: WheelEvent): void => {
     event.preventDefault();
     if (this.session.screen === Screen.Home) return;
+    // Wheel zoom keeps the followed ant; a wheel pan (touchpad scroll) lets it go, like a drag.
+    if (classifyWheel(event, -Infinity) === "pan") this.setFollowing(false);
     this.cameraInput.wheel(event, this.screenPoint(event));
   };
 
@@ -821,6 +959,9 @@ export class AppController {
     const point = this.screenPoint(event);
     const joining = this.cameraInput.pointerCount() > 0;
     const mode = joining ? "pan" : this.pressMode(event, point);
+    if (event.button === 0 && !joining && this.session.screen === Screen.Run) {
+      this.clickStart = { id: event.pointerId, css: { x: event.clientX, y: event.clientY } };
+    }
     this.canvas.setPointerCapture(event.pointerId);
     this.cameraInput.pointerDown(event.pointerId, point, mode);
     if (this.cameraInput.pinching()) {
@@ -888,6 +1029,11 @@ export class AppController {
     this.pointerCss = { x: event.clientX, y: event.clientY };
     this.pointerInside = true;
     this.cameraInput.pointerMove(event.pointerId, this.screenPoint(event));
+    const start = this.clickStart;
+    if (start !== null && Math.hypot(event.clientX - start.css.x, event.clientY - start.css.y) > kClickSlopCss) {
+      this.clickStart = null;
+    }
+    if (this.cameraInput.dragging() || this.cameraInput.pinching()) this.setFollowing(false);
 
     if (event.pointerId !== this.activePointer || this.cameraInput.pinching()) return;
     const model = this.builderModel;
@@ -913,6 +1059,16 @@ export class AppController {
   };
 
   private readonly onPointerUp = (event: PointerEvent): void => {
+    const start = this.clickStart;
+    if (start !== null && start.id === event.pointerId) {
+      this.clickStart = null;
+      if (event.type === "pointerup" && this.runWorld !== null) {
+        const point = this.worldPoint(event);
+        const uid = pickAnt(this.runWorld, point.x, point.y, this.pickRadiusWorld());
+        if (uid < 0) this.deselect();
+        else this.selectAnt(uid);
+      }
+    }
     this.cameraInput.pointerUp(event.pointerId);
     if (this.canvas.hasPointerCapture(event.pointerId)) {
       this.canvas.releasePointerCapture(event.pointerId);
@@ -945,6 +1101,8 @@ export class AppController {
     if (kPanKeys.has(event.code) && screen !== Screen.Home) {
       this.heldKeys.add(event.code);
       event.preventDefault();
+      // A is the ant toggle on Run, so only the arrows and WASD cancel a follow.
+      if (screen === Screen.Run && event.code !== "KeyA") this.setFollowing(false);
     }
 
     if (
@@ -991,7 +1149,9 @@ export class AppController {
         this.session = { ...this.session, zen: !this.session.zen };
         break;
       case "Escape":
-        if (this.session.zen) {
+        if (this.selectedUid >= 0) {
+          this.deselect();
+        } else if (this.session.zen) {
           this.session = { ...this.session, zen: false };
         } else {
           this.session = togglePause(this.session);
@@ -1007,6 +1167,12 @@ export class AppController {
       case "KeyG":
         this.view.showGrid = !this.view.showGrid;
         this.runShowGrid = this.view.showGrid;
+        break;
+      case "KeyF":
+        this.setFollowing(!this.following);
+        break;
+      case "KeyV":
+        this.sensorsOn = !this.sensorsOn;
         break;
       case "Digit1":
         this.session = { ...this.session, speed: 1 };

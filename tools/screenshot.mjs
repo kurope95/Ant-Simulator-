@@ -19,7 +19,7 @@ const kScreens = ["home", "builder", "run"];
 class UsageError extends Error {}
 
 function parseArgs(argv) {
-  const args = { ticks: 30, out: "", size: kDefaultSize, seed: 1, preset: "meadow", screen: "home", zoom: 1, focus: "", interactive: false, breachTick: -1 };
+  const args = { ticks: 30, out: "", size: kDefaultSize, seed: 1, preset: "meadow", screen: "home", zoom: 1, focus: "", interactive: false, breachTick: -1, inspect: -1, follow: false, sensors: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--ticks") args.ticks = Number(argv[++i]);
@@ -31,6 +31,9 @@ function parseArgs(argv) {
     else if (arg === "--zoom") args.zoom = Number(argv[++i]);
     else if (arg === "--focus") args.focus = argv[++i] ?? "";
     else if (arg === "--breach-tick") args.breachTick = Number(argv[++i]);
+    else if (arg === "--inspect") args.inspect = Number(argv[++i]);
+    else if (arg === "--follow") args.follow = true;
+    else if (arg === "--sensors") args.sensors = true;
     else if (arg === "--interactive") args.interactive = true;
     else throw new UsageError(`unknown option: ${arg}`);
   }
@@ -106,6 +109,9 @@ async function main() {
     if (args.zoom !== 1) query.set("zoom", String(args.zoom));
     if (args.focus !== "") query.set("focus", args.focus);
     if (args.breachTick >= 0) query.set("breach", String(args.breachTick));
+    if (args.inspect >= 0) query.set("inspect", String(args.inspect));
+    if (args.follow) query.set("follow", "");
+    if (args.sensors) query.set("sensors", "");
     const url = `${server.url}/?${query.toString()}`;
 
     const chromeArgs = [
@@ -148,7 +154,7 @@ async function main() {
 main().catch((error) => {
   console.error(`error: ${error.message}`);
   if (error instanceof UsageError) {
-    console.error("usage: node tools/screenshot.mjs --out <file.png> [--preset <id>] [--screen home|builder|run] [--zoom <n>] [--ticks N] [--breach-tick N] [--size WxH] [--seed N] [--interactive]");
+    console.error("usage: node tools/screenshot.mjs --out <file.png> [--preset <id>] [--screen home|builder|run] [--zoom <n>] [--ticks N] [--breach-tick N] [--size WxH] [--seed N] [--interactive] [--inspect <uid>] [--follow] [--sensors]");
     process.exitCode = 2;
   } else {
     process.exitCode = 1;

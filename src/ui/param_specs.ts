@@ -41,8 +41,7 @@ const kSpecs: readonly ParamSpec[] = [
   { key: "markerDropDist", label: "Mark every", unit: "u", min: 2, max: 24, step: 1, scale: 1, group: "trails" },
   { key: "foreignErasureFactor", label: "Territory pressure", unit: "", min: 0, max: 1, step: 0.05, scale: 1, group: "trails", digits: 2 },
   { key: "foreignAversion", label: "Foreign scent aversion", unit: "", min: 0, max: 1, step: 0.05, scale: 1, group: "trails", digits: 2 },
-  // degradeTime stays in SimParams but has no live control yet; the design
-  // spec schedules it for M5.
+  { key: "degradeTime", label: "Degrade after", unit: "s", min: 0.5, max: 10, step: 0.5, scale: 1, group: "trails" },
   { key: "energyBurn", label: "Energy burn", unit: "/s", min: 0.1, max: 5, step: 0.1, scale: 1, group: "colony" },
   { key: "spawnCost", label: "Spawn cost", unit: "food", min: 1, max: 20, step: 1, scale: 1, group: "colony" },
 ];

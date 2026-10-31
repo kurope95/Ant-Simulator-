@@ -2,6 +2,7 @@ import type { Rect } from "../core/rect.js";
 import type { Vec2 } from "../core/vec2.js";
 import type { World } from "../sim/world.js";
 import { buildAnts } from "./ant_layer.js";
+import { buildInspectorOverlay, type OverlayOptions } from "./inspector_overlay.js";
 import type { AtlasFrames } from "./atlas.js";
 import { GeometryBatch } from "./batch.js";
 import type { Camera } from "./camera.js";
@@ -292,4 +293,11 @@ export function drawWorld(
       renderer.drawSprites(cache.atlasTexture, cache.actors);
     }
   }
+}
+
+// The selected ant's ring and sensors, drawn over the world in one batch.
+export function drawSelection(renderer: GlRenderer, batch: GeometryBatch, options: OverlayOptions): void {
+  batch.clear();
+  buildInspectorOverlay(batch, options);
+  renderer.drawBatch(batch);
 }

@@ -24,6 +24,9 @@ export interface AppOptions {
   zoom: number;
   focus: { x: number; y: number } | null;
   breachTick: number;
+  inspect: number; // uid of the ant to select on the run screen, -1 for none
+  follow: boolean;
+  sensors: boolean;
 }
 
 export interface ParseResult {
@@ -38,7 +41,7 @@ const kZoomMin = 0.1;
 const kZoomMax = 16;
 const kMaxTicks = 10_000_000;
 const kStartScreens: readonly StartScreen[] = ["home", "builder", "run"];
-const kFlagsInUrl = new Set(["headless", "no-vsync"]);
+const kFlagsInUrl = new Set(["headless", "no-vsync", "follow", "sensors"]);
 
 function defaults(): AppOptions {
   return {
@@ -55,6 +58,9 @@ function defaults(): AppOptions {
     zoom: 1,
     focus: null,
     breachTick: -1,
+    inspect: -1,
+    follow: false,
+    sensors: false,
   };
 }
 
@@ -101,6 +107,23 @@ export function parseOptions(tokens: readonly string[]): ParseResult {
       case "--no-vsync":
         options.vsync = false;
         break;
+      case "--follow":
+        options.follow = true;
+        break;
+      case "--sensors":
+        options.sensors = true;
+        break;
+      case "--inspect": {
+        const taken = take(i, "--inspect");
+        if (taken === null) break;
+        if (!isDigits(taken.value) || Number(taken.value) > kMaxTicks) {
+          error = `invalid value for --inspect: ${taken.value} (expected an ant uid)`;
+          break;
+        }
+        options.inspect = Number(taken.value);
+        i = taken.next;
+        break;
+      }
       case "--preset":
       case "--scenario": {
         const taken = take(i, token);
@@ -279,6 +302,9 @@ export function usageText(): string {
     "  --zoom <n>            camera zoom on run, 0.1-16 (default 1)",
     "  --focus <x,y>         centre the run camera on this world point (default: the centre)",
     "  --breach-tick <n>     open the maze's breach shortcut at this tick (default: never)",
+    "  --inspect <uid>       select this ant on the run screen (default: none)",
+    "  --follow              follow the inspected ant with the camera",
+    "  --sensors             draw the inspected ant's sensors",
     "  --no-vsync            uncapped frame rate (debug timing)",
     "  --help, -h            show this text",
     "  --version             show the version",

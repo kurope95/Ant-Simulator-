@@ -241,7 +241,9 @@ addFoodSource(sources, pos, amount, infinite?, kind?): number
 // sim/colony.ts
 interface Colony { id: ColonyId; nest: Vec2; color: number; foodPool: number; population: number;
                    deliveredTotal: number; deliveredLastSample: number;
-                   deliveredPerSecond: RingBuffer<number>; extinct: boolean }
+                   deliveredPerSecond: RingBuffer<number>;
+                   populationPerSecond: RingBuffer<number>; foodPoolPerSecond: RingBuffer<number>;   // M5: observation only, sampled each second
+                   extinct: boolean }
 makeColony(id, nest, color?, historyCapacity?): Colony     // historyCapacity = 120
 nestRadius(colony, params): number
 
@@ -282,6 +284,16 @@ updateStats(world): void
 
 // sim/checksum.ts
 worldChecksum(world): number     // hashes ant state + marker grid; used by determinism tests
+
+// sim/names.ts (M5)
+antName(uid): string             // pure: uid -> female first name; the first 1000 uids are ~all distinct
+
+// sim/picking.ts (M5)
+pickAnt(world, x, y, radius): number   // uid of the nearest ant within radius (ties: lower uid), else -1
+
+// sim/inspect.ts (M5)
+inspectAnt(world, uid): AntSnapshot | null   // looked up by uid each call; null once the ant is gone
+sensorView(world, uid, out?): SensorView | null   // the cone, sample points, marker scores and sight target the ant uses (same patterns as steering)
 
 // sim/obstacles.ts
 const kSandSpeedFactor = 0.6
@@ -495,6 +507,10 @@ terrainLook(theme, worldSize, cell, time): TerrainLook; terrainUniforms(gl, prog
 buildAnts(sprites: SpriteBatch, legs: GeometryBatch, shadows: SpriteBatch, world, camera, alpha,
           frames: AtlasFrames, gait: GaitTracker): void   // ants are never shorter than 4 CSS px (M1.7)
 
+// render/inspector_overlay.ts (M5): one GeometryBatch per frame for the selected ant
+buildInspectorOverlay(batch: GeometryBatch, options: OverlayOptions): void   // ring; plus cone, sample points, sight target when sensors are on
+wedgeEdgePoints(ant, heading, halfFov, radiusPx): [Vec2, Vec2]
+
 // render/world_view.ts
 interface WorldRenderCache { atlasTexture: WebGLTexture | null; terrainTexture: WebGLTexture | null;
                              heatmapTexture: WebGLTexture | null; heatmapPixels: Uint8Array;
@@ -505,6 +521,7 @@ createWorldRenderCache(renderer, world): WorldRenderCache
 disposeWorldRenderCache(renderer, cache): void    // deletes terrain + heatmap textures; atlas is shared
 refreshTerrain(renderer, cache, world): void        // rebuilds the mask and bumps terrainId
 drawWorld(renderer, cache, world, camera, settings, theme, alpha): void
+drawSelection(renderer, batch, options: OverlayOptions): void   // M5: the selected ant's ring and sensors, one batch
 ```
 
 **Draw order inside `drawWorld`:** terrain copy (redrawn only when stale) → heatmap texture (additive) → `under` grid and border → `shadows` (ants and food) →
@@ -535,6 +552,12 @@ formatClock(ticks, simHz): string        // mm:ss
 speedLabel(speed): string                // "1×", "Max"
 trailModeLabel(mode): string             // "Off", "Trail type", "Colonies"
 colonyRows(world): ColonyRow[]
+stateLabel(state), roleLabel(role): string   // M5 inspector labels
+energyFraction(energy, cap=100): number      // 0..1 for the energy bar
+headingLabel(rad): string                    // "NE 315°"
+
+// ui/sparkline.ts (M5)
+sparklinePath(values, width, height, pad=2): string   // SVG path "M x y L x y ..."; empty -> ""; flat -> mid-height line
 
 // ui/param_specs.ts
 type ParamKey = "antSpeed" | "turnRate" | "sensorRadius" | "sensorHalfFovDeg" | "explorerRatio"
@@ -544,7 +567,7 @@ type ParamKey = "antSpeed" | "turnRate" | "sensorRadius" | "sensorHalfFovDeg" | 
 type ParamGroup = "movement" | "trails" | "colony"
 interface ParamSpec { key: ParamKey; label: string; unit: string; min: number; max: number;
                       step: number; scale: number; group: ParamGroup; digits?: number }
-paramSpecs(): readonly ParamSpec[]      // twelve live rows (M1.7 adds foreignErasureFactor and foreignAversion); degradeTime typed but not shown until M5
+paramSpecs(): readonly ParamSpec[]      // thirteen live rows (M1.7 adds foreignErasureFactor and foreignAversion; M5 adds degradeTime)
 specValue(spec, params): number
 applySpecValue(spec, params, displayValue): number
 formatSpecValue(spec, displayValue): string
@@ -607,6 +630,13 @@ class RunHud { readonly root: HTMLElement; readonly colonyPanelHost: HTMLElement
 class ColonyPanel { readonly root: HTMLElement
                     constructor(root: HTMLElement, onFocus: (id: number) => void)
                     update(world: World): void; setOpen(open: boolean): void }
+                    // M5: each colony row shows two sparklines (delivered/s, ants), redrawn at most 2x/s
+
+// ui/inspector_panel.ts (M5): the selected ant, in the right-hand slot shared with the settings drawer
+class InspectorPanel { readonly root: HTMLElement
+                       constructor(root: HTMLElement, hooks: InspectorHooks)
+                       show(snap: AntSnapshot, colonyName, colonyHex, following, sensors): void
+                       showGone(name: string): void; hide(): void }
 
 // ui/settings_drawer.ts
 interface SettingsHooks { onHeatmap(mode: HeatmapMode): void; onAnts(): void; onGrid(): void;
@@ -675,6 +705,7 @@ class AppController {
   dispose(): void
 }
 // Owns the session machine, camera, overlays, builder wiring, keyboard shortcuts and the frame loop.
+// M5: click an ant to select it (InspectorPanel); F follows, V toggles sensors, Esc deselects. The selection is by uid and clears on every screen change.
 
 // app/interactive.ts
 runInteractive(options, canvas: HTMLCanvasElement, uiRoot: HTMLElement,
@@ -755,7 +786,7 @@ a phase may write only its own ants' slots, and anything cross-ant goes through 
 | M2 Navigation and foraging | `sim/{spatial_hash,stuck}`; `app/{reach,reach_cli}`; wander fix; wall sliding; look-ahead and fallback rays; stuck detection and degrading; spawn safety; retuned defaults; homing memory; per-colony trail layers; maze preset and breach | [plans/2026-10-25-m2-navigation-foraging.md](../plans/2026-10-25-m2-navigation-foraging.md) |
 | M3 Colonies | **closed** — multi-colony setup, palette, territory and the colony heatmap shipped in M1.5. Only the open hostilities topic (main spec §14) remains, unscheduled | — |
 | M4 Crowds and scale | `core/worker_pool`; ant-to-ant PBD in `collide`; `sim/avoidance`; stress preset; determinism test with 1 and N workers; worker-scale neighbour queries through the spatial hash | later |
-| M5 Inspector | `sim/{picking,names}`; ant inspector with follow; sensor drawing; telemetry sparklines; live `degradeTime` control | later |
+| M5 Inspector **(built 2026-10-26)** | `sim/{picking,names,inspect}`; `ui/{inspector_panel,sparkline}`; `render/inspector_overlay`; click, follow and sensors in `app/controller`; `--inspect/--follow/--sensors`; live `degradeTime` row | [plans/2026-10-26-m5-inspector-telemetry.md](../plans/2026-10-26-m5-inspector-telemetry.md) |
 | M6 Tuning and hardening | parameter tuning, performance passes, edge cases, README | later |
 
 Navigation and foraging range, formerly part of a separate mechanics project, are now M2. Ant-to-ant

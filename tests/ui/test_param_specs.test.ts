@@ -31,12 +31,11 @@ function assertFiniteWorld(world: World): void {
   }
 }
 
-test("param specs: twelve live controls with valid ranges and defaults", () => {
+test("param specs: thirteen live controls with valid ranges and defaults", () => {
   const specs = paramSpecs();
-  assert.equal(specs.length, 12);
-  assert.equal(new Set(specs.map((spec) => spec.key)).size, 12);
-  // The live degradeTime control is scheduled for M5 (design spec section 15).
-  assert.equal(specs.some((spec) => spec.key === "degradeTime"), false);
+  assert.equal(specs.length, 13);
+  assert.equal(new Set(specs.map((spec) => spec.key)).size, 13);
+  assert.ok(specs.some((spec) => spec.key === "degradeTime"));
   const defaults = defaultParams();
   for (const spec of specs) {
     assert.ok(["movement", "trails", "colony"].includes(spec.group), spec.key);
@@ -95,4 +94,20 @@ test("every extreme still steps the sandbox without NaN", () => {
   for (const spec of specs) applySpecValue(spec, world.params, spec.max);
   for (let i = 0; i < 300; i++) stepWorld(world);
   assertFiniteWorld(world);
+});
+
+test("param specs: degrade after is live and round-trips", () => {
+  const spec = paramSpecs().find((candidate) => candidate.key === "degradeTime");
+  assert.ok(spec);
+  assert.equal(spec.label, "Degrade after");
+  assert.equal(spec.unit, "s");
+  assert.equal(spec.min, 0.5);
+  assert.equal(spec.max, 10);
+  assert.equal(spec.step, 0.5);
+  assert.equal(spec.group, "trails");
+  const params = defaultParams();
+  assert.equal(specValue(spec, params), 3);
+  assert.equal(applySpecValue(spec, params, 4.2), 4);
+  assert.equal(params.degradeTime, 4);
+  assert.equal(formatSpecValue(spec, 4), "4.0 s");
 });

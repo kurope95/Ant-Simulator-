@@ -18,7 +18,7 @@ import { evaluateStuck, inRestZone } from "./stuck.js";
 import { AntRole, AntState, RandStream } from "./types.js";
 import type { World } from "./world.js";
 
-function senseChannel(state: number): MarkerChannel {
+export function senseChannel(state: number): MarkerChannel {
   return state === AntState.Foraging ? MarkerChannel.ToFood : MarkerChannel.ToHome;
 }
 
@@ -409,6 +409,8 @@ export function updateStats(world: World): void {
     if (sample) {
       colony.deliveredPerSecond.push(colony.deliveredLastSample);
       colony.deliveredLastSample = 0;
+      colony.populationPerSecond.push(colony.population);
+      colony.foodPoolPerSecond.push(colony.foodPool);
     }
     colony.extinct = colony.population === 0 && colony.foodPool < world.params.spawnCost;
   }

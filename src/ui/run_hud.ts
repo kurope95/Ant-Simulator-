@@ -83,6 +83,8 @@ export class RunHud {
   readonly root: HTMLElement;
   readonly colonyPanelHost: HTMLElement;
   readonly settingsHost: HTMLElement;
+  // Shares the right-hand slot with the settings drawer; the controller shows one at a time.
+  readonly inspectorHost: HTMLElement;
 
   private readonly simHz: number;
   private readonly presetName: HTMLSpanElement;
@@ -232,7 +234,11 @@ export class RunHud {
     this.settingsHost.setAttribute("aria-label", "Settings");
     this.settingsHost.hidden = true;
 
-    hud.append(bar, this.colonyPanelHost, this.settingsHost, dock);
+    this.inspectorHost = el("aside", "hud__panel hud__panel--right");
+    this.inspectorHost.setAttribute("aria-label", "Ant inspector");
+    this.inspectorHost.hidden = true;
+
+    hud.append(bar, this.colonyPanelHost, this.settingsHost, this.inspectorHost, dock);
     root.append(hud);
     this.root = hud;
   }
