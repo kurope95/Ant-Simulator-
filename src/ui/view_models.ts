@@ -67,7 +67,7 @@ export function stateLabel(state: number): string {
 }
 
 export function roleLabel(role: number): string {
-  return role === 1 ? "Explorer" : "Follower";
+  return role === 2 ? "Warrior" : role === 1 ? "Explorer" : "Follower";
 }
 
 // Energy as 0..1 of the cap (the energy a new ant starts with).

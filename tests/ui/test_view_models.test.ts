@@ -52,6 +52,7 @@ test("labels: every ant state and role has a name", () => {
   assert.equal(stateLabel(9), "Unknown");
   assert.equal(roleLabel(0), "Follower");
   assert.equal(roleLabel(1), "Explorer");
+  assert.equal(roleLabel(2), "Warrior");
 });
 
 test("labels: energy fraction is clamped to the cap", () => {

@@ -58,7 +58,7 @@ export class InspectorPanel {
 
     const energy = el("div", "inspector__energy");
     const energyHead = el("div", "inspector__energy-head");
-    energyHead.append(el("span", "inspector__label", "Energy"));
+    energyHead.append(el("span", "inspector__label", "Health"));
     this.energyValue = el("span", "inspector__value");
     energyHead.append(this.energyValue);
     const track = el("div", "inspector__energy-track");

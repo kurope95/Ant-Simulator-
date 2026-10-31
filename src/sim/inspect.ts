@@ -11,7 +11,7 @@ export interface AntSnapshot {
   uid: number;
   name: string;
   colony: number;
-  role: 0 | 1;
+  role: 0 | 1 | 2;
   state: 0 | 1 | 2;
   x: number;
   y: number;
@@ -35,13 +35,14 @@ export function inspectAnt(world: World, uid: number): AntSnapshot | null {
     uid,
     name: antName(uid),
     colony: ants.colony[i],
-    role: ants.role[i] as 0 | 1,
+    role: ants.role[i] as 0 | 1 | 2,
     state: state as 0 | 1 | 2,
     x: ants.posX[i],
     y: ants.posY[i],
     heading: ants.heading[i],
     speed: ants.speed[i],
-    energy: ants.energy[i],
+    // Health: energy less battle wounds (conflict design §1); equal to energy with no wounds.
+    energy: ants.energy[i] - ants.wounds[i],
     mass: ants.mass[i],
     carrying: state === AntState.ReturningFood,
     timeSinceAnchor: ants.timeSinceAnchor[i],

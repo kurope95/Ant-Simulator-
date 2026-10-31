@@ -337,6 +337,10 @@ interface CombatSteer { heading: number | null; hold: boolean }
 combatStep(world, ant, look, dt, out): CombatSteer   // standoff, bite, retreat, triggers; own slots + own events only
 const kFightDeathWindow = 5            // s after a bite in which a death counts as a fight death
 
+// Drawing (render/ant_layer.ts, fight branch): warriors at kWarriorScale 1.35; bodies as dark-tinted ant frames
+// under the living; a carried body (load > 1) at the jaws; a health bar over wounded ants once legs draw.
+// The inspector shows Health (energy − wounds) and names role 2 "Warrior".
+
 // sim/corpses.ts (fight branch)
 interface Corpse { uid; x; y; colony; heading; value; expires; taken }
 class Corpses { items: Corpse[]; nextUid; add(x, y, colony, heading, value, expires); rebuild(worldSize, tick);
