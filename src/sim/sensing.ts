@@ -254,8 +254,10 @@ export function directSightTarget(world: World, ant: number): Vec2 | null {
     }
   } else {
     const colony = world.colonies[ants.colony[ant]];
+    // Range first: the line-of-sight march across the map is the costly part.
     if (
       colony !== undefined &&
+      (colony.nest.x - posX) * (colony.nest.x - posX) + (colony.nest.y - posY) * (colony.nest.y - posY) <= rangeSq &&
       lineOfSight(world.obstacles, { x: posX, y: posY }, colony.nest)
     ) {
       targetX = colony.nest.x;

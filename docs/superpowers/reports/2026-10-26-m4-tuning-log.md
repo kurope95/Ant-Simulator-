@@ -35,3 +35,4 @@ With `antCollisions` off the same run averages 11.8 ms against 20.0 ms on (runne
 2. `senseMarkers`: no `Vec2` allocation per sample (cos/sin inline, scalar `isSolidAt`/cell lookups), same arithmetic so results are bit-identical.
 3. Avoidance: skip ants with nobody in the 3×3 hash block, then check that `maxNeighbours` 16 → 12/8 costs nothing in lanes/overlap.
 4. PBD: `exemptAtNest` is evaluated for every neighbour pair; cache it once per ant per pass.
+| 14:20 | perf: direct sight checks nest range before line of sight | defaults | (unchanged: same arithmetic) | | bench ×3 12.96 / 12.98 / 13.60 → **12.98** (think_ants 12.9 → 8.5) | | keep |
