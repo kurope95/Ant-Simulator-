@@ -6,7 +6,7 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { chromePath } from "./chrome.mjs";
+import { browserPath, chromePath } from "./chrome.mjs";
 import { startServer } from "./serve.mjs";
 
 const kRoot = resolve(import.meta.dirname, "..");
@@ -74,7 +74,7 @@ async function launch() {
     if (!(await isSimulatorPage(url))) {
       throw new Error(`port ${kDefaultPort} is in use by another program; close it and try again`);
     }
-    const extra = spawn(chromePath(), appArgs(url, profileDir()), { detached: true, stdio: "ignore" });
+    const extra = spawn(browserPath(), appArgs(url, profileDir()), { detached: true, stdio: "ignore" });
     extra.unref();
     console.log("Ant Simulator is already running; opened another window.");
     return;
@@ -85,7 +85,7 @@ async function launch() {
   console.log("close the game window to stop the server");
   let chrome;
   try {
-    chrome = spawn(chromePath(), appArgs(url, profileDir()), { stdio: "ignore" });
+    chrome = spawn(browserPath(), appArgs(url, profileDir()), { stdio: "ignore" });
   } catch (error) {
     await server.close();
     throw error;

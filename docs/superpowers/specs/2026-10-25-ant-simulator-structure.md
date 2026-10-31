@@ -35,7 +35,7 @@ Ant Simulator/
 ├── tests/                      node:test unit tests, mirroring src/ (plus tests/tools)
 ├── tools/
 │   ├── serve.mjs               dependency-free static server
-│   ├── chrome.mjs              locates the trusted Chrome install (CHROME_PATH overrides)
+│   ├── chrome.mjs              locates the trusted Chrome install (CHROME_PATH overrides); browserPath() falls back to Edge for the game window
 │   ├── launch.mjs              launcher: serve, open the app window, stop when it closes; --check
 │   └── screenshot.mjs          serves the page, drives Chrome headless, writes a PNG
 ├── node_modules/               installed, gitignored
@@ -55,7 +55,7 @@ Ant Simulator/
 | `node --test "dist/tests/**/*.test.js"` | Node | `tests/**/*.test.ts` | `core`, `sim`, pure `render`/`ui`/`app` |
 | `tools/serve.mjs` | Node | — | Node built-ins only |
 | `tools/chrome.mjs` | Node | — | Node built-ins only |
-| `tools/launch.mjs` | Node, spawning Chrome | — | `tools/serve.mjs`, `tools/chrome.mjs`, Node built-ins |
+| `tools/launch.mjs` | Node, spawning Chrome (or Edge when Chrome is missing) | — | `tools/serve.mjs`, `tools/chrome.mjs`, Node built-ins |
 | `tools/screenshot.mjs` | Node, spawning Chrome | — | `tools/serve.mjs`, `tools/chrome.mjs`, Node built-ins |
 
 - **Scripts:** `npm run build` = `tsc -p tsconfig.json`, emitting `dist/src/...` and `dist/tests/...`; `npm test` builds then runs `node --test "dist/tests/**/*.test.js"`; `npm run serve` = `node tools/serve.mjs`; `npm run bench` = build then `node dist/src/app/bench_cli.js`; `npm run reach` = build then `node dist/src/app/reach_cli.js`; `npm run screenshot` = build then `node tools/screenshot.mjs`.
