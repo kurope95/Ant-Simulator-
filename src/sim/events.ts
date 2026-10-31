@@ -17,6 +17,8 @@ export interface DegradeEvent {
 export enum ContactKind {
   Food,
   Nest,
+  // A forager reached a pile with nothing left on it (spec §5.4): it goes home.
+  BarePile,
 }
 
 export interface ContactEvent {

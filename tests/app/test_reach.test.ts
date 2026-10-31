@@ -89,7 +89,7 @@ test("reach: 1000 u delivers", { timeout: 120_000 }, () => {
   // Foraging reach only: the pile cannot run low in two minutes, and regrowth
   // would only nudge its size (this two-minute count swings with tiny changes).
   const params = defaultParams();
-  params.foodRegrowTime = 0;
+  params.foodGrowthRate = 0;
   const world = worldFromSetup(setup, params);
   for (let tick = 1; tick <= 7200; tick++) stepWorld(world);
   const delivered = world.colonies[0].deliveredTotal;

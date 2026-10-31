@@ -14,7 +14,7 @@ export type ParamKey =
   | "trailUnusedLife"
   | "energyBurn"
   | "spawnCost"
-  | "foodRegrowTime"
+  | "foodGrowthRate"
   | "recruitPerDelivery"
   | "scoutRate"
   | "layIncomeNone"
@@ -23,7 +23,8 @@ export type ParamKey =
   | "foreignAversion"
   | "tHorizon";
 
-export type ParamGroup = "movement" | "trails" | "colony";
+// "behaviour" is shown first: the controls that change how the colonies behave most.
+export type ParamGroup = "behaviour" | "movement" | "trails" | "colony";
 
 export interface ParamSpec {
   key: ParamKey;
@@ -43,10 +44,10 @@ const kSpecs: readonly ParamSpec[] = [
   { key: "turnRate", label: "Turn rate", unit: "rad/s", min: 1, max: 12, step: 0.5, scale: 1, group: "movement" },
   { key: "sensorRadius", label: "Sensor range", unit: "u", min: 10, max: 80, step: 1, scale: 1, group: "movement" },
   { key: "sensorHalfFovDeg", label: "Sensor angle", unit: "°", min: 20, max: 90, step: 1, scale: 1, group: "movement" },
-  { key: "explorerRatio", label: "Explorers", unit: "%", min: 0, max: 100, step: 1, scale: 100, group: "movement" },
+  { key: "explorerRatio", label: "Explorers (wander off to search)", unit: "%", min: 0, max: 100, step: 1, scale: 100, group: "behaviour" },
   // How far ahead an ant looks for a head-on meeting (spec §6.1). Changing it takes effect on the next tick.
   { key: "tHorizon", label: "Avoidance look-ahead", unit: "s", min: 0.25, max: 2.5, step: 0.05, scale: 1, group: "movement", digits: 2 },
-  { key: "markerHalfLife", label: "Trail half-life", unit: "s", min: 1, max: 30, step: 0.1, scale: 1, group: "trails" },
+  { key: "markerHalfLife", label: "Trails fade by half every", unit: "s", min: 1, max: 30, step: 0.1, scale: 1, group: "behaviour" },
   { key: "emissionDecay", label: "Trail fade with distance", unit: "", min: 0.005, max: 0.2, step: 0.005, scale: 1, group: "trails", digits: 3 },
   { key: "markerDropDist", label: "Mark every", unit: "u", min: 2, max: 24, step: 1, scale: 1, group: "trails" },
   { key: "foreignErasureFactor", label: "Territory pressure", unit: "", min: 0, max: 1, step: 0.05, scale: 1, group: "trails", digits: 2 },
@@ -58,13 +59,13 @@ const kSpecs: readonly ParamSpec[] = [
   { key: "degradeTime", label: "Degrade after", unit: "s", min: 0.5, max: 10, step: 0.5, scale: 1, group: "trails" },
   { key: "energyBurn", label: "Energy burn", unit: "/s", min: 0.1, max: 5, step: 0.1, scale: 1, group: "colony" },
   { key: "spawnCost", label: "Spawn cost", unit: "food", min: 1, max: 20, step: 1, scale: 1, group: "colony" },
-  // Minutes for an emptied pile to grow back; 0 turns regrowth off.
   // Self-balancing colony (spec §5.8).
-  { key: "recruitPerDelivery", label: "Ants called out per delivery", unit: "", min: 0, max: 4, step: 0.25, scale: 1, group: "colony", digits: 2 },
+  { key: "recruitPerDelivery", label: "Ants a rich find calls out", unit: "", min: 0, max: 4, step: 0.25, scale: 1, group: "behaviour", digits: 2 },
   { key: "scoutRate", label: "Resting ants scouting", unit: "%/min", min: 0, max: 60, step: 1, scale: 6000, group: "colony" },
   { key: "layIncomeNone", label: "Queen stops laying below", unit: "food/ant/min", min: 0, max: 5, step: 0.1, scale: 1, group: "colony" },
-  { key: "layIncomeFull", label: "Queen lays fully from", unit: "food/ant/min", min: 0.5, max: 10, step: 0.1, scale: 1, group: "colony" },
-  { key: "foodRegrowTime", label: "Food grows back in", unit: "min", min: 0, max: 60, step: 1, scale: 1 / 60, group: "colony" },
+  { key: "layIncomeFull", label: "Queen lays fully from", unit: "food/ant/min", min: 0.5, max: 10, step: 0.1, scale: 1, group: "behaviour" },
+  // Living food: growth as a share of the pile's own size per minute; 0 turns it off.
+  { key: "foodGrowthRate", label: "Food grows by", unit: "%/min", min: 0, max: 200, step: 5, scale: 100, group: "behaviour" },
 ];
 
 export function paramSpecs(): readonly ParamSpec[] {

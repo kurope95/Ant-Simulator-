@@ -211,7 +211,8 @@ class Ants {   // SoA; every field is an array-like of the same length
   lastMarkerCell: Int32Array; wanderOffset, wanderHeading, wanderTimer: Float32Array
   homeErrX, homeErrY: Float32Array   // path-integration estimate of the way home (§5.7)
   lifeLeft: Float32Array             // seconds to live; Infinity with the life cycle off (§5.6)
-  richFind: Uint8Array               // 1 while carrying from a pile with plenty left: the delivery calls others out (§5.8)
+  richFind: Uint8Array               // 1 while carrying from a pile with plenty left, reached without a jam: the delivery calls others out (§5.8)
+  foodWait: Float32Array             // s crowded near a pile without reaching it; past foodPatience the ant goes home (§5.4)
   constructor(capacity?)
   size(): number
   spawn(a: AntSpawn, uid: number, speed: number, params: SimParams): number
@@ -239,12 +240,15 @@ decayMarkers(grid, factor, eps, flipMargin, maxAgeTicks?): void     // all layer
 
 // sim/food.ts
 interface FoodAmount { pos: Vec2; amount: number; infinite: boolean }
-interface FoodSource extends FoodAmount { uid: number; kind: FoodKind; capacity?: number }   // capacity: regrows back to it
+interface FoodSource extends FoodAmount { uid: number; kind: FoodKind; capacity?: number; deadFor?: number }   // capacity: grows up to it; deadFor: seconds since it died
 foodRadius(source, params): number
 interface FoodSources { items: FoodSource[]; nextUid: number;
                         findTouching(pos, radius, params): number;
                         takeOne(index): boolean; removeEmpty(): void;
-                        regrow(dt, regrowTime): void }   // under one unit = bare ground; kept while it can regrow
+                        findBareTouching(pos, radius, params): number;   // a dead pile touched, or -1
+                        regrow(dt, ratePerMinute): void;   // logistic growth; dead piles age toward removal
+                        eat(index, amount): void }         // meals off a pile; under one piece kills it
+const kDeadPileLinger = 60   // s a dead pile lies bare before removal
 makeFoodSources(): FoodSources
 addFoodSource(sources, pos, amount, infinite?, kind?): number
 

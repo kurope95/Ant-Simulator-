@@ -38,7 +38,7 @@ test("param specs: twenty-one live controls with valid ranges and defaults", () 
   assert.ok(specs.some((spec) => spec.key === "degradeTime"));
   const defaults = defaultParams();
   for (const spec of specs) {
-    assert.ok(["movement", "trails", "colony"].includes(spec.group), spec.key);
+    assert.ok(["behaviour", "movement", "trails", "colony"].includes(spec.group), spec.key);
     assert.ok(spec.min < spec.max, spec.key);
     assert.ok(spec.step > 0, spec.key);
     assert.ok(spec.scale > 0, spec.key);

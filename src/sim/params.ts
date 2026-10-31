@@ -52,11 +52,17 @@ export interface SimParams {
   homingEnabled: boolean;
   homingDrift: number;
   pushOnSignal: number;
+  // A forager that touches a bare pile goes home (spec §5.4).
+  bareGoHome: boolean;
+  // Seconds a forager waits in a crowd at a pile without reaching it before it
+  // goes home (spec §5.4); 0 never gives up.
+  foodPatience: number;
   mass: number;
   massCarrying: number;
   spawnCost: number;
-  // Seconds for an emptied food pile to grow back to its starting size; 0 never (spec §4.4).
-  foodRegrowTime: number;
+  // How fast a living food pile grows, as a share of its own size per minute
+  // (logistic, capped at its starting size); 0 never grows (spec §4.4).
+  foodGrowthRate: number;
   // Life cycle (spec §5.6). Off: free meals at home, no old age, a birth the moment food allows.
   lifeCycle: boolean;
   // Average life of an ant in seconds, varied per ant by ±lifespanJitter.
@@ -165,10 +171,12 @@ export function defaultParams(): SimParams {
     homingEnabled: true,
     homingDrift: 0.04,
     pushOnSignal: 0.4,
+    bareGoHome: true,
+    foodPatience: 5,
     mass: 1,
     massCarrying: 3,
     spawnCost: 5,
-    foodRegrowTime: 600,
+    foodGrowthRate: 0.4,
     lifeCycle: true,
     antLifespan: 600,
     lifespanJitter: 0.25,

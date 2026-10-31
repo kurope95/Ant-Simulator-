@@ -83,24 +83,38 @@ test("colony: nest radius grows with the square root of the population", () => {
   assert.equal(nestRadius(colony, params), 28);
 });
 
-test("food: an emptied pile stays as bare ground and grows back to its size", () => {
+test("food: a pile grows like a population, capped at its size; eaten to the last piece it dies for good", () => {
   const sources = makeFoodSources();
-  sources.items.push({ uid: 1, pos: { x: 10, y: 10 }, amount: 2, capacity: 600, infinite: false, kind: FoodKind.Seeds });
+  sources.items.push({ uid: 1, pos: { x: 10, y: 10 }, amount: 500, capacity: 1000, infinite: false, kind: FoodKind.Seeds });
+  // At half its size it grows fastest: rate x amount x (1 - amount / capacity) a minute.
+  sources.regrow(60, 0.4);
+  assert.ok(Math.abs(sources.items[0].amount - 600) < 1, `${sources.items[0].amount}`);
+  // Nearly bare, it adds almost nothing.
+  sources.items[0].amount = 2;
+  sources.regrow(60, 0.4);
+  assert.ok(sources.items[0].amount < 3, `${sources.items[0].amount}`);
+  // It never grows past its capacity.
+  sources.items[0].amount = 990;
+  for (let i = 0; i < 100; i++) sources.regrow(60, 0.4);
+  assert.ok(sources.items[0].amount <= 1000);
+  // Taking the last piece kills it: no growth, gone after a minute.
+  sources.items[0].amount = 1.5;
   assert.equal(sources.takeOne(0), true);
-  assert.equal(sources.takeOne(0), true);
-  assert.equal(sources.takeOne(0), false);
+  assert.equal(sources.items[0].amount, 0);
+  sources.regrow(30, 0.4);
+  assert.equal(sources.items[0].amount, 0, "a dead pile never grows");
   sources.removeEmpty();
-  assert.equal(sources.items.length, 1, "a regrowing pile is kept");
-  // 600 per 600 s is one piece a second.
-  sources.regrow(0.5, 600);
-  assert.equal(sources.takeOne(0), false, "half a piece cannot be taken");
-  sources.regrow(0.5, 600);
-  assert.equal(sources.takeOne(0), true);
-  for (let i = 0; i < 1000; i++) sources.regrow(1, 600);
-  assert.equal(sources.items[0].amount, 600, "it stops at its starting size");
-  sources.regrow(1, 0);
-  const pile = sources.items[0];
-  pile.amount = 5;
-  sources.regrow(10, 0);
-  assert.equal(pile.amount, 5, "regrow time 0 turns it off");
+  assert.equal(sources.items.length, 1, "it lingers, bare, for a while");
+  sources.regrow(31, 0.4);
+  sources.removeEmpty();
+  assert.equal(sources.items.length, 0);
+});
+
+test("food: eating off a pile shrinks it", () => {
+  const sources = makeFoodSources();
+  sources.items.push({ uid: 1, pos: { x: 10, y: 10 }, amount: 10, capacity: 10, infinite: false, kind: FoodKind.Seeds });
+  sources.eat(0, 0.4);
+  assert.ok(Math.abs(sources.items[0].amount - 9.6) < 1e-9);
+  sources.eat(0, 9);
+  assert.equal(sources.items[0].amount, 0, "eaten under one piece, it dies");
 });

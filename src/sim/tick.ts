@@ -167,10 +167,13 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
     let chosen = chooseHeading(world, ant);
     let desired = chosen.heading;
 
+    // A tired forager heads home unless it smells food close; a strong smell
+    // keeps it going only until half its energy is gone, or a bare pile that
+    // still smells of food would hold it until it starved (spec §5.6).
     if (
       ants.state[ant] === AntState.Foraging &&
       ants.energy[ant] < params.exhaustedAt &&
-      chosen.bestFoodSignal < params.pushOnSignal
+      (chosen.bestFoodSignal < params.pushOnSignal || ants.energy[ant] < 0.5 * params.exhaustedAt)
     ) {
       ants.state[ant] = AntState.ReturningExhausted;
       chosen = chooseHeading(world, ant);
@@ -256,6 +259,33 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
     );
     if (foodIndex >= 0) {
       out.contacts.push({ antIndex: ant, kind: ContactKind.Food, target: foodIndex });
+    } else if (params.bareGoHome && ants.state[ant] === AntState.Foraging) {
+      const bare = world.food.findBareTouching({ x: ants.posX[ant], y: ants.posY[ant] }, params.antRadius, params);
+      if (bare >= 0) out.contacts.push({ antIndex: ant, kind: ContactKind.BarePile, target: bare });
+    }
+    // Patience (spec §5.4): a forager stuck in a crowd near a pile without
+    // reaching it gives up and goes home, so a jam empties instead of growing.
+    if (params.foodPatience > 0 && ants.state[ant] === AntState.Foraging && foodIndex < 0) {
+      const near = world.food.findTouching(
+        { x: ants.posX[ant], y: ants.posY[ant] },
+        params.antRadius + params.zoneMargin,
+        params,
+      );
+      const crowded =
+        near >= 0 &&
+        world.spatialHash.countWithin(
+          ants.posX[ant],
+          ants.posY[ant],
+          params.crowdRadiusFactor * params.antRadius,
+          ants.posX,
+          ants.posY,
+          ant,
+        ) >= params.crowdLimit;
+      ants.foodWait[ant] = crowded ? ants.foodWait[ant] + dt : 0;
+      if (ants.foodWait[ant] > params.foodPatience) {
+        ants.foodWait[ant] = 0;
+        ants.state[ant] = AntState.ReturningExhausted;
+      }
     }
 
     const colony = world.colonies[ants.colony[ant]];
@@ -418,12 +448,28 @@ export function applyEvents(world: World, events: readonly ChunkEvents[]): void 
     }
     for (const contact of chunk.contacts) {
       const ant = contact.antIndex;
+      if (contact.kind === ContactKind.BarePile) {
+        // Nothing left here: home, where with the colony balancing itself it rests.
+        if (ants.state[ant] === AntState.Foraging) {
+          ants.state[ant] = AntState.ReturningExhausted;
+          ants.heading[ant] = wrapAngle(ants.heading[ant] + Math.PI);
+          ants.wanderHeading[ant] = ants.heading[ant];
+        }
+        continue;
+      }
       if (contact.kind === ContactKind.Food) {
         if (ants.state[ant] === AntState.ReturningFood) {
           ants.energy[ant] = params.energyMax;
-        } else if (world.food.takeOne(contact.target)) {
+        } else if ((world.food.items[contact.target]?.amount ?? 0) >= 1) {
+          // It eats its fill off the pile, then takes a piece home (if eating
+          // did not finish the pile off).
+          eatAtPile(world, ant, contact.target);
           const pile = world.food.items[contact.target];
-          ants.richFind[ant] = pile.infinite || pile.amount >= params.recruitMinPile ? 1 : 0;
+          if (!world.food.takeOne(contact.target)) continue;
+          // Only a piece from a rich pile reached without a jam calls others out.
+          ants.richFind[ant] =
+            (pile.infinite || pile.amount >= params.recruitMinPile) && ants.foodWait[ant] < 1 ? 1 : 0;
+          ants.foodWait[ant] = 0;
           ants.state[ant] = AntState.ReturningFood;
           ants.mass[ant] = params.massCarrying;
           ants.energy[ant] = params.energyMax;
@@ -469,7 +515,7 @@ export function applyEvents(world: World, events: readonly ChunkEvents[]): void 
     }
   }
 
-  world.food.regrow(1 / params.simHz, params.foodRegrowTime);
+  world.food.regrow(1 / params.simHz, params.foodGrowthRate);
   world.food.removeEmpty();
   for (const colony of world.colonies) {
     updateIncome(colony, colony.deliveredTotal - (incomeMark.get(colony) ?? colony.deliveredTotal), params.simHz);
@@ -483,6 +529,15 @@ export function applyEvents(world: World, events: readonly ChunkEvents[]): void 
     }
     layEggs(world, colony);
   }
+}
+
+// An ant eats its fill off a food pile, at the price of a meal at home (spec
+// §5.6): the pile shrinks by what it eats. With the life cycle off, meals are free.
+function eatAtPile(world: World, ant: number, pile: number): void {
+  const params = world.params;
+  const hunger = params.energyMax - world.ants.energy[ant];
+  world.ants.energy[ant] = params.energyMax;
+  if (params.lifeCycle && hunger > 0) world.food.eat(pile, hunger * params.foodPerEnergy);
 }
 
 // An ant at its own nest eats from the stores up to a full stomach. With the life
