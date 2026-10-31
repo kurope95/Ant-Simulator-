@@ -2,7 +2,7 @@ import { rgba } from "../core/color.js";
 import { contains, expanded } from "../core/rect.js";
 import { fromAngle, lerpVec } from "../core/vec2.js";
 import { FoodKind } from "../sim/setup.js";
-import { AntRole } from "../sim/types.js";
+import { AntRole, AntState } from "../sim/types.js";
 import type { World } from "../sim/world.js";
 import type { AtlasFrame, AtlasFrames } from "./atlas.js";
 import type { GeometryBatch } from "./batch.js";
@@ -79,6 +79,7 @@ export function buildAnts(
 
   // Shadows go to their own batch, drawn underneath: the world offset, times the zoom.
   for (let i = 0; i < ants.size(); i++) {
+    if (ants.state[i] === AntState.Resting) continue; // resting inside the nest
     const worldP = lerpVec(
       { x: ants.prevX[i], y: ants.prevY[i] },
       { x: ants.posX[i], y: ants.posY[i] },
@@ -100,6 +101,7 @@ export function buildAnts(
   }
 
   for (let i = 0; i < ants.size(); i++) {
+    if (ants.state[i] === AntState.Resting) continue; // resting inside the nest
     const worldP = lerpVec(
       { x: ants.prevX[i], y: ants.prevY[i] },
       { x: ants.posX[i], y: ants.posY[i] },

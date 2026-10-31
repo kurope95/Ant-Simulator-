@@ -23,6 +23,9 @@ export function spawnStartingAnts(world: World, setup: WorldSetup): void {
       spawnAtNest(world, colony, share);
     }
     if (world.params.lifeCycle) colony.foodPool += colonyReserve(colony, world.params);
+    // The founders start as a healthy colony: as if food had been coming in at
+    // the full laying level; it settles to the real income within a minute or two.
+    colony.incomePerMinute = colony.population * world.params.layIncomeFull;
   }
 }
 

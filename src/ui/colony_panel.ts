@@ -100,7 +100,7 @@ export class ColonyPanel {
       parts.name.textContent = row.name;
       parts.tag.hidden = !row.extinct;
       parts.stats.textContent =
-        `${formatInteger(row.population)} ants · ` +
+        `${formatInteger(row.population)} ants (${formatInteger(row.resting)} home) · ` +
         `${formatInteger(row.delivered)} delivered · ` +
         `${formatInteger(row.foodPool)} food`;
       parts.row.dataset.extinct = String(row.extinct);

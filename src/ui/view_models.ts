@@ -10,6 +10,7 @@ export interface ColonyRow {
   colorIndex: number;
   hex: number;
   population: number;
+  resting: number;
   delivered: number;
   foodPool: number;
   extinct: boolean;
@@ -47,6 +48,7 @@ export function colonyRows(world: World): ColonyRow[] {
       colorIndex: colony.color,
       hex: colonyHex(colony.color),
       population: colony.population,
+      resting: colony.resting,
       delivered: colony.deliveredTotal,
       foodPool: colony.foodPool,
       extinct: colony.extinct,
@@ -61,6 +63,8 @@ export function stateLabel(state: number): string {
       return "Carrying food";
     case 2:
       return "Heading home, tired";
+    case 3:
+      return "Resting in the nest";
     default:
       return "Unknown";
   }

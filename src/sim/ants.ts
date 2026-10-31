@@ -51,6 +51,8 @@ export class Ants {
   combatTimer: Float32Array;
   foe: Uint32Array;
   load: Float32Array;
+  // 1 while carrying from a pile that still had plenty left: worth calling others out for (spec §5.8).
+  richFind: Uint8Array;
 
   private count = 0;
   private capacity: number;
@@ -94,6 +96,7 @@ export class Ants {
     this.combatTimer = new Float32Array(capacity);
     this.foe = new Uint32Array(capacity);
     this.load = new Float32Array(capacity);
+    this.richFind = new Uint8Array(capacity);
   }
 
   size(): number {
@@ -139,6 +142,7 @@ export class Ants {
     this.combatTimer[i] = 0;
     this.foe[i] = kNoFoe;
     this.load[i] = 0;
+    this.richFind[i] = 0;
     this.indexByUid.set(uid, i);
     this.count += 1;
     return i;
@@ -187,6 +191,7 @@ export class Ants {
       this.combatTimer[index] = this.combatTimer[last];
       this.foe[index] = this.foe[last];
       this.load[index] = this.load[last];
+      this.richFind[index] = this.richFind[last];
       this.indexByUid.set(this.uid[index], index);
     }
     this.indexByUid.delete(removedUid);
@@ -237,6 +242,7 @@ export class Ants {
     this.combatTimer = grow(this.combatTimer, next);
     this.foe = grow(this.foe, next);
     this.load = grow(this.load, next);
+    this.richFind = grow(this.richFind, next);
     this.capacity = next;
   }
 }

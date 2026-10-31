@@ -56,6 +56,10 @@ Each ant looks at its surroundings at the start of the tick (a pass before Think
 
 **Stopping, whole colony.** Through mood and fear (§6): a colony that has lost many ants becomes careful, and a colony with full stores is calm and avoids fights.
 
+### 4b. Resting ants and fighting (with the self-balancing colony, main spec §5.8)
+- Warriors never rest: coming home is the turn of their patrol, and a newborn warrior goes straight out.
+- While the colony's battle smell lies at its nest or inside half its safety ring, `DEFEND_CALL_RATE` (3) resting ants a second are called out; out in the ring they attack raiders like any worker.
+
 ### 5. Nest is solid to rivals
 A rival ant cannot enter another colony's nest: the collision pass pushes it back out to the nest edge, like a wall.
 
@@ -86,6 +90,7 @@ Each ant carries two feelings, 0 to 1, built only from what it experiences itsel
 | `biteReach` | 3 u | gap at which ants can bite |
 | `engageRadius` / `oddsRadius` / `loseRadius` | 24 / 32 / 48 u | |
 | `nestGuardFactor` | 4 | safety ring = nest radius × this |
+| `defendCallRate` | 3 /s | resting ants called out while fighting is at the nest |
 | `standoffTime` / `retreatTime` | 3 / 6 s | |
 | `retreatOdds` / `workerOdds` | 1.5 / 2 | |
 | `retreatHealth` | 0.35 | share of 100 |

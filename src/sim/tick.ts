@@ -2,10 +2,10 @@ import { wrapAngle } from "../core/math.js";
 import { randRange, randUnit } from "../core/rng.js";
 import { fromAngle } from "../core/vec2.js";
 import { slideHeadingAlongNormal } from "./collide.js";
-import { colonyReserve, nestRadius, type Colony } from "./colony.js";
+import { colonyReserve, guardRadius, nestRadius, type Colony } from "./colony.js";
 import { answersCall, combatStep, kFightDeathWindow, type CombatSteer } from "./conflict.js";
 import { ContactKind, makeChunkEvents, type ChunkEvents } from "./events.js";
-import { degrade, deposit, emissionStrength, foodAt, homeAt, MarkerChannel } from "./marker_grid.js";
+import { battleAt, degrade, deposit, emissionStrength, foodAt, homeAt, MarkerChannel } from "./marker_grid.js";
 import { isSolidAt, speedFactorAt, freeDistance } from "./obstacles.js";
 import {
   chooseFallback,
@@ -17,6 +17,7 @@ import {
 import { turnToward, updateWander } from "./steering.js";
 import { evaluateStuck, inRestZone } from "./stuck.js";
 import { AntRole, AntState, Combat, RandStream } from "./types.js";
+import type { SimParams } from "./params.js";
 import type { World } from "./world.js";
 
 export function senseChannel(state: number): MarkerChannel {
@@ -108,6 +109,20 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
   const dt = 1 / params.simHz;
 
   for (let ant = begin; ant < end; ant++) {
+    if (ants.state[ant] === AntState.Resting) {
+      // A resting ant sits in the nest (spec §5.8): it ages, burns a little and
+      // eats from the stores when it gets hungry; nothing else.
+      ants.energy[ant] -= params.energyBurn * params.restBurnFactor * dt;
+      ants.lifeLeft[ant] -= dt;
+      ants.prevX[ant] = ants.posX[ant];
+      ants.prevY[ant] = ants.posY[ant];
+      ants.velX[ant] = 0;
+      ants.velY[ant] = 0;
+      if (ants.energy[ant] < 0.9 * params.energyMax) {
+        out.contacts.push({ antIndex: ant, kind: ContactKind.Nest, target: ants.colony[ant] });
+      }
+      continue;
+    }
     ants.energy[ant] -= params.energyBurn * dt;
     ants.lifeLeft[ant] -= dt;
     if (params.conflict) {
@@ -295,6 +310,90 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
   }
 }
 
+// A point on the nest's rim in direction `angle`. Walks the ring in
+// golden-angle steps: a boulder or pond overlapping the nest blocks some
+// directions, and the samples that follow visit the rest of the ring evenly.
+// If all 16 are solid, the nest centre.
+function nestEdgePoint(world: World, colony: Colony, angle: number): { x: number; y: number } {
+  const radius = nestRadius(colony, world.params);
+  for (let k = 0; k < 16; k++) {
+    const a = angle + k * 2.39996;
+    const x = colony.nest.x + Math.cos(a) * radius;
+    const y = colony.nest.y + Math.sin(a) * radius;
+    if (!isSolidAt(world.obstacles, { x, y })) return { x, y };
+  }
+  return { x: colony.nest.x, y: colony.nest.y };
+}
+
+// An ant goes into the nest to rest (spec §5.8): to the nest centre, hidden.
+export function startResting(world: World, colony: Colony, ant: number): void {
+  const ants = world.ants;
+  ants.state[ant] = AntState.Resting;
+  ants.posX[ant] = colony.nest.x;
+  ants.posY[ant] = colony.nest.y;
+  ants.prevX[ant] = colony.nest.x;
+  ants.prevY[ant] = colony.nest.y;
+  ants.velX[ant] = 0;
+  ants.velY[ant] = 0;
+  ants.mass[ant] = world.params.mass;
+  colony.resting += 1;
+  colony.restQueue.push(ants.uid[ant]);
+}
+
+// A resting ant is called out: it leaves from the nest rim, heading outward.
+function leaveNest(world: World, colony: Colony, ant: number): void {
+  const ants = world.ants;
+  const angle = randRange(world.seed, ants.uid[ant], world.tick, RandStream.LeaveNest, -Math.PI, Math.PI);
+  const pos = nestEdgePoint(world, colony, angle);
+  ants.state[ant] = AntState.Foraging;
+  ants.posX[ant] = pos.x;
+  ants.posY[ant] = pos.y;
+  ants.prevX[ant] = pos.x;
+  ants.prevY[ant] = pos.y;
+  ants.heading[ant] = angle;
+  ants.wanderHeading[ant] = angle;
+  ants.timeSinceAnchor[ant] = 0;
+  ants.dropX[ant] = pos.x;
+  ants.dropY[ant] = pos.y;
+  ants.timeSinceLastMarker[ant] = 0;
+  ants.homeErrX[ant] = 0;
+  ants.homeErrY[ant] = 0;
+  colony.resting -= 1;
+}
+
+// Fighting near the nest calls resting ants out to defend it (conflict design §4):
+// while the colony's battle smell lies at the nest or inside half its safety
+// ring, defendCallRate ants a second are called.
+function callDefenders(world: World, colony: Colony): void {
+  const params = world.params;
+  if (colony.resting <= 0) return;
+  const grid = world.markers;
+  const reach = guardRadius(colony, params) * 0.5;
+  let alarm = battleAt(grid, colony.id, grid.cellIndex(colony.nest));
+  for (let k = 0; k < 8 && alarm < params.battleDetectMin; k++) {
+    const a = (k * Math.PI) / 4;
+    const x = colony.nest.x + Math.cos(a) * reach;
+    const y = colony.nest.y + Math.sin(a) * reach;
+    alarm = Math.max(alarm, battleAt(grid, colony.id, grid.cellIndex({ x, y })));
+  }
+  if (alarm >= params.battleDetectMin) colony.callOut += params.defendCallRate / params.simHz;
+}
+
+// Deliveries and scouting call resting ants out, oldest rest first (spec §5.8).
+// Calls never bank beyond the ants there are to answer them.
+function callOutOfNest(world: World, colony: Colony): void {
+  const params = world.params;
+  colony.callOut += (params.scoutRate * colony.resting) / params.simHz;
+  colony.callOut = Math.min(colony.callOut, colony.resting);
+  while (colony.callOut >= 1 && colony.restQueue.length > 0) {
+    const uid = colony.restQueue.shift()!;
+    const ant = world.ants.indexOf(uid);
+    if (ant === null || world.ants.state[ant] !== AntState.Resting) continue; // died or already out
+    colony.callOut -= 1;
+    leaveNest(world, colony, ant);
+  }
+}
+
 // lifeShare < 1 spawns an ant part-way through its life: the starting ants get
 // staggered ages so the first generation does not die of old age all at once.
 export function spawnAtNest(world: World, colony: Colony, lifeShare = 1): number {
@@ -332,20 +431,7 @@ export function spawnAtNest(world: World, colony: Colony, lifeShare = 1): number
       1 - params.speedJitter,
       1 + params.speedJitter,
     );
-  const radius = nestRadius(colony, params);
-  // Walk the spawn ring in golden-angle steps: a boulder or pond overlapping
-  // the nest blocks some directions, and the samples that follow visit the
-  // rest of the ring evenly. If all 16 are solid, use the nest centre.
-  let pos = { x: colony.nest.x, y: colony.nest.y };
-  for (let k = 0; k < 16; k++) {
-    const a = angle + k * 2.39996;
-    const x = colony.nest.x + Math.cos(a) * radius;
-    const y = colony.nest.y + Math.sin(a) * radius;
-    if (!isSolidAt(world.obstacles, { x, y })) {
-      pos = { x, y };
-      break;
-    }
-  }
+  const pos = nestEdgePoint(world, colony, angle);
   const index = world.ants.spawn(
     {
       pos,
@@ -383,6 +469,9 @@ export function resetChunkEvents(world: World): void {
 export function applyEvents(world: World, events: readonly ChunkEvents[]): void {
   const ants = world.ants;
   const params = world.params;
+  // Deliveries counted this tick, for the queen's income signal.
+  const incomeMark = new Map<Colony, number>();
+  for (const colony of world.colonies) incomeMark.set(colony, colony.deliveredTotal);
 
   for (const chunk of events) {
     for (const event of chunk.deposits) {
@@ -404,6 +493,8 @@ export function applyEvents(world: World, events: readonly ChunkEvents[]): void 
         } else if (ants.state[ant] === AntState.ReturningFood) {
           ants.energy[ant] = params.energyMax;
         } else if (world.food.takeOne(contact.target)) {
+          const pile = world.food.items[contact.target];
+          ants.richFind[ant] = pile.infinite || pile.amount >= params.recruitMinPile ? 1 : 0;
           pickUp(world, ant, 1);
         }
       } else if (contact.kind === ContactKind.Corpse) {
@@ -427,8 +518,16 @@ export function applyEvents(world: World, events: readonly ChunkEvents[]): void 
           ants.load[ant] = 0;
           ants.state[ant] = AntState.Foraging;
           if (params.conflict) ants.stress[ant] = Math.max(0, ants.stress[ant] - params.deliverCalm);
+          // A forager back from a rich pile calls more ants out to it; crumbs
+          // from a bare, regrowing pile call nobody (spec §5.8).
+          if (params.restAtHome && ants.richFind[ant] === 1) colony.callOut += params.recruitPerDelivery;
+          ants.richFind[ant] = 0;
         } else if (state === AntState.ReturningExhausted) {
-          ants.state[ant] = AntState.Foraging;
+          // Searched until tired and found nothing: with the colony balancing
+          // itself, it stays in and rests until work calls it out.
+          // Warriors never rest: coming home is the turn of their patrol.
+          if (params.restAtHome && ants.role[ant] !== AntRole.Warrior) startResting(world, colony, ant);
+          else ants.state[ant] = AntState.Foraging;
         }
         const hunger = params.energyMax - ants.energy[ant];
         const ate = eatAtNest(colony, ant, world);
@@ -449,6 +548,9 @@ export function applyEvents(world: World, events: readonly ChunkEvents[]): void 
   world.food.regrow(1 / params.simHz, params.foodRegrowTime);
   world.food.removeEmpty();
   for (const colony of world.colonies) {
+    updateIncome(colony, colony.deliveredTotal - (incomeMark.get(colony) ?? colony.deliveredTotal), params.simHz);
+    if (params.restAtHome && params.conflict) callDefenders(world, colony);
+    if (params.restAtHome) callOutOfNest(world, colony);
     if (!params.lifeCycle) {
       while (colony.foodPool >= params.spawnCost && ants.size() < params.maxAntsTotal) {
         colony.foodPool -= params.spawnCost;
@@ -555,7 +657,9 @@ function eatAtNest(colony: Colony, ant: number, world: World): number {
 // rebuild after losing ants.
 function layEggs(world: World, colony: Colony): void {
   const params = world.params;
-  const rate = params.birthRateBase + params.birthRatePerAnt * colony.population;
+  // The queen sees how crowded the nest is: the more ants rest for lack of
+  // work, the slower she lays (spec §5.8).
+  const rate = (params.birthRateBase + params.birthRatePerAnt * colony.population) * layingFactor(colony, params);
   colony.birthCredit = Math.min(params.birthBurst, colony.birthCredit + rate / params.simHz);
   while (
     colony.birthCredit >= 1 &&
@@ -564,8 +668,30 @@ function layEggs(world: World, colony: Colony): void {
   ) {
     colony.birthCredit -= 1;
     colony.foodPool -= params.spawnCost;
-    spawnAtNest(world, colony);
+    const egg = spawnAtNest(world, colony);
+    // A newborn starts in the nest and goes out when work calls it.
+    // A newborn worker waits in the nest; a newborn warrior goes straight out on patrol.
+    if (params.restAtHome && world.ants.role[egg] !== AntRole.Warrior) startResting(world, colony, egg);
   }
+}
+
+// The queen's laying multiplier from the food coming in per ant (spec §5.8):
+// 0 at or below layIncomeNone per ant per minute, 1 from layIncomeFull. When
+// more ants no longer bring in more food, the share per ant falls and so do
+// births; the colony settles where its food income supports it.
+export function layingFactor(colony: Colony, params: SimParams): number {
+  if (!params.restAtHome || colony.population <= 0) return 1;
+  const perAnt = colony.incomePerMinute / colony.population;
+  const span = params.layIncomeFull - params.layIncomeNone;
+  if (!(span > 0)) return perAnt >= params.layIncomeFull ? 1 : 0;
+  return Math.min(1, Math.max(0, (perAnt - params.layIncomeNone) / span));
+}
+
+// One tick of the smoothed income: an exponential average over kIncomeWindow s.
+const kIncomeWindow = 60;
+function updateIncome(colony: Colony, deliveredThisTick: number, simHz: number): void {
+  const instant = deliveredThisTick * simHz * 60;
+  colony.incomePerMinute += (instant - colony.incomePerMinute) / (kIncomeWindow * simHz);
 }
 
 export function clampToWorld(world: World): void {
@@ -604,6 +730,7 @@ export function removeDead(world: World): void {
     const colony = world.colonies[ants.colony[index]];
     if (colony !== undefined) {
       colony.population -= 1;
+      if (ants.state[index] === AntState.Resting) colony.resting -= 1;
       if (killed) colony.diedInFight += 1;
       else if (starved) colony.diedOfHunger += 1;
       else colony.diedOfAge += 1;

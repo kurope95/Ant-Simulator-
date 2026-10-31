@@ -6,6 +6,8 @@ export enum AntState {
   Foraging,
   ReturningFood,
   ReturningExhausted,
+  // Inside the nest with no work: not drawn, does not move, eats little (spec §5.8).
+  Resting,
 }
 
 export enum AntRole {
@@ -39,4 +41,5 @@ export enum RandStream {
   StartingAge,
   Warrior,
   Boldness,
+  LeaveNest,
 }

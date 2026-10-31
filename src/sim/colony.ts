@@ -25,6 +25,14 @@ export interface Colony {
   diedInFight: number;
   nestStress: number;
   nestFear: number;
+  // Self-balancing colony (spec §5.8): ants resting in the nest, the uids in the
+  // order they came to rest (stale entries are skipped), and calls banked by
+  // deliveries and scouting, spent one ant at a time.
+  resting: number;
+  restQueue: number[];
+  callOut: number;
+  // Food delivered per minute, smoothed over about a minute: what the queen senses.
+  incomePerMinute: number;
 }
 
 export function makeColony(id: ColonyId, nest: Vec2, color = 0, historyCapacity = 120): Colony {
@@ -47,6 +55,10 @@ export function makeColony(id: ColonyId, nest: Vec2, color = 0, historyCapacity 
     diedInFight: 0,
     nestStress: 0,
     nestFear: 0,
+    resting: 0,
+    restQueue: [],
+    callOut: 0,
+    incomePerMinute: 0,
   };
 }
 

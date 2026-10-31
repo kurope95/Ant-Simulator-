@@ -15,6 +15,7 @@ function lifeWorld(): { world: World; params: SimParams } {
   params.worldH = 400;
   params.wanderAngleFollower = 0;
   params.wanderAngleExplorer = 0;
+  params.restAtHome = false; // meals and ageing on the move; test_resting covers resting
   const world = makeWorld(params, 1);
   world.colonies.push(makeColony(0, { x: 10, y: 10 }));
   return { world, params };
@@ -82,6 +83,7 @@ test("life cycle: off, ants never age and meals are free", () => {
 
 test("life cycle: the queen keeps the reserve and lays at a steady rate", () => {
   const { world, params } = lifeWorld();
+  world.params.restAtHome = false; // newborns resting would slow her: test_resting covers that
   for (let i = 0; i < 100; i++) spawnAnt(world, { x: 300, y: 300 });
   const colony = world.colonies[0];
   const reserve = colonyReserve(colony, params);

@@ -77,6 +77,8 @@ export interface SimParams {
   oddsRadius: number;
   loseRadius: number;
   nestGuardFactor: number;
+  // Resting ants called out per second while there is fighting at the nest.
+  defendCallRate: number;
   standoffTime: number;
   chaseTime: number;
   retreatTime: number;
@@ -106,6 +108,20 @@ export interface SimParams {
   fearDecay: number;
   boldStress: number;
   fearDamp: number;
+  // Self-balancing colony (spec §5.8). Off: every ant is always out foraging.
+  restAtHome: boolean;
+  // A resting ant burns this share of the normal energy rate.
+  restBurnFactor: number;
+  // Resting ants each delivery calls out of the nest.
+  recruitPerDelivery: number;
+  // Only a pile with at least this much left after the pickup is worth calling others out for.
+  recruitMinPile: number;
+  // Share of the resting ants that leave as scouts each second.
+  scoutRate: number;
+  // The queen lays by the food coming in per ant per minute: not at all at or
+  // below layIncomeNone, at full rate from layIncomeFull.
+  layIncomeNone: number;
+  layIncomeFull: number;
   nestBaseR: number;
   nestGrowth: number;
   foodBaseR: number;
@@ -202,6 +218,7 @@ export function defaultParams(): SimParams {
     oddsRadius: 32,
     loseRadius: 48,
     nestGuardFactor: 4,
+    defendCallRate: 3,
     standoffTime: 3,
     chaseTime: 3,
     retreatTime: 6,
@@ -230,6 +247,13 @@ export function defaultParams(): SimParams {
     fearDecay: 0.01,
     boldStress: 0.8,
     fearDamp: 1.5,
+    restAtHome: true,
+    restBurnFactor: 0.25,
+    recruitPerDelivery: 1,
+    recruitMinPile: 100,
+    scoutRate: 0.002,
+    layIncomeNone: 3,
+    layIncomeFull: 6,
     nestBaseR: 20,
     nestGrowth: 0.4,
     foodBaseR: 12,

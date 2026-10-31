@@ -1,3 +1,4 @@
+import { AntState } from "./types.js";
 import type { World } from "./world.js";
 
 // The uid of the ant nearest to (x, y) within `radius`, or -1. Ties go to the
@@ -8,6 +9,7 @@ export function pickAnt(world: World, x: number, y: number, radius: number): num
   let bestUid = -1;
   let bestSq = Infinity;
   for (let i = 0; i < ants.size(); i++) {
+    if (ants.state[i] === AntState.Resting) continue; // inside the nest, out of sight
     const dx = ants.posX[i] - x;
     const dy = ants.posY[i] - y;
     const distSq = dx * dx + dy * dy;

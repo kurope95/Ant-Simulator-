@@ -247,3 +247,30 @@ test("conflict: a guarding warrior walks the column's edge, a worker its middle"
   const centre = senseMarkers(world, warrior, MarkerChannel.ToFood, pattern);
   assert.ok(Math.abs(centre.targetHeading) < 0.05, "guardEdge 0 walks the middle");
 });
+
+test("conflict: warriors never rest; fighting at the nest calls resting ants out", () => {
+  const world = twoColonies();
+  const colony = world.colonies[0];
+  colony.foodPool = 100;
+  const warrior = addAnt(world, 0, { x: colony.nest.x, y: colony.nest.y }, AntRole.Warrior);
+  world.ants.state[warrior] = AntState.ReturningExhausted;
+  stepWorld(world);
+  assert.notEqual(world.ants.state[at(world, world.ants.uid[warrior])], AntState.Resting);
+  // Ten workers resting at home; battle smell at the nest calls them out.
+  const resting: number[] = [];
+  for (let i = 0; i < 10; i++) {
+    const worker = addAnt(world, 0, { x: colony.nest.x, y: colony.nest.y });
+    world.ants.state[worker] = AntState.ReturningExhausted;
+    resting.push(world.ants.uid[worker]);
+  }
+  world.params.scoutRate = 0;
+  stepWorld(world);
+  assert.equal(colony.resting, 10);
+  const cell = world.markers.cellIndex(colony.nest);
+  for (let t = 0; t < world.params.simHz; t++) {
+    deposit(world.markers, cell, 0, MarkerChannel.Battle, 1, world.params);
+    stepWorld(world);
+  }
+  const out = 10 - colony.resting;
+  assert.ok(out >= world.params.defendCallRate - 1 && out <= world.params.defendCallRate + 1, `${out} defenders in 1 s`);
+});
