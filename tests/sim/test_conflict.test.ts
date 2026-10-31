@@ -8,7 +8,7 @@ import { MarkerChannel, battleAt, deposit, homeAt } from "../../src/sim/marker_g
 import { defaultParams } from "../../src/sim/params.js";
 import { loadPreset } from "../../src/sim/presets.js";
 import { worldFromSetup } from "../../src/sim/setup_apply.js";
-import { followerPattern, senseMarkers } from "../../src/sim/sensing.js";
+import { directSightHeading, followerPattern, senseMarkers } from "../../src/sim/sensing.js";
 import { spawnAtNest } from "../../src/sim/tick.js";
 import { AntRole, AntState, Combat, kNoFoe } from "../../src/sim/types.js";
 import { makeWorld, stepWorld, type World } from "../../src/sim/world.js";
@@ -311,4 +311,15 @@ test("conflict: once biting has started an outnumbered ant fights on; only bad w
   world.ants.wounds[at(world, lone)] = world.ants.energy[at(world, lone)] - 10;
   stepWorld(world);
   assert.equal(world.ants.combat[at(world, lone)], Combat.Retreat, "badly hurt: now it runs");
+});
+
+test("conflict: a worker spots a body lying close by, whichever way it faces", () => {
+  const world = twoColonies();
+  const victim = addAnt(world, 1, { x: 500, y: 300 });
+  world.ants.energy[victim] = 0.001;
+  stepWorld(world);
+  assert.equal(world.corpses.items.length, 1);
+  const body = world.corpses.items[0];
+  const worker = addAnt(world, 0, { x: body.x, y: body.y + 12 }, AntRole.Follower, 0);
+  assert.notEqual(directSightHeading(world, worker), null);
 });

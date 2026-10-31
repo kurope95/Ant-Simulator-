@@ -339,6 +339,25 @@ export function directSightTarget(world: World, ant: number): Vec2 | null {
       targetY = item.pos.y;
       hasTarget = true;
     }
+    // Workers also see bodies lying in range (conflict design §2): a body counts
+    // like a tiny pile, seen in the cone and smelled up close.
+    if (
+      params.conflict &&
+      ants.role[ant] !== AntRole.Warrior &&
+      (ants.combat[ant] === Combat.None || ants.combat[ant] === Combat.Cooldown)
+    ) {
+      const corpse = world.corpses.nearest(posX, posY, params.sensorRadius);
+      if (corpse >= 0) {
+        const body = world.corpses.items[corpse];
+        const edge = Math.hypot(body.x - posX, body.y - posY);
+        if (edge < bestEdge && lineOfSight(world.obstacles, { x: posX, y: posY }, { x: body.x, y: body.y })) {
+          bestEdge = edge;
+          targetX = body.x;
+          targetY = body.y;
+          hasTarget = true;
+        }
+      }
+    }
     if (!hasTarget) return null;
     if (bestEdge <= params.foodSmellRadius) return { x: targetX, y: targetY };
     const halfFov = (params.sensorHalfFovDeg * Math.PI) / 180;
