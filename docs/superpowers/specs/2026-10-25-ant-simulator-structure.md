@@ -124,6 +124,7 @@ randRange(seed, uid, tick, stream, lo, hi): number        // [lo, hi)
 class FixedStepClock {
   constructor(stepSeconds: number, maxStepsPerFrame: number)
   advance(frameSeconds: number, speed: number): number   // steps to run now
+  dropBacklog(): void   // keeps under one step of backlog; the controller calls it when its per-frame step budget (kStepBudgetMs, 22 ms) runs out, so a slow world runs slower than real time instead of the frame rate collapsing
   alpha(): number                                        // [0, 1)
   stepSeconds(): number
   reset(): void
@@ -264,7 +265,7 @@ interface ChunkEvents { deposits: DepositEvent[]; degrades: DegradeEvent[]; cont
 makeChunkEvents(): ChunkEvents
 
 // sim/sensing.ts, sim/steering.ts
-interface SensorSample { angleOffset: number; distance: number }
+interface SensorSample { angleOffset: number; distance: number; slot: number }   // slot: the pattern direction; senseMarkers works out cos/sin once per slot
 followerPattern(params): readonly SensorSample[] // 25 = 5 angles x 5 distances, scaled by the sensor params
 explorerPattern(params): readonly SensorSample[] // 6 = 3 angles x 2 distances, scaled the same way; cached per params pair
 interface SenseResult { found: boolean; targetHeading: number; bestSignal: number; bestFoodSignal: number }
@@ -646,7 +647,7 @@ interface RunHudHooks { onPause(): void; onSpeed(speed): void; onReset(): void;
 // over the map on hover. The controller fits the map between them (kRunRailInsetCss).
 class RunHud { readonly root: HTMLElement; readonly colonyPanelHost: HTMLElement
                constructor(root, params: SimParams, hooks: RunHudHooks)
-               update(world: World, fps: number, state: HudState): void
+               update(world: World, fps: number, state: HudState, achievedSpeed?: number): void   // shows "Actual speed" only when the world runs below the chosen speed
                setZen(on: boolean): void }
 
 // ui/colony_panel.ts

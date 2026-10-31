@@ -23,6 +23,12 @@ export class FixedStepClock {
     return steps;
   }
 
+  // Throws away time the simulation could not keep up with, so a slow world
+  // runs slower than real time instead of piling up steps for later frames.
+  dropBacklog(): void {
+    this.acc = Math.min(this.acc, this.step * 0.999999);
+  }
+
   alpha(): number {
     return Math.min(this.acc / this.step, 0.999999);
   }

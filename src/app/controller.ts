@@ -56,6 +56,9 @@ import {
 const kRunRailInsetCss = 88;
 const kRunEdgeInsetCss = 12;
 const kMaxFrameSeconds = 0.25;
+// Most of a frame the simulation may use; past it the frame draws and the
+// rest of the steps are dropped, so a big colony slows the ants, not the picture.
+const kStepBudgetMs = 22;
 const kSelectionRadiusPx = 24;
 // How close a click must land to pick an ant, in CSS pixels; the drag slop is the same 4 px the camera uses.
 const kPickRadiusPx = 12;
@@ -133,6 +136,8 @@ export class AppController {
   private breached = false;
   private breachRequested = false;
   private frameMs = 1000 / 60;
+  // Simulated seconds per real second actually achieved, smoothed.
+  private achievedSpeed = 1;
   private lastTime = 0;
   private rafId = 0;
   private viewportW = 0;
@@ -846,7 +851,18 @@ export class AppController {
         steps += this.stepRequests;
         this.stepRequests = 0;
       }
-      for (let i = 0; i < steps; i++) stepWorld(this.runWorld);
+      const started = performance.now();
+      let done = 0;
+      while (done < steps) {
+        stepWorld(this.runWorld);
+        done += 1;
+        if (performance.now() - started > kStepBudgetMs) break;
+      }
+      if (done < steps) this.clock.dropBacklog();
+      if (!this.session.paused && frameSeconds > 0) {
+        const speed = (done * this.clock.stepSeconds()) / frameSeconds;
+        this.achievedSpeed = this.achievedSpeed * 0.9 + speed * 0.1;
+      }
       alpha = this.session.paused ? 1 : this.clock.alpha();
     }
     if (this.session.screen === Screen.Run) this.applyScheduledBreach();
@@ -879,7 +895,7 @@ export class AppController {
         settingsOpen: this.settingsOpen,
         breachAvailable: this.setup.breach.length > 0,
       };
-      this.runHud.update(this.runWorld, 1000 / Math.max(this.frameMs, 0.001), state);
+      this.runHud.update(this.runWorld, 1000 / Math.max(this.frameMs, 0.001), state, this.achievedSpeed);
     }
   };
 

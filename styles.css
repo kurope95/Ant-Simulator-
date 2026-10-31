@@ -316,6 +316,10 @@ textarea {
   background: rgba(235, 241, 229, 0.035);
 }
 
+.chip--slow .chip__value {
+  color: var(--accent);
+}
+
 .chip__label {
   font-size: 10px;
   font-weight: 600;
