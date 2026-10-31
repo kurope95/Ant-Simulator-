@@ -288,7 +288,7 @@ updateWander(world, ant, dt): boolean        // true on the tick a new offset an
 // makes it follow a wall instead of oscillating against it (spec §5.3).
 thinkChunk(world, begin, end, out: ChunkEvents): void
 startResting(world, colony, ant): void            // into the nest centre, hidden; queued to be called out (§5.8)
-layingFactor(colony, params): number              // the queen's rate multiplier from food income per ant (§5.8)
+layingFactor(colony, params): number              // the queen's rate multiplier: max(food income per ant, empty nest) (§5.8)
 spawnAtNest(world, colony, lifeShare?): number   // lifeShare < 1: a founder part-way through its life
 resetChunkEvents(world): void
 applyEvents(world, events: readonly ChunkEvents[]): void

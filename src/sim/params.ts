@@ -80,6 +80,10 @@ export interface SimParams {
   // below layIncomeNone, at full rate from layIncomeFull.
   layIncomeNone: number;
   layIncomeFull: number;
+  // She also lays while the nest is nearly empty (every ant called out to work):
+  // fully below layEmptyBelow resting, not for this reason from layEmptyUntil.
+  layEmptyBelow: number;
+  layEmptyUntil: number;
   nestBaseR: number;
   nestGrowth: number;
   foodBaseR: number;
@@ -173,6 +177,8 @@ export function defaultParams(): SimParams {
     scoutRate: 0.002,
     layIncomeNone: 3,
     layIncomeFull: 6,
+    layEmptyBelow: 0.05,
+    layEmptyUntil: 0.2,
     nestBaseR: 20,
     nestGrowth: 0.4,
     foodBaseR: 12,

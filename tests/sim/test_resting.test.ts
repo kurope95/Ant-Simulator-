@@ -96,6 +96,7 @@ test("resting: the queen lays by the food coming in per ant", () => {
   const params = defaultParams();
   const colony = makeColony(0, { x: 0, y: 0 });
   colony.population = 100;
+  colony.resting = 50; // a crowded nest, so only the income counts here
   colony.incomePerMinute = 100 * params.layIncomeFull;
   assert.equal(layingFactor(colony, params), 1);
   colony.incomePerMinute = 100 * ((params.layIncomeNone + params.layIncomeFull) / 2);
@@ -105,6 +106,17 @@ test("resting: the queen lays by the food coming in per ant", () => {
   assert.equal(layingFactor(colony, params), 0);
   params.restAtHome = false;
   assert.equal(layingFactor(colony, params), 1);
+});
+
+test("resting: an empty nest makes the queen lay even when food per ant is low", () => {
+  const params = defaultParams();
+  const colony = makeColony(0, { x: 0, y: 0 });
+  colony.population = 100;
+  colony.incomePerMinute = 0; // far food: long trips, little per ant
+  colony.resting = 2;
+  assert.equal(layingFactor(colony, params), 1, "nearly everyone is out working");
+  colony.resting = Math.round(params.layEmptyUntil * 100);
+  assert.equal(layingFactor(colony, params), 0, "a crowded nest and no income: no eggs");
 });
 
 test("resting: the queen's income signal follows deliveries over about a minute", () => {
