@@ -1,6 +1,6 @@
 import { stopwatch } from "../core/stopwatch.js";
 import { summarize, type SampleSummary } from "../core/stats.js";
-import { kPhaseCount, phaseName } from "../sim/phases.js";
+import { kPhaseCount, kSubPhaseCount, phaseName, subPhaseName } from "../sim/phases.js";
 import { defaultParams } from "../sim/params.js";
 import { loadPreset } from "../sim/presets.js";
 import { worldFromSetup } from "../sim/setup_apply.js";
@@ -14,6 +14,8 @@ export interface BenchReport {
   threads: number;
   ants: number;
   phases: SampleSummary[];
+  // Pieces of Think and Collisions (SubPhase order); printed after the totals when present.
+  subPhases?: SampleSummary[];
   total: SampleSummary;
   ticksPerSec: number;
   antUpdatesPerSec: number;
@@ -33,6 +35,13 @@ export function formatBenchReport(report: BenchReport): string {
   text += row("total", report.total.avg.toFixed(3), report.total.p95.toFixed(3));
   text += "ticks_per_sec".padEnd(16) + report.ticksPerSec.toFixed(1).padStart(10) + "\n";
   text += "ant_updates_per_sec".padEnd(16) + report.antUpdatesPerSec.toFixed(0).padStart(10) + "\n";
+  if (report.subPhases !== undefined) {
+    text += "sub_phase".padEnd(16) + "avg_ms".padStart(10) + "p95_ms".padStart(10) + "\n";
+    for (let sub = 0; sub < kSubPhaseCount; sub++) {
+      const sample = report.subPhases[sub];
+      text += row(subPhaseName(sub), sample.avg.toFixed(3), sample.p95.toFixed(3));
+    }
+  }
   return text;
 }
 
@@ -54,6 +63,7 @@ export function runBench(options: AppOptions): number {
 
   const ticks = effectiveTicks(options);
   const phaseSamples: number[][] = Array.from({ length: kPhaseCount }, () => []);
+  const subSamples: number[][] = Array.from({ length: kSubPhaseCount }, () => []);
   const totalSamples: number[] = [];
   let antTicks = 0;
   const watch = stopwatch();
@@ -61,6 +71,7 @@ export function runBench(options: AppOptions): number {
     stepWorld(world);
     antTicks += world.ants.size();
     for (let phase = 0; phase < kPhaseCount; phase++) phaseSamples[phase].push(world.timings.ms[phase]);
+    for (let sub = 0; sub < kSubPhaseCount; sub++) subSamples[sub].push(world.timings.sub[sub]);
     totalSamples.push(world.timings.totalMs);
   }
   const seconds = watch.elapsedSeconds();
@@ -72,6 +83,7 @@ export function runBench(options: AppOptions): number {
     threads: 1,
     ants: world.ants.size(),
     phases: phaseSamples.map(summarize),
+    subPhases: subSamples.map(summarize),
     total: summarize(totalSamples),
     ticksPerSec: seconds > 0 ? ticks / seconds : 0,
     antUpdatesPerSec: seconds > 0 ? antTicks / seconds : 0,

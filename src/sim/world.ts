@@ -13,7 +13,7 @@ import type { ChunkEvents } from "./events.js";
 import { makeFoodSources, type FoodSources } from "./food.js";
 import { makeMarkerGrid, decayMarkers, type MarkerGrid } from "./marker_grid.js";
 import { makeObstacleGrid, rebuildBorder, type ObstacleGrid } from "./obstacles.js";
-import { emptyPhaseTimings, Phase, type PhaseTimings } from "./phases.js";
+import { emptyPhaseTimings, Phase, SubPhase, type PhaseTimings } from "./phases.js";
 import { markerDecayFactor, type SimParams } from "./params.js";
 import { ObstacleKind, rectCellBounds, type SetupRect } from "./setup.js";
 import { SpatialHash } from "./spatial_hash.js";
@@ -93,18 +93,30 @@ export function makeWorld(params: SimParams, seed: number, size?: Vec2): World {
 function collisionPhase(world: World): void {
   const ants = world.ants;
   const params = world.params;
+  const sub = world.timings.sub;
+  let mark = performance.now();
+  // Adds the time since the previous lap to one sub-phase.
+  const lap = (which: SubPhase): void => {
+    const now = performance.now();
+    sub[which] += now - mark;
+    mark = now;
+  };
   if (!params.antCollisions) {
     clampToWorld(world);
     resolveObstacles(world);
     clampToWorld(world);
+    lap(SubPhase.CollideWalls);
     return;
   }
   world.spatialHash.build(ants.posX, ants.posY, ants.size(), world.size, params.hashCell);
+  lap(SubPhase.CollideHash);
   for (let it = 0; it < params.pbdIterations; it++) {
     resolveAntOverlaps(world, world.collisionScratch);
+    lap(SubPhase.CollideAnts);
     clampToWorld(world);
     resolveObstacles(world);
     clampToWorld(world);
+    lap(SubPhase.CollideWalls);
   }
   // Velocity is the movement that actually happened, pushes included.
   const simHz = params.simHz;
@@ -112,6 +124,7 @@ function collisionPhase(world: World): void {
     ants.velX[i] = (ants.posX[i] - ants.prevX[i]) * simHz;
     ants.velY[i] = (ants.posY[i] - ants.prevY[i]) * simHz;
   }
+  lap(SubPhase.CollideVelocity);
 }
 
 export function stepWorld(world: World): void {
@@ -137,7 +150,10 @@ export function stepWorld(world: World): void {
   timed(Phase.Think, () => {
     // The avoidance pre-pass runs first, on start-of-tick state, so the think
     // loop below sees the same avoidance whatever order its chunks run in.
+    const avoidStart = performance.now();
     if (world.params.antCollisions) computeAvoidance(world, world.avoidScratch);
+    const thinkStart = performance.now();
+    world.timings.sub[SubPhase.Avoidance] = thinkStart - avoidStart;
     resetChunkEvents(world);
     const chunkSize = world.params.chunkSize;
     const lists = world.chunkEvents;
@@ -147,6 +163,7 @@ export function stepWorld(world: World): void {
       if (begin >= end) break;
       thinkChunk(world, begin, end, lists[chunk]);
     }
+    world.timings.sub[SubPhase.ThinkAnts] = performance.now() - thinkStart;
   });
   timed(Phase.Events, () => applyEvents(world, world.chunkEvents));
   timed(Phase.Collisions, () => collisionPhase(world));
