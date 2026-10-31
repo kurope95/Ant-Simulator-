@@ -115,7 +115,11 @@ test("resting: the queen's income signal follows deliveries over about a minute"
   for (let s = 0; s < 120; s++) {
     const carrier = addAnt(world, { x: 200, y: 200 }, AntState.ReturningFood);
     for (let t = 0; t < world.params.simHz; t++) stepWorld(world);
-    world.ants.energy[world.ants.indexOf(world.ants.uid[carrier])!] = 0; // out of the way
+    // Out of the way, far from the nest (dying would leave a body some forager could deliver).
+    const done = world.ants.indexOf(world.ants.uid[carrier])!;
+    world.ants.posX[done] = 390;
+    world.ants.posY[done] = 390;
+    world.ants.lifeLeft[done] = 1e9;
   }
   assert.ok(colony.incomePerMinute > 45 && colony.incomePerMinute < 62, `income ${colony.incomePerMinute}`);
 });
