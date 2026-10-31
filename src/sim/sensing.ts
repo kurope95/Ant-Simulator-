@@ -1,7 +1,7 @@
 import { angleDiff } from "../core/math.js";
-import { angleOf, fromAngle, type Vec2 } from "../core/vec2.js";
+import { angleOf, type Vec2 } from "../core/vec2.js";
 import { MarkerChannel, type MarkerGrid } from "./marker_grid.js";
-import { isSolidAt, freeDistance, freeDistanceDir, lineOfSight } from "./obstacles.js";
+import { isSolidCell, freeDistance, freeDistanceDir, lineOfSight } from "./obstacles.js";
 import type { SimParams } from "./params.js";
 import { AntRole, AntState, Combat } from "./types.js";
 import type { World } from "./world.js";
@@ -9,6 +9,9 @@ import type { World } from "./world.js";
 export interface SensorSample {
   angleOffset: number;
   distance: number;
+  // Which of the pattern's directions this sample lies on; samples on one
+  // direction share its cos/sin, so they are worked out once per ant.
+  slot: number;
 }
 
 // Patterns are fractions of the live sensor params, so the sliders govern the
@@ -35,10 +38,11 @@ function buildPattern(
   const halfFov = (params.sensorHalfFovDeg * Math.PI) / 180;
   return Object.freeze(
     distanceFractions.flatMap((fraction) =>
-      angleFractions.map((angleFraction) =>
+      angleFractions.map((angleFraction, slot) =>
         Object.freeze({
           angleOffset: halfFov * angleFraction,
           distance: params.sensorRadius * fraction,
+          slot,
         }),
       ),
     ),
@@ -88,6 +92,14 @@ function rivalStrength(grid: MarkerGrid, colony: number, cell: number): number {
   return strongest;
 }
 
+// cos/sin of (heading + offset) per pattern direction for the ant being sensed.
+// Math.cos of the same sum as before, so results are bit-identical; there are
+// just 5 directions instead of 25 samples to work out.
+const kMaxSlots = 8;
+const slotCos = new Float64Array(kMaxSlots);
+const slotSin = new Float64Array(kMaxSlots);
+const slotDone = new Uint8Array(kMaxSlots);
+
 export function senseMarkers(
   world: World,
   ant: number,
@@ -121,16 +133,30 @@ export function senseMarkers(
       : 0;
   let bestX = 0;
   let bestY = 0;
+  const obstacles = world.obstacles;
+  const obstacleCell = obstacles.cell;
+  const markerCell = grid.cell;
+  const gridW = grid.width;
+  const gridH = grid.height;
+  slotDone.fill(0);
 
   for (const sample of pattern) {
-    const direction = fromAngle(heading + sample.angleOffset);
-    const x = posX + direction.x * sample.distance;
-    const y = posY + direction.y * sample.distance;
-    if (isSolidAt(world.obstacles, { x, y })) continue;
+    const slot = sample.slot;
+    if (slotDone[slot] === 0) {
+      slotDone[slot] = 1;
+      slotCos[slot] = Math.cos(heading + sample.angleOffset);
+      slotSin[slot] = Math.sin(heading + sample.angleOffset);
+    }
+    const x = posX + slotCos[slot] * sample.distance;
+    const y = posY + slotSin[slot] * sample.distance;
+    if (isSolidCell(obstacles, Math.floor(x / obstacleCell), Math.floor(y / obstacleCell))) continue;
     // Cheap line of sight: a wall at the halfway point blocks the sample too.
-    if (isSolidAt(world.obstacles, { x: (posX + x) * 0.5, y: (posY + y) * 0.5 })) continue;
-    const cell = grid.cellIndex({ x, y });
-    if (cell < 0) continue;
+    if (isSolidCell(obstacles, Math.floor(((posX + x) * 0.5) / obstacleCell), Math.floor(((posY + y) * 0.5) / obstacleCell))) {
+      continue;
+    }
+    // grid.cellIndex inlined: same bounds, no object per sample.
+    if (x < 0 || y < 0 || x >= gridW * markerCell || y >= gridH * markerCell) continue;
+    const cell = Math.floor(y / markerCell) * gridW + Math.floor(x / markerCell);
     const index = layer + cell;
     const home = grid.toHome[index];
     const food = grid.toFood[index];

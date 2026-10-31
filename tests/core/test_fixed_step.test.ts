@@ -42,3 +42,12 @@ test("fixed_step: reset clears the accumulator", () => {
   clock.reset();
   assert.equal(clock.alpha(), 0);
 });
+
+test("fixed_step: dropBacklog keeps less than one step, so a slow world falls behind instead of catching up", () => {
+  const clock = new FixedStepClock(1 / 60, 16);
+  assert.equal(clock.advance(0.1, 1), 6);
+  clock.advance(0.05, 1);
+  clock.dropBacklog();
+  assert.ok(clock.alpha() < 1);
+  assert.equal(clock.advance(1 / 60, 1) <= 2, true);
+});

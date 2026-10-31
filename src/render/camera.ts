@@ -2,6 +2,15 @@ import { clamp } from "../core/math.js";
 import type { Rect } from "../core/rect.js";
 import type { Vec2 } from "../core/vec2.js";
 
+export interface Insets {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+export const kNoInsets: Insets = { left: 0, right: 0, top: 0, bottom: 0 };
+
 export class Camera {
   static readonly kMinScale = 0.05;
   static readonly kMaxScale = 16;
@@ -40,12 +49,17 @@ export class Camera {
     return { x: this.centerVec.x, y: this.centerVec.y };
   }
 
-  fit(worldSize: Vec2): void {
-    const sx = this.viewportSize.x / worldSize.x;
-    const sy = this.viewportSize.y / worldSize.y;
-    this.camScale = clamp(Math.min(sx, sy), Camera.kMinScale, Camera.kMaxScale);
+  // Fits the world into the viewport less `inset` (in viewport pixels), so
+  // panels along the edges do not cover the map, and centres it in that space.
+  fit(worldSize: Vec2, inset: Insets = kNoInsets): void {
+    const freeW = Math.max(1, this.viewportSize.x - inset.left - inset.right);
+    const freeH = Math.max(1, this.viewportSize.y - inset.top - inset.bottom);
+    this.camScale = clamp(Math.min(freeW / worldSize.x, freeH / worldSize.y), Camera.kMinScale, Camera.kMaxScale);
     this.setScaleLimits(this.camScale * Camera.kMinScaleOfFit, Camera.kMaxScale);
-    this.centerVec = { x: worldSize.x / 2, y: worldSize.y / 2 };
+    this.centerVec = {
+      x: worldSize.x / 2 - (inset.left - inset.right) / 2 / this.camScale,
+      y: worldSize.y / 2 - (inset.top - inset.bottom) / 2 / this.camScale,
+    };
   }
 
   setScaleLimits(min: number, max: number): void {

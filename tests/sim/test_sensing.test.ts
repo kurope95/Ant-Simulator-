@@ -43,8 +43,8 @@ test("sensing: a rival's scent on a cell repels, so an ant keeps to its own road
   world.markers.toFood[ahead] = 0.8; // colony 0's scent on the same cell
   world.markers.toFood[cells + left] = 0.2; // the ant's own scent to the left, with no rival
   const pattern = [
-    { angleOffset: 0, distance: 10 },
-    { angleOffset: 0.5, distance: 10 },
+    { angleOffset: 0, distance: 10, slot: 0 },
+    { angleOffset: 0.5, distance: 10, slot: 1 },
   ];
   // Ahead scores 0.3 - 0.35 * 0.8 = 0.02, so the 0.2 to the left wins.
   near(senseMarkers(world, index, MarkerChannel.ToFood, pattern).targetHeading, 0.5);
@@ -74,13 +74,13 @@ test("sensing: direct sight of the nest ignores rival scent", () => {
 test("sensing: follower and explorer patterns have pinned shapes at default params", () => {
   const follower = followerPattern(defaultParams());
   assert.equal(follower.length, 25);
-  assert.deepEqual(follower[0], { angleOffset: -Math.PI / 3, distance: 6.4 });
-  assert.deepEqual(follower[24], { angleOffset: Math.PI / 3, distance: 32 });
+  assert.deepEqual(follower[0], { angleOffset: -Math.PI / 3, distance: 6.4, slot: 0 });
+  assert.deepEqual(follower[24], { angleOffset: Math.PI / 3, distance: 32, slot: 4 });
   const explorer = explorerPattern(defaultParams());
   assert.equal(explorer.length, 6);
-  assert.deepEqual(explorer[0], { angleOffset: -Math.PI / 3, distance: 16 });
-  assert.deepEqual(explorer[1], { angleOffset: 0, distance: 16 });
-  assert.deepEqual(explorer[5], { angleOffset: Math.PI / 3, distance: 32 });
+  assert.deepEqual(explorer[0], { angleOffset: -Math.PI / 3, distance: 16, slot: 0 });
+  assert.deepEqual(explorer[1], { angleOffset: 0, distance: 16, slot: 1 });
+  assert.deepEqual(explorer[5], { angleOffset: Math.PI / 3, distance: 32, slot: 2 });
 });
 
 test("sensing: the patterns follow the sensor params", () => {
@@ -129,7 +129,7 @@ test("sensing: a solid halfway point blocks the sample", () => {
   const { world, index } = makeSenseWorld();
   const cell = world.markers.cellIndex({ x: 132, y: 100 });
   world.markers.toFood[cell] = 0.8;
-  const pattern = [{ angleOffset: 0, distance: 32 }];
+  const pattern = [{ angleOffset: 0, distance: 32, slot: 0 }];
   const open = senseMarkers(world, index, MarkerChannel.ToFood, pattern);
   assert.equal(open.found, true);
 

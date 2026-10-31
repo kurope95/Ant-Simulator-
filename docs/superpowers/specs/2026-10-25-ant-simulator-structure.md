@@ -124,6 +124,7 @@ randRange(seed, uid, tick, stream, lo, hi): number        // [lo, hi)
 class FixedStepClock {
   constructor(stepSeconds: number, maxStepsPerFrame: number)
   advance(frameSeconds: number, speed: number): number   // steps to run now
+  dropBacklog(): void   // keeps under one step of backlog; the controller calls it when its per-frame step budget (kStepBudgetMs, 22 ms) runs out, so a slow world runs slower than real time instead of the frame rate collapsing
   alpha(): number                                        // [0, 1)
   stepSeconds(): number
   reset(): void
@@ -267,7 +268,7 @@ interface ChunkEvents { deposits: DepositEvent[]; degrades: DegradeEvent[]; cont
 makeChunkEvents(): ChunkEvents
 
 // sim/sensing.ts, sim/steering.ts
-interface SensorSample { angleOffset: number; distance: number }
+interface SensorSample { angleOffset: number; distance: number; slot: number }   // slot: the pattern direction; senseMarkers works out cos/sin once per slot
 followerPattern(params): readonly SensorSample[] // 25 = 5 angles x 5 distances, scaled by the sensor params
 explorerPattern(params): readonly SensorSample[] // 6 = 3 angles x 2 distances, scaled the same way; cached per params pair
 interface SenseResult { found: boolean; targetHeading: number; bestSignal: number; bestFoodSignal: number }
@@ -421,12 +422,13 @@ a colony's `id` is its index in `WorldSetup.colonies`. The maze is the only pres
 
 ```ts
 // render/camera.ts
+interface Insets { left: number; right: number; top: number; bottom: number }   // kNoInsets = all 0
 class Camera {
   static readonly kMinScale = 0.05, kMaxScale = 16     // physical pixels per world unit
   static readonly kMinScaleOfFit = 0.6                 // the zoom floor after fit() is this share of the fit scale
   setViewport(sizePx: Vec2): void; viewport(): Vec2
   setPixelRatio(ratio: number): void; pixelRatio(): number   // device pixels per CSS pixel (M1.7); minimum sprite sizes are in CSS px
-  fit(worldSize: Vec2): void
+  fit(worldSize: Vec2, inset?: Insets): void         // fits into the viewport less inset (viewport px), centred in that space
   setScaleLimits(min: number, max: number): void
   clampCenter(worldSize: Vec2): void                   // keeps the centre inside the world
   worldToScreen(p: Vec2): Vec2; screenToWorld(p: Vec2): Vec2
@@ -630,8 +632,11 @@ class BuilderModel {
   get setup(): WorldSetup; get tool(): BuilderTool; get brushRadius(): number
   get selection(): BuilderSelection | null; get dirty(): boolean
   get startingColor(): number | null; get startingAnts(): number
+  get nextColonyColor(): number   // the colour the next placed nest gets: the picked one, else the first free one
   get foodKind(): FoodKind; get foodAmount(): number
   setTool(tool): void; clearSelection(): void; setBrushRadius(radius): void
+  // applyAt with the Colony or Food tool places without selecting, so the panel keeps
+  // showing the next nest's or pile's settings; existing items change via the Select tool.
   setFoodKind(kind): void; setFoodAmount(amount): void
   setStartingAnts(count): void; setStartingColor(color): void
   setSeed(seed): boolean
@@ -658,9 +663,12 @@ interface HudState { presetName: string; seed: number; paused: boolean; speed: S
 interface RunHudHooks { onPause(): void; onSpeed(speed): void; onReset(): void;
                         onEdit(): void; onFinish(): void; onColonies(): void;
                         onSettings(): void; onFit(): void }
+// Two slim side rails (.hud__rail--left: brand, counters, colonies button, legend;
+// .hud__rail--right: pause, speeds, reset/edit/breach/finish, settings button) open
+// over the map on hover. The controller fits the map between them (kRunRailInsetCss).
 class RunHud { readonly root: HTMLElement; readonly colonyPanelHost: HTMLElement
                constructor(root, params: SimParams, hooks: RunHudHooks)
-               update(world: World, fps: number, state: HudState): void
+               update(world: World, fps: number, state: HudState, achievedSpeed?: number): void   // shows "Actual speed" only when the world runs below the chosen speed
                setZen(on: boolean): void }
 
 // ui/colony_panel.ts

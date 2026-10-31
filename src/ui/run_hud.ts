@@ -93,6 +93,8 @@ export class RunHud {
   private readonly chipDelivered: HTMLSpanElement;
   private readonly chipClock: HTMLSpanElement;
   private readonly chipFps: HTMLSpanElement;
+  private readonly chipSpeed: HTMLSpanElement;
+  private readonly speedChip: HTMLElement;
   private readonly pauseButton: HTMLButtonElement;
   private readonly pauseLabel: HTMLSpanElement;
   private readonly speedButtons: SpeedOption[] = [];
@@ -111,8 +113,11 @@ export class RunHud {
     hud.dataset.paused = "false";
     hud.append(el("div", "screen__vignette"));
 
-    const bar = el("header", "hud__bar glass");
-    const brand = el("div", "hud__brand");
+    // Two slim rails down the sides keep the full height for the map; each
+    // slides open over the map while the pointer is on it (rail--open in CSS).
+    const bar = el("nav", "hud__rail hud__rail--left glass");
+    bar.setAttribute("aria-label", "Run status");
+    const brand = el("div", "hud__brand rail__wide");
     this.presetName = el("span", "hud__preset");
     this.seedLabel = el("span", "hud__seed");
     const meta = el("div", "hud__meta");
@@ -123,13 +128,19 @@ export class RunHud {
     const ants = makeChip("Ants");
     const delivered = makeChip("Delivered");
     const clock = makeChip("Elapsed");
+    // Shown only when the world is too big to run at the chosen speed.
+    const actual = makeChip("Actual speed");
+    actual.chip.classList.add("chip--slow");
+    actual.chip.title = "The colony is too big to run at the chosen speed on this computer";
+    this.chipSpeed = actual.value;
+    this.speedChip = actual.chip;
     const fps = makeChip("FPS");
     fps.chip.classList.add("chip--fps");
     this.chipAnts = ants.value;
     this.chipDelivered = delivered.value;
     this.chipClock = clock.value;
     this.chipFps = fps.value;
-    chips.append(ants.chip, delivered.chip, clock.chip, fps.chip);
+    chips.append(ants.chip, delivered.chip, clock.chip, fps.chip, actual.chip);
 
     this.coloniesButton = button({
       label: "",
@@ -147,11 +158,13 @@ export class RunHud {
       onClick: () => hooks.onSettings(),
     });
     this.settingsButton.setAttribute("aria-pressed", "false");
+    // Each panel's button sits on the side where the panel opens.
     const tools = el("div", "hud__tools");
-    tools.append(this.coloniesButton, this.settingsButton);
-    bar.append(brand, chips, tools);
+    tools.append(this.coloniesButton);
+    const rightTools = el("div", "hud__tools hud__tools--end");
+    rightTools.append(this.settingsButton);
 
-    this.pauseLabel = el("span", undefined, "Pause");
+    this.pauseLabel = el("span", "rail__wide", "Pause");
     this.pauseButton = button({
       label: "",
       icon: "pause",
@@ -214,18 +227,10 @@ export class RunHud {
     this.colonyLegend = el("span", "hud__legend-group");
     this.legend.append(this.trailLegend, this.colonyLegend);
 
-    const dock = el("div", "hud__dock glass");
-    dock.append(
-      this.legend,
-      makeDivider(),
-      this.pauseButton,
-      speeds,
-      makeDivider(),
-      reset,
-      edit,
-      this.breachButton,
-      finish,
-    );
+    bar.append(brand, chips, tools, this.legend);
+    const dock = el("nav", "hud__rail hud__rail--right glass");
+    dock.setAttribute("aria-label", "Run controls");
+    dock.append(this.pauseButton, speeds, makeDivider(), reset, edit, this.breachButton, finish, rightTools);
 
     this.colonyPanelHost = el("aside", "hud__panel hud__panel--left");
     this.colonyPanelHost.setAttribute("aria-label", "Colonies");
@@ -243,7 +248,7 @@ export class RunHud {
     this.root = hud;
   }
 
-  update(world: World, fps: number, state: HudState): void {
+  update(world: World, fps: number, state: HudState, achievedSpeed = 0): void {
     setText(this.presetName, state.presetName);
     setText(this.seedLabel, `seed ${state.seed}`);
 
@@ -253,6 +258,10 @@ export class RunHud {
     setText(this.chipDelivered, formatInteger(delivered));
     setText(this.chipClock, formatClock(world.tick, this.simHz));
     setText(this.chipFps, formatInteger(fps));
+    const chosen = state.speed === "max" ? Infinity : state.speed;
+    const slow = !state.paused && achievedSpeed > 0 && achievedSpeed < 0.9 * chosen && state.speed !== "max";
+    this.speedChip.hidden = !slow;
+    if (slow) setText(this.chipSpeed, `${achievedSpeed < 1 ? achievedSpeed.toFixed(2) : achievedSpeed.toFixed(1)}×`);
 
     this.root.dataset.paused = String(state.paused);
     setText(this.pauseLabel, state.paused ? "Play" : "Pause");

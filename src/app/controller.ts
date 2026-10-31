@@ -1,6 +1,6 @@
 import { FixedStepClock } from "../core/fixed_step.js";
 import type { Vec2 } from "../core/vec2.js";
-import { Camera } from "../render/camera.js";
+import { Camera, kNoInsets, type Insets } from "../render/camera.js";
 import { GlRenderer } from "../render/gl_renderer.js";
 import { themeForPreset, type Theme } from "../render/theme.js";
 import { cycleHeatmap, defaultViewSettings, type ViewSettings } from "../render/view_settings.js";
@@ -51,7 +51,14 @@ import {
   type SessionState,
 } from "./session.js";
 
+// Room the run-screen map leaves for the side rails (12 px margin + 64 px rail +
+// 12 px gap, matching --rail-w in styles.css) and a small edge margin.
+const kRunRailInsetCss = 88;
+const kRunEdgeInsetCss = 12;
 const kMaxFrameSeconds = 0.25;
+// Most of a frame the simulation may use; past it the frame draws and the
+// rest of the steps are dropped, so a big colony slows the ants, not the picture.
+const kStepBudgetMs = 22;
 const kSelectionRadiusPx = 24;
 // How close a click must land to pick an ant, in CSS pixels; the drag slop is the same 4 px the camera uses.
 const kPickRadiusPx = 12;
@@ -129,6 +136,8 @@ export class AppController {
   private breached = false;
   private breachRequested = false;
   private frameMs = 1000 / 60;
+  // Simulated seconds per real second actually achieved, smoothed.
+  private achievedSpeed = 1;
   private lastTime = 0;
   private rafId = 0;
   private viewportW = 0;
@@ -391,7 +400,7 @@ export class AppController {
   private applyFit(): void {
     const world = this.activeWorld;
     if (world === null) return;
-    this.camera.fit(world.size);
+    this.camera.fit(world.size, this.runInsets());
     if (this.session.screen === Screen.Run && !this.zoomApplied) {
       this.zoomApplied = true;
       if (this.options.zoom !== 1) {
@@ -403,6 +412,16 @@ export class AppController {
       if (this.options.focus !== null) this.camera.centerOn(this.options.focus);
     }
     this.needsFit = false;
+  }
+
+  // On the run screen the map fits between the two collapsed side rails (they
+  // open over the map on hover); everywhere else, and in zen mode, it uses the
+  // whole canvas.
+  private runInsets(): Insets {
+    if (this.session.screen !== Screen.Run || this.session.zen) return kNoInsets;
+    const side = kRunRailInsetCss * this.camera.pixelRatio();
+    const edge = kRunEdgeInsetCss * this.camera.pixelRatio();
+    return { left: side, right: side, top: edge, bottom: edge };
   }
 
   private presetName(): string {
@@ -832,7 +851,18 @@ export class AppController {
         steps += this.stepRequests;
         this.stepRequests = 0;
       }
-      for (let i = 0; i < steps; i++) stepWorld(this.runWorld);
+      const started = performance.now();
+      let done = 0;
+      while (done < steps) {
+        stepWorld(this.runWorld);
+        done += 1;
+        if (performance.now() - started > kStepBudgetMs) break;
+      }
+      if (done < steps) this.clock.dropBacklog();
+      if (!this.session.paused && frameSeconds > 0) {
+        const speed = (done * this.clock.stepSeconds()) / frameSeconds;
+        this.achievedSpeed = this.achievedSpeed * 0.9 + speed * 0.1;
+      }
       alpha = this.session.paused ? 1 : this.clock.alpha();
     }
     if (this.session.screen === Screen.Run) this.applyScheduledBreach();
@@ -865,7 +895,7 @@ export class AppController {
         settingsOpen: this.settingsOpen,
         breachAvailable: this.setup.breach.length > 0,
       };
-      this.runHud.update(this.runWorld, 1000 / Math.max(this.frameMs, 0.001), state);
+      this.runHud.update(this.runWorld, 1000 / Math.max(this.frameMs, 0.001), state, this.achievedSpeed);
     }
   };
 

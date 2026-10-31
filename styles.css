@@ -22,6 +22,10 @@
   --slow: 360ms;
   --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --font-display: Georgia, "Times New Roman", serif;
+  /* Run-screen side rails: collapsed width and open width. kRunRailInsetCss in
+     src/app/controller.ts leaves 12 + --rail-w + 12 px for each. */
+  --rail-w: 64px;
+  --rail-open: 232px;
 }
 
 *,
@@ -312,6 +316,10 @@ textarea {
   background: rgba(235, 241, 229, 0.035);
 }
 
+.chip--slow .chip__value {
+  color: var(--accent);
+}
+
 .chip__label {
   font-size: 10px;
   font-weight: 600;
@@ -446,18 +454,57 @@ textarea {
   display: none;
 }
 
-.hud__bar {
+/* Two slim rails down the sides leave the full height to the map. Collapsed
+   they show icons and numbers only; with the pointer on one (or keyboard focus inside
+   it) it slides open over the map and shows the labels. */
+.hud__rail {
   position: absolute;
-  top: 16px;
-  left: 16px;
-  right: 16px;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: 16px;
-  height: 62px;
-  padding: 0 12px 0 20px;
+  top: 12px;
+  bottom: 12px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: var(--rail-w);
+  padding: 10px 7px;
+  overflow: hidden auto;
+  scrollbar-width: none;
   pointer-events: auto;
+  transition: width var(--base) var(--ease);
+}
+
+.hud__rail--left {
+  left: 12px;
+}
+
+.hud__rail--right {
+  right: 12px;
+}
+
+.hud__rail:hover,
+.hud__rail:has(:focus-visible) {
+  width: var(--rail-open);
+}
+
+.hud__rail:not(:hover):not(:has(:focus-visible)) .rail__wide,
+.hud__rail:not(:hover):not(:has(:focus-visible)) .button:has(> .icon) > span,
+.hud__rail:not(:hover):not(:has(:focus-visible)) .chip__label,
+.hud__rail:not(:hover):not(:has(:focus-visible)) .legend > span:not(.legend__dot),
+.hud__rail:not(:hover):not(:has(:focus-visible)) .hud__legend-note {
+  display: none;
+}
+
+.hud__rail .button {
+  width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.hud__rail:not(:hover):not(:has(:focus-visible)) .button {
+  justify-content: center;
+  padding: 0;
 }
 
 .hud__brand {
@@ -488,36 +535,60 @@ textarea {
 
 .hud__chips {
   display: flex;
-  gap: 8px;
-  justify-self: center;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hud__rail .chip {
+  min-width: 0;
+  padding: 6px 4px;
+  align-items: center;
+  text-align: center;
+}
+
+.hud__rail:is(:hover, :has(:focus-visible)) .chip {
+  align-items: flex-start;
+  padding: 6px 10px;
+  text-align: left;
 }
 
 .hud__tools {
   display: flex;
-  gap: 8px;
-  justify-self: end;
-}
-
-.hud__dock {
-  position: absolute;
-  left: 50%;
-  bottom: 18px;
-  display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 8px;
-  max-width: calc(100% - 32px);
-  padding: 8px;
-  pointer-events: auto;
-  transform: translateX(-50%);
+}
+
+.hud__tools--end {
+  margin-top: auto;
+}
+
+.hud__rail:is(:hover, :has(:focus-visible)) .hud__tools {
+  flex-direction: row;
 }
 
 .hud__legend {
   display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 0 10px 0 6px;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: auto;
+  padding: 8px 4px 2px;
   font-size: 11px;
   color: var(--muted);
+}
+
+.hud__rail:not(:hover):not(:has(:focus-visible)) .hud__legend {
+  align-items: center;
+}
+
+.hud__rail .segmented {
+  flex-direction: column;
+}
+
+.hud__rail .segmented button {
+  min-width: 0;
+  width: 100%;
+  padding: 0;
 }
 
 .legend {
@@ -539,13 +610,14 @@ textarea {
 }
 
 .hud__legend-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
 }
 
 .hud__legend-note {
   opacity: 0.8;
+  line-height: 1.4;
 }
 
 .legend__dot--food {
@@ -555,13 +627,13 @@ textarea {
 
 .hud__divider {
   flex: none;
-  width: 1px;
-  height: 22px;
+  width: 100%;
+  height: 1px;
   background: var(--stroke);
 }
 
-.hud__dock .button--primary {
-  min-width: 104px;
+.hud__rail .button--primary {
+  min-height: 44px;
 }
 
 .hud .icon-play {
@@ -578,8 +650,8 @@ textarea {
 
 .hud__panel {
   position: absolute;
-  top: 94px;
-  bottom: 104px;
+  top: 12px;
+  bottom: 12px;
   pointer-events: auto;
   overflow-y: auto;
   scrollbar-width: thin;
@@ -587,12 +659,12 @@ textarea {
 }
 
 .hud__panel--left {
-  left: 16px;
+  left: calc(24px + var(--rail-w));
   width: 288px;
 }
 
 .hud__panel--right {
-  right: 16px;
+  right: calc(24px + var(--rail-w));
   width: 360px;
 }
 
@@ -1550,12 +1622,6 @@ body.headless #log {
     display: none;
   }
 
-  .hud__dock {
-    flex-wrap: wrap;
-    justify-content: center;
-    max-width: 760px;
-  }
-
   .builder__rail {
     width: 58px;
     padding: 8px 4px;
@@ -1590,10 +1656,6 @@ body.headless #log {
 }
 
 @media (max-width: 940px) {
-  .hud__legend {
-    display: none;
-  }
-
   .home__last {
     display: none;
   }
@@ -1653,29 +1715,6 @@ body.headless #log {
     max-height: 40%;
   }
 
-  .hud__bar {
-    grid-template-columns: auto 1fr auto;
-    gap: 10px;
-    height: auto;
-    min-height: 56px;
-    padding: 10px 12px;
-  }
-
-  .hud__meta,
-  .chip__label {
-    display: none;
-  }
-
-  .hud__dock {
-    flex-wrap: wrap;
-    justify-content: center;
-    width: calc(100% - 32px);
-  }
-
-  .hud__divider {
-    display: none;
-  }
-
   .wordmark {
     font-size: 11px;
     letter-spacing: 0.16em;
@@ -1683,10 +1722,6 @@ body.headless #log {
 }
 
 @media (max-width: 560px) {
-  .hud__chips {
-    display: none;
-  }
-
   .home__bar {
     padding: 18px;
   }

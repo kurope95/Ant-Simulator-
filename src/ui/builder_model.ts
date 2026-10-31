@@ -1,5 +1,5 @@
 import type { Vec2 } from "../core/vec2.js";
-import { COLONY_PALETTE } from "../sim/palette.js";
+import { COLONY_PALETTE, firstFreeColor } from "../sim/palette.js";
 import { loadPreset, presetInfo } from "../sim/presets.js";
 import {
   FoodKind,
@@ -138,6 +138,11 @@ export class BuilderModel {
     return this.nextColor;
   }
 
+  // The colour the next nest placed will get: the one picked, or the first free one.
+  get nextColonyColor(): number {
+    return this.nextColor ?? firstFreeColor(this.currentSetup.colonies.map((colony) => colony.color));
+  }
+
   get startingAnts(): number {
     return this.nextAnts;
   }
@@ -237,13 +242,16 @@ export class BuilderModel {
           this.nextAnts,
         );
         if (colony === null) return false;
-        this.currentSelection = { kind: "colony", id: colony.id };
+        // Placing does not select: the panel keeps showing the settings for the
+        // next nest, so a colour picked now applies to the nest placed next.
+        // Existing nests are changed with the Select tool.
+        this.currentSelection = null;
         this.currentDirty = true;
         return true;
       }
       case BuilderTool.Food: {
-        const food = addFood(this.currentSetup, p, this.nextFoodAmount, this.nextFoodKind);
-        this.currentSelection = { kind: "food", id: food.uid };
+        addFood(this.currentSetup, p, this.nextFoodAmount, this.nextFoodKind);
+        this.currentSelection = null;
         this.currentDirty = true;
         return true;
       }
