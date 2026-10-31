@@ -167,7 +167,10 @@ validate(params: SimParams): string | null       // null when valid, else a spec
 enum Phase { SpatialHash, Think, Events, Collisions, Removals, Decay, Stats }
 const kPhaseCount = 7
 phaseName(phase): string                          // "spatial_hash", "think", ...
-interface PhaseTimings { ms: number[]; totalMs: number }
+enum SubPhase { Avoidance, ThinkAnts, CollideHash, CollideAnts, CollideWalls, CollideVelocity }  // M4 tuning
+const kSubPhaseCount = 6
+subPhaseName(sub): string                        // "avoidance", "think_ants", "collide_hash", ...
+interface PhaseTimings { ms: number[]; sub: number[]; totalMs: number }
 emptyPhaseTimings(): PhaseTimings
 // stepWorld runs all seven; SpatialHash rebuilds the ant bucket grid every tick.
 
@@ -321,7 +324,7 @@ makeAvoidScratch(): AvoidScratch
 
 // sim/collide.ts
 resolveAntOverlaps(world, scratch: CollisionScratch): void  // Jacobi PBD pass over ant pairs (M4)
-exemptAtNest(world, index): boolean      // inside own nest radius × nestExemptFactor (M4)
+exemptAtNest(world, index): boolean      // inside own nest radius × nestExemptFactor (M4); PBD caches it per pass in CollisionScratch.exempt
 makeCollisionScratch(): CollisionScratch
 resolveObstacles(world): void              // pushes ants out of Rock/Water, both axes; teleports ants buried in a solid interior to the nearest open cell (energy 0 when none is found)
 slideHeadingAlongNormal(ants, index, nx, ny): void  // removes the into-wall part of a heading
@@ -734,7 +737,7 @@ crowdMetrics(world): CrowdMetrics         // { lanes, overlap, inCorridor }
 interface BenchReport { preset: string; ticks: number; threads: number; ants: number;
                         phases: SampleSummary[]; total: SampleSummary;
                         ticksPerSec: number; antUpdatesPerSec: number }
-formatBenchReport(report): string
+formatBenchReport(report): string        // optional subPhases rows print after the totals (M4 tuning)
 runBench(options): number              // prints the report; returns the exit code
 
 // app/reach.ts

@@ -13,7 +13,7 @@ const kMaxSeed = 0xffffffff;
 const kMaxTicks = 10_000_000;
 const kMinZoom = 0.1;
 const kMaxZoom = 16;
-const kPresets = ["meadow", "dunes", "creek", "boulder", "maze", "blank"];
+const kPresets = ["meadow", "dunes", "creek", "boulder", "maze", "highway", "blank"];
 const kScreens = ["home", "builder", "run"];
 
 class UsageError extends Error {}
