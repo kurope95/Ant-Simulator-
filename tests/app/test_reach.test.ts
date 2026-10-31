@@ -92,6 +92,8 @@ test("reach: 1000 u delivers", { timeout: 120_000 }, () => {
   const params = defaultParams();
   params.warriorRatio = 0;
   params.foodGrowthRate = 0;
+  params.foodSproutRate = 0;
+  params.foodSpreadRate = 0;
   const world = worldFromSetup(setup, params);
   for (let tick = 1; tick <= 7200; tick++) stepWorld(world);
   const delivered = world.colonies[0].deliveredTotal;

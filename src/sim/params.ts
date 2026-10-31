@@ -63,6 +63,12 @@ export interface SimParams {
   // How fast a living food pile grows, as a share of its own size per minute
   // (logistic, capped at its starting size); 0 never grows (spec §4.4).
   foodGrowthRate: number;
+  // New food (spec §4.4): a full living pile seeds a new one nearby foodSpreadRate
+  // times a minute (less when depleted); foodSproutRate new piles a minute sprout
+  // anywhere on the map; at most foodPileCap living piles at once.
+  foodSpreadRate: number;
+  foodSproutRate: number;
+  foodPileCap: number;
   // Life cycle (spec §5.6). Off: free meals at home, no old age, a birth the moment food allows.
   lifeCycle: boolean;
   // Average life of an ant in seconds, varied per ant by ±lifespanJitter.
@@ -226,6 +232,9 @@ export function defaultParams(): SimParams {
     massCarrying: 3,
     spawnCost: 5,
     foodGrowthRate: 0.4,
+    foodSpreadRate: 0.5,
+    foodSproutRate: 0.3,
+    foodPileCap: 24,
     lifeCycle: true,
     antLifespan: 600,
     lifespanJitter: 0.25,

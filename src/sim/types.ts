@@ -44,4 +44,6 @@ export enum RandStream {
   Warrior,
   Boldness,
   LeaveNest,
+  FoodSprout,
+  FoodSproutPlace,
 }
