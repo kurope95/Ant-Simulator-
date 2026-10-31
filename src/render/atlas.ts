@@ -10,6 +10,9 @@ export interface AtlasFrame {
 export interface AtlasFrames {
   antBody(colony: number, variant: number): AtlasFrame;
   antSmall(colony: number, variant: number): AtlasFrame;
+  // Warriors (fight branch): a big armoured head and long jaws.
+  antWarrior(colony: number, variant: number): AtlasFrame;
+  antWarriorSmall(colony: number, variant: number): AtlasFrame;
   food(kind: FoodKind, variant: number): AtlasFrame;
   nest(colony: number): AtlasFrame;
 }
@@ -35,6 +38,14 @@ export function makeAtlasFrames(): AtlasFrames {
     antSmall(colony: number, variant: number): AtlasFrame {
       const slot = wrap(colony, 8) * 2 + wrap(variant, 2);
       return frame(slot * 128, 64, 128, 64);
+    },
+    antWarrior(colony: number, variant: number): AtlasFrame {
+      const slot = wrap(colony, 8) * 2 + wrap(variant, 2);
+      return frame(slot * 128, 448, 128, 64);
+    },
+    antWarriorSmall(colony: number, variant: number): AtlasFrame {
+      const slot = wrap(colony, 8) * 2 + wrap(variant, 2);
+      return frame(slot * 128, 512, 128, 64);
     },
     food(kind: FoodKind, variant: number): AtlasFrame {
       const slot = wrap(kind, 3) * 4 + wrap(variant, 4);

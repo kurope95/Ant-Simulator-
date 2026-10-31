@@ -198,6 +198,7 @@ class SpatialHash {   // counting sort over occupied cells only; O(ants) per bui
   countWithin(x, y, radius, xs, ys, exclude): number  // excludes one index (the asker itself)
   queryWithin(x, y, radius, xs, ys, exclude, out: Uint32Array): number  // writes neighbour indices into out, up to out.length (M4)
   nearestWithin(x, y, radius, xs, ys, exclude, k, outIdx, outDistSq): number  // k nearest, sorted by distance then index (M4)
+  countGroups(x, y, radius, xs, ys, exclude, group: Uint8Array, own, out: Int32Array): void  // [same, other, nearest other or -1] within radius (fight branch look-around)
 }
 
 // sim/stuck.ts
@@ -326,7 +327,7 @@ nearestFreePoint(grid, pos, maxCells): Vec2 | null // BFS from the cell holding 
 
 // sim/conflict.ts (fight branch; specs/2026-10-31-colony-conflict-design.md)
 interface LookAround { active; sisters, rivals: Uint16Array; rival, foe: Int32Array;
-                       rivalX, rivalY, foeX, foeY: Float32Array; idx; d2 }   // per-ant start-of-tick scratch
+                       rivalX, rivalY, foeX, foeY: Float32Array; counts: Int32Array }   // per-ant start-of-tick scratch
 makeLookAround(): LookAround
 computeLookAround(world, look): void   // pre-pass in Think after avoidance; skipped with < 2 colonies
 courage(world, ant): number            // 1 + boldStress × stress − fearDamp × fear, in 0..2

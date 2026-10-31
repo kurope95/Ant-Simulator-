@@ -9,7 +9,6 @@ import type { World } from "./world.js";
 // The look-around pass reads start-of-tick state for every ant and writes only
 // scratch slots, so the fight decisions in Think do not depend on ant order.
 
-const kNeighbours = 24;
 // A trail counts on a cell from this strength, for "own ground" and "contested".
 const kGroundMin = 0.05;
 // Seconds after a bite during which a death counts as killed in a fight.
@@ -27,8 +26,7 @@ export interface LookAround {
   foe: Int32Array;
   foeX: Float32Array;
   foeY: Float32Array;
-  idx: Uint32Array;
-  d2: Float32Array;
+  counts: Int32Array;
 }
 
 export function makeLookAround(): LookAround {
@@ -42,8 +40,7 @@ export function makeLookAround(): LookAround {
     foe: new Int32Array(0),
     foeX: new Float32Array(0),
     foeY: new Float32Array(0),
-    idx: new Uint32Array(kNeighbours),
-    d2: new Float32Array(kNeighbours),
+    counts: new Int32Array(3),
   };
 }
 
@@ -70,31 +67,11 @@ export function computeLookAround(world: World, look: LookAround): void {
   ensure(look, n);
   const { posX, posY, colony } = ants;
   for (let i = 0; i < n; i++) {
-    const k = world.spatialHash.nearestWithin(
-      posX[i],
-      posY[i],
-      params.oddsRadius,
-      posX,
-      posY,
-      i,
-      kNeighbours,
-      look.idx,
-      look.d2,
-    );
-    let sisters = 0;
-    let rivals = 0;
-    let rival = -1;
-    for (let m = 0; m < k; m++) {
-      const j = look.idx[m];
-      if (colony[j] === colony[i]) {
-        sisters += 1;
-      } else {
-        rivals += 1;
-        if (rival < 0) rival = j; // sorted by distance, so the first is the nearest
-      }
-    }
-    look.sisters[i] = sisters;
-    look.rivals[i] = rivals;
+    // A headcount and the nearest rival are all the fight rules need.
+    world.spatialHash.countGroups(posX[i], posY[i], params.oddsRadius, posX, posY, i, colony, colony[i], look.counts);
+    const rival = look.counts[2];
+    look.sisters[i] = Math.min(look.counts[0], 0xffff);
+    look.rivals[i] = Math.min(look.counts[1], 0xffff);
     look.rival[i] = rival;
     look.rivalX[i] = rival >= 0 ? posX[rival] : 0;
     look.rivalY[i] = rival >= 0 ? posY[rival] : 0;

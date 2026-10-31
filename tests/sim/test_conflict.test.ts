@@ -8,6 +8,7 @@ import { MarkerChannel, battleAt, deposit, homeAt } from "../../src/sim/marker_g
 import { defaultParams } from "../../src/sim/params.js";
 import { loadPreset } from "../../src/sim/presets.js";
 import { worldFromSetup } from "../../src/sim/setup_apply.js";
+import { followerPattern, senseMarkers } from "../../src/sim/sensing.js";
 import { spawnAtNest } from "../../src/sim/tick.js";
 import { AntRole, AntState, Combat, kNoFoe } from "../../src/sim/types.js";
 import { makeWorld, stepWorld, type World } from "../../src/sim/world.js";
@@ -222,4 +223,27 @@ test("conflict: two colonies replay identically from the same seed", { timeout: 
   }
   assert.equal(worldChecksum(a), worldChecksum(b));
   assert.equal(a.colonies[0].diedInFight + a.colonies[1].diedInFight, b.colonies[0].diedInFight + b.colonies[1].diedInFight);
+});
+
+test("conflict: a guarding warrior walks the column's edge, a worker its middle", () => {
+  const world = twoColonies();
+  const grid = world.markers;
+  // A food column along y = 300: strongest in the middle, fading to nothing 40 u out.
+  for (let x = 0; x < 1000; x += grid.cell) {
+    for (let y = 260; y <= 340; y += grid.cell) {
+      const cell = grid.cellIndex({ x, y });
+      grid.toFood[cell] = Math.max(0, 1 - Math.abs(y - 300) / 40);
+    }
+  }
+  const warrior = addAnt(world, 0, { x: 500, y: 300 }, AntRole.Warrior, 0);
+  const worker = addAnt(world, 0, { x: 500, y: 300 }, AntRole.Follower, 0);
+  const pattern = followerPattern(world.params);
+  const guard = senseMarkers(world, warrior, MarkerChannel.ToFood, pattern);
+  const work = senseMarkers(world, worker, MarkerChannel.ToFood, pattern);
+  assert.ok(guard.found && work.found);
+  assert.ok(Math.abs(work.targetHeading) < 0.05, `worker heading ${work.targetHeading}`);
+  assert.ok(Math.abs(guard.targetHeading) > 0.2, `warrior heading ${guard.targetHeading}`);
+  world.params.guardEdge = 0;
+  const centre = senseMarkers(world, warrior, MarkerChannel.ToFood, pattern);
+  assert.ok(Math.abs(centre.targetHeading) < 0.05, "guardEdge 0 walks the middle");
 });

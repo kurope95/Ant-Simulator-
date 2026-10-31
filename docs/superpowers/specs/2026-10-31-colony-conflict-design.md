@@ -28,7 +28,8 @@ Signs it works, on a normal two-colony run:
 
 ### 3. Warriors
 - `WARRIOR_RATIO` (10%) of newborn and starting ants are warriors (stream `Warrior`). They are drawn larger, bite harder (`WARRIOR_DAMAGE` ×3) and take less damage (`WARRIOR_ARMOR` ×2).
-- **Guarding:** a warrior walks its colony's food trails out and back (the busiest trails are the strongest, so that is where warriors gather). It never picks up food and lays no trail. At a food pile it turns for home; at the nest it turns out again.
+- **Guarding:** a warrior walks its colony's food trails out and back (the busiest trails are the strongest, so that is where warriors gather), along the column's **edge**: of the trail cells it can smell it heads for those near `GUARD_EDGE` (0.5) of the strongest, keeping to one flank (by uid), so both sides of a column are guarded (Marek, 2026-10-31). It never picks up food and lays no trail. At a food pile it turns for home; at the nest it turns out again.
+- **Look:** warriors have their own sprite: a smaller gaster, a broad armoured head and long curved jaws, drawn 1.7x a worker's size.
 - Warriors are pulled hard by their colony's battle smell; workers only weakly (§5).
 
 ### 4. How fights start, grow and stop
@@ -47,7 +48,7 @@ Each ant looks at its surroundings at the start of the tick (a pass before Think
 **Fighting.** Fighters close in and bite (`BITE_DPS`, scaled by role). Every fighter leaves **battle smell** on its cell.
 
 **Battle smell.** A third scent channel per colony. It fades fast (`BATTLE_HALF_LIFE` 8 s, so it is gone about 30 s after the fighting stops), it does not count for ground ownership and it is not erased by rivals.
-- A warrior answers it if its own boldness passes `WARRIOR_CALL × courage`: only part of the warriors come; the rest keep guarding.
+- A warrior answers it if its own boldness passes `WARRIOR_CALL × courage` (0.35: most warriors stay on guard) and it can smell the battle from where it is: only part of the warriors come; the rest keep guarding.
 - A worker heading out answers it only rarely (`WORKER_CALL × courage`).
 - Other workers treat it as danger: it lowers the score of their trail cells (`BATTLE_AVERSION`, less when the colony is stressed), so they take another way if there is one and push through if there is not.
 
@@ -66,7 +67,8 @@ Each ant carries two feelings, 0 to 1, built only from what it experiences itsel
 - **Courage** = `1 + BOLD_STRESS × stress − FEAR_DAMP × fear`, kept within 0–2. Courage scales who answers the call, who engages, and how bad the odds must be before an ant runs. Hunger makes a colony bold; losses make it careful; the two are kept apart so a starving colony does not fight to the last ant.
 
 ### 7. On screen
-- Warriors are drawn 1.35× larger.
+- Warriors are drawn 1.7× larger, with their own big-headed, long-jawed sprite.
+- The settings drawer has a Fighting group: warriors among newborns, warriors answering a fight, guards keep to column edge, workers that fight back, bite strength, retreat below health, battle smell half-life.
 - Bodies are drawn as dark ants lying where they fell; a carried body is drawn at the mandibles.
 - Zoomed in, a wounded ant shows a small health bar above it.
 - The inspector shows role, health, wounds, stress, fear and fight state.
@@ -87,7 +89,8 @@ Each ant carries two feelings, 0 to 1, built only from what it experiences itsel
 | `standoffTime` / `retreatTime` | 3 / 6 s | |
 | `retreatOdds` / `workerOdds` | 1.5 / 2 | |
 | `retreatHealth` | 0.35 | share of 100 |
-| `warriorCall` / `workerCall` / `workerEngage` | 0.6 / 0.1 / 0.5 | shares of ants that respond |
+| `warriorCall` / `workerCall` / `workerEngage` | 0.35 / 0.1 / 0.5 | shares of ants that respond |
+| `guardEdge` | 0.5 | where a guard walks across a column: 0 middle, toward 1 the faint edge |
 | `battleHalfLife` / `battleAversion` / `battleDetectMin` | 8 s / 0.5 / 0.05 | |
 | `woundHeal` / `nestHeal` | 0.3 / 3 per s | |
 | `corpseFood` / `corpseLifetime` | 2 / 120 s | |

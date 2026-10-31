@@ -34,6 +34,8 @@ export function paintSpriteAtlas(): SpriteAtlas {
     for (let variant = 0; variant < 2; variant++) {
       paintAnt(ctx, frames.antBody(colony, variant), colony, variant, false);
       paintAnt(ctx, frames.antSmall(colony, variant), colony, variant, true);
+      paintWarrior(ctx, frames.antWarrior(colony, variant), colony, variant, false);
+      paintWarrior(ctx, frames.antWarriorSmall(colony, variant), colony, variant, true);
     }
     paintNest(ctx, frames.nest(colony), colony);
   }
@@ -156,6 +158,76 @@ function paintAnt(
   ctx.lineTo(tipTop.x, tipTop.y);
   ctx.moveTo(elbowBottom.x, elbowBottom.y);
   ctx.lineTo(tipBottom.x, tipBottom.y);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+// A warrior, like a soldier ant: a smaller gaster, a broad armoured head that
+// is a large share of the body, and long, thick, curved jaws reaching forward.
+// Same frame size and leg hips as a worker, so legs and placement line up.
+function paintWarrior(
+  ctx: CanvasRenderingContext2D,
+  frame: AtlasFrame,
+  colony: number,
+  variant: number,
+  small: boolean,
+): void {
+  const colors: AntColors = antColors(colonyHex(colony));
+  const gasterWide = variant === 1 ? 1.04 : 1;
+  const shell = small ? colors.gaster : colors.body;
+  const outline = small ? 2 : 3;
+
+  ctx.save();
+  ctx.translate(frame.x, frame.y);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  if (small) paintBakedLegs(ctx, colors.outline);
+  else paintHipJoints(ctx, colors.outline);
+
+  fillSegment(ctx, 32, 32, 20 * gasterWide, 13, colors.gaster, colors.outline, outline);
+  fillSegment(ctx, 55, 32, 6, 5, shell, colors.outline, outline);
+  fillSegment(ctx, 72, 32, 15, 10, shell, colors.outline, outline);
+  // The head: broad, squarish and darker, with a crease down the middle.
+  fillSegment(ctx, 98, 32, 17, 17, colors.outline, colors.outline, outline);
+  fillSegment(ctx, 98, 32, 15, 15, shell, colors.outline, 1);
+  ctx.strokeStyle = colors.outline;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(86, 32);
+  ctx.lineTo(108, 32);
+  ctx.stroke();
+
+  ctx.fillStyle = colors.sheen;
+  ellipse(ctx, 30, 27, 13 * gasterWide, 5);
+  ctx.fill();
+  ellipse(ctx, 71, 27, 9, 4);
+  ctx.fill();
+  ellipse(ctx, 96, 24, 9, 5);
+  ctx.fill();
+
+  // Jaws: long, thick sickles curving in toward each other, tips almost crossing.
+  ctx.fillStyle = colors.outline;
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(110, 32 + side * 11);
+    ctx.quadraticCurveTo(124, 32 + side * 14, 127, 32 + side * 2);
+    ctx.quadraticCurveTo(120, 32 + side * 7, 112, 32 + side * 5);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Short, thick antennae.
+  ctx.strokeStyle = colors.outline;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(106, 22);
+  ctx.lineTo(112, 12);
+  ctx.lineTo(120, 9);
+  ctx.moveTo(106, 42);
+  ctx.lineTo(112, 52);
+  ctx.lineTo(120, 55);
   ctx.stroke();
 
   ctx.restore();

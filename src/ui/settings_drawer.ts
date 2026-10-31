@@ -37,6 +37,7 @@ const kGroups: readonly GroupParts[] = [
   { key: "movement", title: "Movement" },
   { key: "trails", title: "Trails" },
   { key: "colony", title: "Colony" },
+  { key: "fighting", title: "Fighting" },
 ];
 
 const kTrailModes: readonly HeatmapMode[] = [

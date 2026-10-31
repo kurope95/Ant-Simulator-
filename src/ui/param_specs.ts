@@ -14,9 +14,16 @@ export type ParamKey =
   | "spawnCost"
   | "foreignErasureFactor"
   | "foreignAversion"
-  | "tHorizon";
+  | "tHorizon"
+  | "warriorRatio"
+  | "warriorCall"
+  | "guardEdge"
+  | "workerEngage"
+  | "biteDps"
+  | "retreatHealth"
+  | "battleHalfLife";
 
-export type ParamGroup = "movement" | "trails" | "colony";
+export type ParamGroup = "movement" | "trails" | "colony" | "fighting";
 
 export interface ParamSpec {
   key: ParamKey;
@@ -47,6 +54,14 @@ const kSpecs: readonly ParamSpec[] = [
   { key: "degradeTime", label: "Degrade after", unit: "s", min: 0.5, max: 10, step: 0.5, scale: 1, group: "trails" },
   { key: "energyBurn", label: "Energy burn", unit: "/s", min: 0.1, max: 5, step: 0.1, scale: 1, group: "colony" },
   { key: "spawnCost", label: "Spawn cost", unit: "food", min: 1, max: 20, step: 1, scale: 1, group: "colony" },
+  // Colony conflict (fight branch). Warrior share applies to ants born from now on.
+  { key: "warriorRatio", label: "Warriors among newborns", unit: "%", min: 0, max: 40, step: 1, scale: 100, group: "fighting" },
+  { key: "warriorCall", label: "Warriors answering a fight", unit: "%", min: 0, max: 100, step: 5, scale: 100, group: "fighting" },
+  { key: "guardEdge", label: "Guards keep to column edge", unit: "", min: 0, max: 0.9, step: 0.05, scale: 1, group: "fighting", digits: 2 },
+  { key: "workerEngage", label: "Workers that fight back", unit: "%", min: 0, max: 100, step: 5, scale: 100, group: "fighting" },
+  { key: "biteDps", label: "Bite strength", unit: "/s", min: 1, max: 40, step: 1, scale: 1, group: "fighting" },
+  { key: "retreatHealth", label: "Retreat below health", unit: "%", min: 0, max: 90, step: 5, scale: 100, group: "fighting" },
+  { key: "battleHalfLife", label: "Battle smell half-life", unit: "s", min: 1, max: 30, step: 0.5, scale: 1, group: "fighting" },
 ];
 
 export function paramSpecs(): readonly ParamSpec[] {

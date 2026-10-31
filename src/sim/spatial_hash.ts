@@ -110,6 +110,60 @@ export class SpatialHash {
     return found;
   }
 
+  // Counts the ants within `radius` of (x, y), except `exclude`, whose
+  // group[i] equals `own` and those whose group differs, and finds the nearest
+  // of the latter (ties: lower index). Writes [same, other, nearest or -1] to out.
+  countGroups(
+    x: number,
+    y: number,
+    radius: number,
+    xs: Float32Array,
+    ys: Float32Array,
+    exclude: number,
+    group: Uint8Array,
+    own: number,
+    out: Int32Array,
+  ): void {
+    let same = 0;
+    let other = 0;
+    let nearest = -1;
+    let nearestD2 = Infinity;
+    if (radius >= 0) {
+      const minCol = this.clampCol(Math.floor((x - radius) / this.cell));
+      const maxCol = this.clampCol(Math.floor((x + radius) / this.cell));
+      const minRow = this.clampRow(Math.floor((y - radius) / this.cell));
+      const maxRow = this.clampRow(Math.floor((y + radius) / this.cell));
+      const radiusSq = radius * radius;
+      for (let row = minRow; row <= maxRow; row++) {
+        const base = row * this.cols;
+        for (let col = minCol; col <= maxCol; col++) {
+          const c = base + col;
+          const end = this.cellEnd[c];
+          for (let k = this.cellStart[c]; k < end; k++) {
+            const i = this.items[k];
+            if (i === exclude) continue;
+            const dx = xs[i] - x;
+            const dy = ys[i] - y;
+            const d2 = dx * dx + dy * dy;
+            if (d2 > radiusSq) continue;
+            if (group[i] === own) {
+              same += 1;
+            } else {
+              other += 1;
+              if (d2 < nearestD2 || (d2 === nearestD2 && i < nearest)) {
+                nearestD2 = d2;
+                nearest = i;
+              }
+            }
+          }
+        }
+      }
+    }
+    out[0] = same;
+    out[1] = other;
+    out[2] = nearest;
+  }
+
   // Writes the indices of every ant within `radius` of (x, y), except `exclude`,
   // into `out`. Returns how many were written (at most out.length).
   queryWithin(

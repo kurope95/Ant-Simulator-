@@ -96,6 +96,12 @@ function rivalStrength(grid: MarkerGrid, colony: number, cell: number): number {
 // Math.cos of the same sum as before, so results are bit-identical; there are
 // just 5 directions instead of 25 samples to work out.
 const kMaxSlots = 8;
+// Candidate samples a guarding warrior chooses among (conflict design §3).
+const kMaxCandidates = 32;
+const candSignal = new Float64Array(kMaxCandidates);
+const candX = new Float64Array(kMaxCandidates);
+const candY = new Float64Array(kMaxCandidates);
+const candOffset = new Float64Array(kMaxCandidates);
 const slotCos = new Float64Array(kMaxSlots);
 const slotSin = new Float64Array(kMaxSlots);
 const slotDone = new Uint8Array(kMaxSlots);
@@ -139,6 +145,11 @@ export function senseMarkers(
   const gridW = grid.width;
   const gridH = grid.height;
   slotDone.fill(0);
+  // A warrior on a trail heads for the column's edge, not its middle: it
+  // collects the samples and picks one near guardEdge of the strongest.
+  const guard =
+    !battleChannel && world.params.conflict && world.params.guardEdge > 0 && ants.role[ant] === AntRole.Warrior;
+  let candidates = 0;
 
   for (const sample of pattern) {
     const slot = sample.slot;
@@ -170,12 +181,44 @@ export function senseMarkers(
     // Without own scent the signal cannot be positive, so the rival lookup is skipped.
     let signal = contested && own > 0 ? own - aversion * rivalStrength(grid, colony, cell) : own;
     if (danger > 0 && own > 0) signal -= danger * grid.battle[index];
+    if (guard) {
+      if (signal > 0 && candidates < kMaxCandidates) {
+        candSignal[candidates] = signal;
+        candX[candidates] = x;
+        candY[candidates] = y;
+        candOffset[candidates] = sample.angleOffset;
+        candidates += 1;
+      }
+      continue;
+    }
     const bias = Math.abs(sample.angleOffset);
     if (signal > 0 && (signal > bestSignal || (signal === bestSignal && bias < bestBias))) {
       bestSignal = signal;
       bestBias = bias;
       bestX = x;
       bestY = y;
+    }
+  }
+
+  if (guard && candidates > 0) {
+    let peak = 0;
+    for (let c = 0; c < candidates; c++) if (candSignal[c] > peak) peak = candSignal[c];
+    const target = peak * world.params.guardEdge;
+    // Each warrior keeps to one flank, so both edges of a column are covered.
+    const side = (ants.uid[ant] & 1) === 0 ? 1 : -1;
+    let bestScore = -Infinity;
+    for (let c = 0; c < candidates; c++) {
+      const s = candSignal[c];
+      let score = s <= target ? s : 2 * target - s;
+      if (candOffset[c] * side > 0) score += 0.1 * peak;
+      const bias = Math.abs(candOffset[c]);
+      if (score > bestScore || (score === bestScore && bias < bestBias)) {
+        bestScore = score;
+        bestBias = bias;
+        bestSignal = s;
+        bestX = candX[c];
+        bestY = candY[c];
+      }
     }
   }
 

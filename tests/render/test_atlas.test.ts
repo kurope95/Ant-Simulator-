@@ -6,7 +6,9 @@ import { FoodKind } from "../../src/sim/setup.js";
 test("atlas: all frames fit inside the page and never overlap", () => {
   const frames = makeAtlasFrames();
   const list: AtlasFrame[] = [];
-  for (let c = 0; c < 8; c++) for (let v = 0; v < 2; v++) list.push(frames.antBody(c, v), frames.antSmall(c, v));
+  for (let c = 0; c < 8; c++) for (let v = 0; v < 2; v++) {
+    list.push(frames.antBody(c, v), frames.antSmall(c, v), frames.antWarrior(c, v), frames.antWarriorSmall(c, v));
+  }
   for (let k = 0; k < 3; k++) for (let v = 0; v < 4; v++) list.push(frames.food(k as FoodKind, v));
   for (let c = 0; c < 8; c++) list.push(frames.nest(c));
   for (const f of list) {

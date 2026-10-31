@@ -21,7 +21,7 @@ const kWhite = rgba(255, 255, 255, 255);
 const kLegColor = rgba(36, 27, 20, 255);
 // Colony conflict (design §7): warriors are drawn larger; bodies are dark ants
 // lying where they fell; a wounded ant shows a small health bar when zoomed in.
-const kWarriorScale = 1.35;
+const kWarriorScale = 1.7;
 const kCorpseTint = rgba(70, 62, 56, 230);
 const kCarriedCorpseSize = 0.75;
 const kHealthBarBack = rgba(0, 0, 0, 170);
@@ -40,8 +40,10 @@ function bodyFrame(
   colonyId: number,
   variant: number,
   animated: boolean,
+  warrior = false,
 ): AtlasFrame {
   const color = colorIndexFor(world, colonyId);
+  if (warrior) return animated ? frames.antWarrior(color, variant) : frames.antWarriorSmall(color, variant);
   return animated ? frames.antBody(color, variant) : frames.antSmall(color, variant);
 }
 
@@ -84,7 +86,7 @@ export function buildAnts(
     );
     if (!contains(view, worldP)) continue;
     const p = camera.worldToScreen(worldP);
-    const frame = bodyFrame(frames, world, ants.colony[i], ants.uid[i] % 2, animated);
+    const frame = bodyFrame(frames, world, ants.colony[i], ants.uid[i] % 2, animated, ants.role[i] === AntRole.Warrior);
     const size = sizeOf(i);
     shadows.addFrame(
       frame,
@@ -108,7 +110,7 @@ export function buildAnts(
     const heading = ants.heading[i];
     const dir = fromAngle(heading);
     const variant = ants.uid[i] % 2;
-    const frame = bodyFrame(frames, world, ants.colony[i], variant, animated);
+    const frame = bodyFrame(frames, world, ants.colony[i], variant, animated, ants.role[i] === AntRole.Warrior);
     const size = sizeOf(i);
     sprites.addFrame(frame, p.x, p.y, widthPx * size, heightPx * size, heading, kWhite);
 

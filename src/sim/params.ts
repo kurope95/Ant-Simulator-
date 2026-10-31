@@ -82,6 +82,8 @@ export interface SimParams {
   workerOdds: number;
   retreatHealth: number;
   warriorCall: number;
+  // Where a guarding warrior walks across a column: 0 its middle, toward 1 its faint edge.
+  guardEdge: number;
   workerCall: number;
   workerEngage: number;
   battleHalfLife: number;
@@ -203,7 +205,8 @@ export function defaultParams(): SimParams {
     retreatOdds: 1.5,
     workerOdds: 2,
     retreatHealth: 0.35,
-    warriorCall: 0.6,
+    warriorCall: 0.35,
+    guardEdge: 0.5,
     workerCall: 0.1,
     workerEngage: 0.5,
     battleHalfLife: 8,
