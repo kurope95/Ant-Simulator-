@@ -56,9 +56,12 @@ import {
 const kRunRailInsetCss = 88;
 const kRunEdgeInsetCss = 12;
 const kMaxFrameSeconds = 0.25;
-// Most of a frame the simulation may use; past it the frame draws and the
+// Most of a frame the simulation may use at 1x; past it the frame draws and the
 // rest of the steps are dropped, so a big colony slows the ants, not the picture.
+// Faster speeds may use proportionally more of each frame (fast-forward trades
+// frame rate for speed), up to kMaxStepBudgetMs; Max takes all of that.
 const kStepBudgetMs = 22;
+const kMaxStepBudgetMs = 90;
 const kSelectionRadiusPx = 24;
 // How close a click must land to pick an ant, in CSS pixels; the drag slop is the same 4 px the camera uses.
 const kPickRadiusPx = 12;
@@ -823,6 +826,10 @@ export class AppController {
     return this.camera.screenToWorld(this.screenPoint(event));
   }
 
+  private stepBudgetMs(setting: SpeedSetting): number {
+    return setting === "max" ? kMaxStepBudgetMs : Math.min(kMaxStepBudgetMs, kStepBudgetMs * setting);
+  }
+
   private speedSteps(setting: SpeedSetting): number {
     return setting === "max" ? 1000 : setting;
   }
@@ -864,12 +871,13 @@ export class AppController {
         steps += this.stepRequests;
         this.stepRequests = 0;
       }
+      const budget = this.stepBudgetMs(this.session.speed);
       const started = performance.now();
       let done = 0;
       while (done < steps) {
         stepWorld(this.runWorld);
         done += 1;
-        if (performance.now() - started > kStepBudgetMs) break;
+        if (performance.now() - started > budget) break;
       }
       if (done < steps) this.clock.dropBacklog();
       if (!this.session.paused && frameSeconds > 0) {
