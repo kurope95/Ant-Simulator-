@@ -10,7 +10,8 @@ import { legPose, type GaitTracker } from "./legs.js";
 import type { SpriteBatch } from "./sprite_batch.js";
 
 const kCullMargin = 32;
-const kMinLengthPx = 1.5;
+// Ants are never drawn shorter than this many CSS pixels, so crowds read as coloured streams.
+const kMinAntCssPx = 4;
 const kCarriedFoodOffset = 0.55;
 const kCarriedFoodSize = 0.45;
 const kLegWidthPx = 1.5;
@@ -50,7 +51,7 @@ export function buildAnts(
   const ants = world.ants;
   const params = world.params;
   const scale = camera.scale();
-  const lengthPx = Math.max(params.antLength * scale, kMinLengthPx);
+  const lengthPx = Math.max(params.antLength * scale, kMinAntCssPx * camera.pixelRatio());
   const widthPx = Math.max(1.25 * lengthPx, 1);
   const heightPx = Math.max(0.6 * lengthPx, 1);
   const animated = lengthPx >= params.legsMinPx;

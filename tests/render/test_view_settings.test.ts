@@ -9,12 +9,12 @@ import {
 
 test("view settings: defaults and the heatmap cycle", () => {
   const settings = defaultViewSettings();
-  assert.equal(settings.heatmap, HeatmapMode.DualChannel);
+  assert.equal(settings.heatmap, HeatmapMode.ColonyColor);
   assert.equal(settings.showAnts, true);
   assert.equal(settings.showGrid, false);
   assert.equal(settings.showHash, false);
   assert.equal(settings.showColliders, false);
-  assert.equal(cycleHeatmap(HeatmapMode.Off), HeatmapMode.DualChannel);
-  assert.equal(cycleHeatmap(HeatmapMode.DualChannel), HeatmapMode.ColonyColor);
-  assert.equal(cycleHeatmap(HeatmapMode.ColonyColor), HeatmapMode.Off);
+  assert.equal(cycleHeatmap(HeatmapMode.Off), HeatmapMode.ColonyColor);
+  assert.equal(cycleHeatmap(HeatmapMode.DualChannel), HeatmapMode.Off);
+  assert.equal(cycleHeatmap(HeatmapMode.ColonyColor), HeatmapMode.DualChannel);
 });

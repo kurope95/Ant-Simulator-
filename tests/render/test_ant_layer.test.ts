@@ -103,6 +103,22 @@ test("ants: off-screen ants are culled and extreme scales stay finite", () => {
   for (const v of legs.vertexData()) assert.ok(Number.isFinite(v));
 });
 
+test("ants: never shorter than 4 CSS px, so crowds stay readable at fit zoom", () => {
+  const { world, camera } = layerWorld();
+  camera.setPixelRatio(2);
+  camera.setViewport({ x: 8, y: 6 }); // fit clamps to 0.05 px per unit, so the ant is far below 4 CSS px
+  camera.fit(world.size);
+  world.ants.heading[0] = 0;
+  const sprites = new SpriteBatch();
+  const gait = new GaitTracker();
+  gait.update(world);
+  buildAnts(sprites, new GeometryBatch(), new SpriteBatch(), world, camera, 0, makeAtlasFrames(), gait);
+  const data = sprites.vertexData();
+  const xs = [data[0], data[8], data[16], data[24]];
+  // 4 CSS px at 2x is 8 device px long, and the sprite is 1.25 times as wide as it is long.
+  near(Math.max(...xs) - Math.min(...xs), 1.25 * 8);
+});
+
 test("ants: body interpolation uses the alpha between prev and pos", () => {
   const { world, camera } = layerWorld();
   world.ants.prevX[0] = 100;

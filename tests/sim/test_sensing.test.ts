@@ -30,6 +30,47 @@ function makeSenseWorld(): { world: World; index: number } {
   return { world, index };
 }
 
+test("sensing: a rival's scent on a cell repels, so an ant keeps to its own road", () => {
+  const params = defaultParams();
+  const world = makeWorld(params, 1);
+  world.colonies.push(makeColony(0, { x: 0, y: 0 }), makeColony(1, { x: 0, y: 0 }));
+  world.markers.resize(world.size, world.markers.cell, 2);
+  const index = world.ants.spawn({ pos: { x: 100, y: 100 }, heading: 0, colony: 1 }, 7, params.antSpeed, params);
+  const cells = world.markers.width * world.markers.height;
+  const ahead = world.markers.cellIndex({ x: 110, y: 100 });
+  const left = world.markers.cellIndex({ x: 100 + 10 * Math.cos(0.5), y: 100 + 10 * Math.sin(0.5) });
+  world.markers.toFood[cells + ahead] = 0.3; // the ant's own scent straight ahead
+  world.markers.toFood[ahead] = 0.8; // colony 0's scent on the same cell
+  world.markers.toFood[cells + left] = 0.2; // the ant's own scent to the left, with no rival
+  const pattern = [
+    { angleOffset: 0, distance: 10 },
+    { angleOffset: 0.5, distance: 10 },
+  ];
+  // Ahead scores 0.3 - 0.35 * 0.8 = 0.02, so the 0.2 to the left wins.
+  near(senseMarkers(world, index, MarkerChannel.ToFood, pattern).targetHeading, 0.5);
+  world.params.foreignAversion = 0;
+  near(senseMarkers(world, index, MarkerChannel.ToFood, pattern).targetHeading, 0);
+});
+
+test("sensing: direct sight of the nest ignores rival scent", () => {
+  const params = defaultParams();
+  const world = makeWorld(params, 1);
+  world.colonies.push(makeColony(0, { x: 120, y: 100 }), makeColony(1, { x: 0, y: 0 }));
+  world.markers.resize(world.size, world.markers.cell, 2);
+  world.params.foreignAversion = 1;
+  const index = world.ants.spawn(
+    { pos: { x: 100, y: 100 }, heading: 0, colony: 0, state: AntState.ReturningFood },
+    7,
+    params.antSpeed,
+    params,
+  );
+  const cell = world.markers.cellIndex({ x: 100, y: 100 });
+  world.markers.toHome[world.markers.width * world.markers.height + cell] = 1;
+  const sight = directSightHeading(world, index);
+  assert.ok(sight !== null);
+  near(sight, 0);
+});
+
 test("sensing: follower and explorer patterns have pinned shapes at default params", () => {
   const follower = followerPattern(defaultParams());
   assert.equal(follower.length, 25);

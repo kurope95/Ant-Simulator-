@@ -14,7 +14,7 @@ export interface ViewSettings {
 
 export function defaultViewSettings(): ViewSettings {
   return {
-    heatmap: HeatmapMode.DualChannel,
+    heatmap: HeatmapMode.ColonyColor,
     showAnts: true,
     showGrid: false,
     showHash: false,
@@ -22,7 +22,9 @@ export function defaultViewSettings(): ViewSettings {
   };
 }
 
+// M cycles Colonies → Trail type → Off → Colonies.
 export function cycleHeatmap(mode: HeatmapMode): HeatmapMode {
-  const next = mode + 1;
-  return next > HeatmapMode.ColonyColor ? HeatmapMode.Off : next;
+  if (mode === HeatmapMode.ColonyColor) return HeatmapMode.DualChannel;
+  if (mode === HeatmapMode.DualChannel) return HeatmapMode.Off;
+  return HeatmapMode.ColonyColor;
 }

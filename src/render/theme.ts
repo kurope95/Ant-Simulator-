@@ -69,6 +69,15 @@ function makeTheme(
   };
 }
 
+// Luminous trail colours, one per palette entry in src/sim/palette.ts. Trails read these, not the
+// darker colony colours, so a trail stays bright on dark ground.
+const kTrailHex = [0xff7a57, 0xffc94d, 0x6aa8ff, 0x7fe08a, 0xc48cff, 0xff8fb0, 0x4fe3cc, 0xf2ead8];
+
+export function trailHex(paletteIndex: number): number {
+  const index = Number.isFinite(paletteIndex) && paletteIndex > 0 ? Math.trunc(paletteIndex) : 0;
+  return kTrailHex[index % kTrailHex.length];
+}
+
 export function meadowTheme(): Theme {
   return makeTheme("Meadow", 0x0b100d, rgba(0x59, 0x5f, 0x59, 15), 0x2e3d2a, 0xa8d86b, {
     groundA: 0x141c12,

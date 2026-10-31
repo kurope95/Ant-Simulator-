@@ -11,7 +11,9 @@ export type ParamKey =
   | "emissionDecay"
   | "degradeTime"
   | "energyBurn"
-  | "spawnCost";
+  | "spawnCost"
+  | "foreignErasureFactor"
+  | "foreignAversion";
 
 export type ParamGroup = "movement" | "trails" | "colony";
 
@@ -37,6 +39,8 @@ const kSpecs: readonly ParamSpec[] = [
   { key: "markerHalfLife", label: "Trail half-life", unit: "s", min: 1, max: 30, step: 0.1, scale: 1, group: "trails" },
   { key: "emissionDecay", label: "Trail fade with distance", unit: "", min: 0.005, max: 0.2, step: 0.005, scale: 1, group: "trails", digits: 3 },
   { key: "markerDropDist", label: "Mark every", unit: "u", min: 2, max: 24, step: 1, scale: 1, group: "trails" },
+  { key: "foreignErasureFactor", label: "Territory pressure", unit: "", min: 0, max: 1, step: 0.05, scale: 1, group: "trails", digits: 2 },
+  { key: "foreignAversion", label: "Foreign scent aversion", unit: "", min: 0, max: 1, step: 0.05, scale: 1, group: "trails", digits: 2 },
   // degradeTime stays in SimParams but has no live control yet; the design
   // spec schedules it for M5.
   { key: "energyBurn", label: "Energy burn", unit: "/s", min: 0.1, max: 5, step: 0.1, scale: 1, group: "colony" },

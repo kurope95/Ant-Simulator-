@@ -31,10 +31,10 @@ function assertFiniteWorld(world: World): void {
   }
 }
 
-test("param specs: ten live controls with valid ranges and defaults", () => {
+test("param specs: twelve live controls with valid ranges and defaults", () => {
   const specs = paramSpecs();
-  assert.equal(specs.length, 10);
-  assert.equal(new Set(specs.map((spec) => spec.key)).size, 10);
+  assert.equal(specs.length, 12);
+  assert.equal(new Set(specs.map((spec) => spec.key)).size, 12);
   // The live degradeTime control is scheduled for M5 (design spec section 15).
   assert.equal(specs.some((spec) => spec.key === "degradeTime"), false);
   const defaults = defaultParams();

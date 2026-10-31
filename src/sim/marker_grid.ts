@@ -107,7 +107,10 @@ export function degrade(
   values[index] *= factor;
 }
 
-export function decayMarkers(grid: MarkerGrid, factor: number, eps: number): void {
+// Each colony's strength on the cell being recomputed by decayMarkers: the larger of its two channels.
+let strengthScratch = new Float64Array(0);
+
+export function decayMarkers(grid: MarkerGrid, factor: number, eps: number, flipMargin: number): void {
   const cells = grid.width * grid.height;
   const { colonies, owner, toHome, toFood } = grid;
   if (colonies === 1) {
@@ -124,9 +127,11 @@ export function decayMarkers(grid: MarkerGrid, factor: number, eps: number): voi
     }
     return;
   }
+  if (strengthScratch.length < colonies) strengthScratch = new Float64Array(colonies);
+  const strength = strengthScratch;
   for (let cell = 0; cell < cells; cell++) {
-    let best = 0;
-    let bestColony = kNoOwner;
+    let strongest = 0;
+    let strongestColony = kNoOwner;
     for (let colony = 0; colony < colonies; colony++) {
       const index = colony * cells + cell;
       let home = toHome[index] * factor;
@@ -135,12 +140,29 @@ export function decayMarkers(grid: MarkerGrid, factor: number, eps: number): voi
       if (food < eps) food = 0;
       toHome[index] = home;
       toFood[index] = food;
-      const strongest = home > food ? home : food;
-      if (strongest > best) {
-        best = strongest;
-        bestColony = colony;
+      const value = home > food ? home : food;
+      strength[colony] = value;
+      if (value > strongest) {
+        strongest = value;
+        strongestColony = colony;
       }
     }
-    owner[cell] = bestColony;
+    // Ownership has hysteresis: the owner keeps the cell until a rival is at least
+    // flipMargin times its strength. An unowned cell, or one whose owner has faded
+    // to nothing, goes to the strongest colony.
+    let next = strongestColony;
+    const current = owner[cell];
+    if (current !== kNoOwner && current < colonies && strength[current] > 0) {
+      let rival = 0;
+      let rivalColony = kNoOwner;
+      for (let colony = 0; colony < colonies; colony++) {
+        if (colony !== current && strength[colony] > rival) {
+          rival = strength[colony];
+          rivalColony = colony;
+        }
+      }
+      next = rivalColony !== kNoOwner && rival >= flipMargin * strength[current] ? rivalColony : current;
+    }
+    owner[cell] = next;
   }
 }

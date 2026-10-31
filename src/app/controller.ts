@@ -1072,6 +1072,7 @@ export class AppController {
 
   private updateCamera(world: World, seconds: number): void {
     const pan = this.panKeyDirection();
+    this.camera.setPixelRatio(this.dpr());
     this.cameraInput.setPixelRatio(this.dpr());
     this.cameraInput.setKeyPan(pan.x, pan.y);
     this.cameraInput.update(seconds);

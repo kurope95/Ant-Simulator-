@@ -112,6 +112,7 @@ smoothstep(t): number
 // core/color.ts
 interface Rgba8 { r: number; g: number; b: number; a: number }   // 0-255 each
 rgba(r, g, b, a?): Rgba8; rgb(hex: number): Rgba8
+mixHex(a: number, b: number, t: number): number   // 0xRRGGBB mix: t = 0 gives a, t = 1 gives b (M1.7)
 
 // core/rng.ts
 mix32(x: number): number                                  // 32-bit avalanche finalizer, uint32 result
@@ -225,7 +226,7 @@ foodAt(grid, colony, cell): number
 emissionStrength(timeSinceAnchor, params): number
 deposit(grid, cell, colony, channel, strength, params): void
 degrade(grid, cell, colony, channel, factor): void     // the depositor's own layer only
-decayMarkers(grid, factor, eps): void                  // all layers, then recompute owner
+decayMarkers(grid, factor, eps, flipMargin): void     // all layers, then recompute owner with hysteresis (M1.7)
 
 // sim/food.ts
 interface FoodAmount { pos: Vec2; amount: number; infinite: boolean }
@@ -257,7 +258,7 @@ interface SensorSample { angleOffset: number; distance: number }
 followerPattern(params): readonly SensorSample[] // 25 = 5 angles x 5 distances, scaled by the sensor params
 explorerPattern(params): readonly SensorSample[] // 6 = 3 angles x 2 distances, scaled the same way; cached per params pair
 interface SenseResult { found: boolean; targetHeading: number; bestSignal: number; bestFoodSignal: number }
-senseMarkers(world, ant, channel, pattern): SenseResult
+senseMarkers(world, ant, channel, pattern): SenseResult   // score = own signal − foreignAversion × strongest rival (M1.7)
 interface FallbackChoice { heading: number; clearAhead: boolean }
 chooseFallback(world, ant): FallbackChoice   // wander heading if its look-ahead is free, else the longest free ray
 fallbackHeading(world, ant): number          // chooseFallback(...).heading
@@ -375,6 +376,7 @@ class Camera {
   static readonly kMinScale = 0.05, kMaxScale = 16     // physical pixels per world unit
   static readonly kMinScaleOfFit = 0.6                 // the zoom floor after fit() is this share of the fit scale
   setViewport(sizePx: Vec2): void; viewport(): Vec2
+  setPixelRatio(ratio: number): void; pixelRatio(): number   // device pixels per CSS pixel (M1.7); minimum sprite sizes are in CSS px
   fit(worldSize: Vec2): void
   setScaleLimits(min: number, max: number): void
   clampCenter(worldSize: Vec2): void                   // keeps the centre inside the world
@@ -414,6 +416,10 @@ const kAtlasWidth = 2048, kAtlasHeight = 1024
 makeAtlasFrames(): AtlasFrames
 // antBody 128x64, antSmall 128x64, food 64x64, nest 256x256; 8 colony slots, 4 food variants.
 
+// render/ant_colors.ts (M1.7)
+interface AntColors { gaster: string; body: string; outline: string; sheen: string }   // CSS colours for an ant sprite
+antColors(colonyHex: number): AntColors   // gaster = the colony colour; body = that colour 55% toward #1a120c
+
 // render/sprite_atlas.ts
 interface SpriteAtlas { canvas: HTMLCanvasElement; frames: AtlasFrames }
 paintSpriteAtlas(): SpriteAtlas          // Canvas2D, runs in the browser only
@@ -447,17 +453,18 @@ interface Theme { name: string; outside: Rgba8; ground: Rgba8; grid: Rgba8; bord
                   speckle: Rgba8 }   // terrain colours per preset (M1.6); rock and water are two tones each
 meadowTheme(): Theme; dunesTheme(): Theme; creekTheme(): Theme; boulderTheme(): Theme; blankTheme(): Theme
 themeForPreset(presetId): Theme        // unknown ids fall back to Meadow
+trailHex(paletteIndex): number         // luminous trail colour for a palette entry (M1.7); the index wraps at 8
 // heatHome #4FC3B0, heatFood #F0B45E, heatAlpha 0.62 for every theme.
 
 // render/view_settings.ts
 enum HeatmapMode { Off, DualChannel, ColonyColor }
 interface ViewSettings { heatmap: HeatmapMode; showAnts: boolean; showGrid: boolean;
                          showHash: boolean; showColliders: boolean }
-defaultViewSettings(): ViewSettings    // DualChannel, ants on, grid off
-cycleHeatmap(mode): HeatmapMode        // Off -> DualChannel -> ColonyColor -> Off
+defaultViewSettings(): ViewSettings    // ColonyColor, ants on, grid off (M1.7)
+cycleHeatmap(mode): HeatmapMode        // ColonyColor -> DualChannel -> Off -> ColonyColor (M1.7)
 
 // render/heatmap.ts
-fillHeatmapRgba(grid: MarkerGrid, mode, theme, rgbaOut: Uint8Array): void   // pure, testable
+fillHeatmapRgba(grid: MarkerGrid, mode, theme, colorByColony: readonly number[], rgbaOut: Uint8Array): void   // pure, testable; colorByColony[id] = palette index (M1.7)
 
 // render/food_layout.ts
 const kFoodPerPiece = 100, kMaxFoodPieces = 48
@@ -469,7 +476,7 @@ foodPieces(uid, pos, radius, amount, infinite): FoodPiece[]   // inner-first gol
 buildFood(sprites: SpriteBatch, shadows: SpriteBatch, world, camera, frames: AtlasFrames): void
 
 // render/nest_layer.ts
-buildNests(sprites: SpriteBatch, world, camera, frames: AtlasFrames): void
+buildNests(sprites: SpriteBatch, world, camera, frames: AtlasFrames): void   // never smaller than 28 CSS px (M1.7)
 
 // render/legs.ts
 const kGaitStride = 24
@@ -486,7 +493,7 @@ terrainLook(theme, worldSize, cell, time): TerrainLook; terrainUniforms(gl, prog
 
 // render/ant_layer.ts
 buildAnts(sprites: SpriteBatch, legs: GeometryBatch, shadows: SpriteBatch, world, camera, alpha,
-          frames: AtlasFrames, gait: GaitTracker): void
+          frames: AtlasFrames, gait: GaitTracker): void   // ants are never shorter than 4 CSS px (M1.7)
 
 // render/world_view.ts
 interface WorldRenderCache { atlasTexture: WebGLTexture | null; terrainTexture: WebGLTexture | null;
@@ -526,17 +533,18 @@ interface ColonyRow { id: number; name: string; colorIndex: number; hex: number;
 formatInteger(value): string
 formatClock(ticks, simHz): string        // mm:ss
 speedLabel(speed): string                // "1×", "Max"
-trailModeLabel(mode): string             // "Off", "Trails", "Colonies"
+trailModeLabel(mode): string             // "Off", "Trail type", "Colonies"
 colonyRows(world): ColonyRow[]
 
 // ui/param_specs.ts
 type ParamKey = "antSpeed" | "turnRate" | "sensorRadius" | "sensorHalfFovDeg" | "explorerRatio"
               | "markerHalfLife" | "markerDropDist" | "emissionDecay" | "degradeTime"
+              | "foreignErasureFactor" | "foreignAversion"   // M1.7
               | "energyBurn" | "spawnCost"
 type ParamGroup = "movement" | "trails" | "colony"
 interface ParamSpec { key: ParamKey; label: string; unit: string; min: number; max: number;
                       step: number; scale: number; group: ParamGroup; digits?: number }
-paramSpecs(): readonly ParamSpec[]      // ten live rows; degradeTime typed but not shown until M5
+paramSpecs(): readonly ParamSpec[]      // twelve live rows (M1.7 adds foreignErasureFactor and foreignAversion); degradeTime typed but not shown until M5
 specValue(spec, params): number
 applySpecValue(spec, params, displayValue): number
 formatSpecValue(spec, displayValue): string
@@ -779,6 +787,7 @@ tests/render/ test_ant_layer.test.ts   [M1.5]  test_atlas.test.ts        [M1.5]
               test_layers.test.ts      [M1.5] test_legs.test.ts         [M1.5]
               test_sprite_batch.test.ts [M1.5] test_theme.test.ts       [M1.5]
               test_view_settings.test.ts
+              test_ant_colors.test.ts [M1.7]
 tests/ui/     test_builder_model.test.ts [M1.5] test_param_specs.test.ts
               test_view_models.test.ts   [M1.5]
 tests/app/    test_attract.test.ts [M1.5] test_bench.test.ts [M1.5]

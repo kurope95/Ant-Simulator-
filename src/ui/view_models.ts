@@ -35,7 +35,7 @@ export function speedLabel(speed: SpeedSetting): string {
 export function trailModeLabel(mode: HeatmapMode): string {
   if (mode === HeatmapMode.Off) return "Off";
   if (mode === HeatmapMode.ColonyColor) return "Colonies";
-  return "Trails";
+  return "Trail type";
 }
 
 export function colonyRows(world: World): ColonyRow[] {

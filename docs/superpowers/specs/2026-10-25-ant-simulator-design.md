@@ -111,7 +111,7 @@ The layers are colony-major: `index = k × cells + cell`. A derived `int8 owner`
 
 Two colonies' trails therefore coexist in one cell *(M2: with a single-owner cell, the first colony to touch a cell locked every rival out of it, and the contest preset's second colony delivered nothing)*.
 
-**Decay (every tick).** Multiply both channels of every layer by `f = 2^(−dt / MARKER_HALF_LIFE)`. Values below `MARKER_EPS` become 0. After decaying, `owner` is recomputed as the argmax over colonies of `max(to_home, to_food)`, or −1 when every layer is 0.
+**Decay (every tick).** Multiply both channels of every layer by `f = 2^(−dt / MARKER_HALF_LIFE)`. Values below `MARKER_EPS` become 0. After decaying, `owner` is recomputed with hysteresis (M1.7): the current owner keeps the cell until a rival's `max(to_home, to_food)` is at least `FLIP_MARGIN` (1.25) times the owner's. An unowned cell, or one whose owner has faded to 0, takes the strongest colony. It is −1 when every layer is 0.
 - The default half-life is 15 s, raised from 7.7 s in the M2 retune so a carrier's trail survives a long trip, then trimmed from 20 s at review so an exhausted source's trail clears `MARKER_DETECT_MIN` within 150 s (a full-strength deposit reaches 2^(−150/15) ≈ 0.00098). 7.7 s matched the original "×0.9985 per tick" at 60 Hz, but stays the same at any frame rate. *(Fix: the original per-tick factor made trails fade twice as fast at 120 FPS.)*
 
 **Emission strength.** A deposit has strength `e = exp(−time_since_anchor × EMISSION_DECAY)`.
@@ -139,6 +139,11 @@ Exhausted ants still move their drop point, because stuck detection (§5.5) reli
 2. If the territory rule is on (`TERRITORY_RULE`, the default), multiply every *other* colony's `to_home` and `to_food` at `c` by `1 − e × FOREIGN_ERASURE_FACTOR`. Territory wears rival trails down; it never locks them out.
 
 This rule is implemented in `src/sim/marker_grid.ts` (`deposit`). The single-owner rule of M1.5 was replaced in M2 (§15).
+
+**Scent competition (M1.7).** In plain words: every cell holds each colony's scent. Laying scent weakens rivals' scent on that cell, so the colony that walks there more wins it. A cell changes owner only once the challenger is clearly stronger. Ants dislike rivals' scent, so they keep to their own roads unless they've taken the road over. Three rules make that happen:
+1. **Contest on deposit:** the territory rule above, with `FOREIGN_ERASURE_FACTOR` exposed in Settings as *Territory pressure* (0–1, default 0.5).
+2. **Ownership with hysteresis:** `FLIP_MARGIN` 1.25, applied in the owner recompute of the decay step above.
+3. **Foreign scent deters:** `FOREIGN_AVERSION` 0.35, exposed in Settings as *Foreign scent aversion* (0–1). In `senseMarkers` (§5.3), a sample's score is its own channel minus `FOREIGN_AVERSION` times the strongest rival's `max(to_home, to_food)` on that cell. A score of 0 or less does not count as found. Direct sight of food or the nest ignores this.
 
 **Erasing dead-end trails.** While an ant's `degrade_timer > 0`, each time it enters a new marker cell whose own layer still holds the channel it is following, it multiplies *that channel of its own layer* by `DEGRADE_FACTOR` (0.5). It follows `to_food` while FORAGING and `to_home` otherwise. Rival layers are never erased this way.
 
@@ -335,12 +340,12 @@ Each frame draws these layers in order, with one draw call per layer:
 
 1. **Terrain.** A procedural fragment shader over one obstacle mask: one RGBA texel per obstacle cell (R rock, G water, B sand, A mud; linear, mipmapped). It draws two-tone ground with grain, rocks with a lit rim and a shadow to the bottom-right, water darker in the middle with a pale shoreline and a slow shimmer, and sand and mud with ripples. Edges stay sharp at any zoom. The mask is rebuilt only when the map changes. At 2880 × 1620 on the laptop GPU the shader pass costs 3.9 ms (mixed map), 2.4 ms (open ground) and 7.0 ms (rock everywhere). A frame therefore draws the terrain into a screen-size copy and reuses it until the view, mask, theme or water shimmer (10 Hz) changes.
 2. **Marker heatmap**, if enabled, at marker-grid resolution: one world-sized quad with linear filtering.
-   - **Trails (default):** `to_home` teal `#4FC3B0`, `to_food` amber `#F0B45E`. The colour is the pure hue mixed by food share, and the alpha is `0.62 × min(1, √(home + food))`, so a faint trail keeps its hue. The layer draws additively, so trails glow on dark ground. The run HUD names both channels.
-   - **Colonies:** the owner's palette colour, alpha `0.62 × √(stronger channel)`.
+   - **Colonies (default, M1.7):** each cell takes its owner's luminous trail colour, the palette entry lifted for dark ground (`trailHex`). Food trails are bright and home trails dim (60%), in the same hue. Where a rival is as strong as the owner, the colour greys by up to 55%, so hues never mix. Alpha `0.62 × min(1, √total)`, where `total` sums every colony's `max(to_home, to_food)`. The run legend lists each colony and the bright/dim key.
+   - **Trail type:** `to_home` teal `#4FC3B0`, `to_food` amber `#F0B45E`. The colour is the pure hue mixed by food share, and the alpha is `0.62 × min(1, √(home + food))`, so a faint trail keeps its hue. The layer draws additively, so trails glow on dark ground. The run legend names both channels.
    - **Off.**
-3. **Food and nests.** Food shows 1–48 sprite pieces (Seeds, Berries or Leaves). Each colony's anthill is a 256 px sprite drawn at `2.6 × nest radius`: a lit mound with soil scattered round it, a dark entrance and a colony-coloured ring at the foot. It is rotated deterministically per colony id and tinted grey when extinct (the ring stays).
+3. **Food and nests.** Food shows 1–48 sprite pieces (Seeds, Berries or Leaves). Each colony's anthill is a 256 px sprite drawn at `2.6 × nest radius`: a lit mound with soil scattered round it, a dark entrance, a colony-coloured ring at the foot (0.14 r wide at 95% alpha), and a colony-colour glow out to 1.5 r. The crest is tinted 20% toward the colony colour (M1.7). A nest is never smaller than 28 CSS px. It is rotated deterministically per colony id and tinted grey when extinct (the ring stays).
 4. **Shadows.** Ant bodies and food pieces cast a shadow: the sim's `shadowOffsetX/Y` (2, 3) in world units times the zoom, 35% black, in one shadows batch drawn beneath the nests, food, legs and ants.
-5. **Ants.** A procedural 2048×1024 atlas: a brown-black body with the colony colour as an accent on the thorax sheen, one gaster band, the antenna tips and the leg joints. Two variants per colony, body facing +x, drawn as screen-aligned quads at interpolated positions. Carried food is a seed sprite at the mandibles.
+5. **Ants.** A procedural atlas. The gaster is the colony colour. The waist, thorax and head take it 55% toward dark brown, and a white sheen marks the carapace (`antColors`, M1.7). Legs and joints stay dark; the antenna tips take the colony colour. A small ant is one colour all over, with a 2 px outline. An ant is never drawn shorter than 4 CSS px. Two variants per colony, body facing +x, drawn as screen-aligned quads at interpolated positions. Carried food is a seed sprite at the mandibles.
 6. **Legs.** Screen-space two-segment legs, six per ant, animated when the ant is at least `LEGS_MIN_PX` (18) physical pixels long; below that a baked-leg frame is used (§8).
 7. **Debug overlays:** for the selected ant its sample points, rays and avoidance neighbours; spatial hash and border colliders in developer mode.
 8. **The DOM UI overlay.**
@@ -374,7 +379,7 @@ The UI is a DOM overlay (HTML/CSS) above the WebGL canvas, crisp at any display 
 
 - **Home.** Wordmark, a serif headline over a dimmed live meadow, **Quick start** and **New world**, and a Last run card (preset, elapsed time, delivered, ants, colonies).
 - **Builder.** A left tool rail (Select, Colony, Food, Rock, Water, Sand, Mud, Erase), a glass left panel (five preset cards, seed with roll, selected colony's palette colour and starting ants, selected food kind and amount, brush radius), the canvas with a 6% 120 u grid and a brush ring, a top bar with Back and Start, and a validation line naming the first problem. Start is disabled while `validateSetup` fails. The builder edits a `WorldSetup`; no simulation runs.
-- **Run.** A glass top bar (wordmark, preset and seed, tick/ants/delivered/FPS chips, Colonies and Settings) and a bottom dock (Pause/Play, 1×/2×/4×/Max, Reset, Edit, Finish), with a legend naming the Home (teal) and Food (amber) trails. Overlays: a pause menu (Resume, Step, Restart, Edit world, Finish run), a colony panel (per colony: swatch, population, delivered, food pool, extinct), a settings drawer (live sliders and switches, Fit, Reset parameters) and a finish dialog (Confirm Finish returns Home).
+- **Run.** A glass top bar (wordmark, preset and seed, tick/ants/delivered/FPS chips, Colonies and Settings) and a bottom dock (Pause/Play, 1×/2×/4×/Max, Reset, Edit, Finish), with a legend that lists each colony in Colonies view, or names the Home (teal) and Food (amber) trails in Trail type view. Overlays: a pause menu (Resume, Step, Restart, Edit world, Finish run), a colony panel (per colony: swatch, population, delivered, food pool, extinct), a settings drawer (live sliders and switches, Fit, Reset parameters) and a finish dialog (Confirm Finish returns Home).
 - **Stopping.** Finish ends the run and stores its summary; Reset rebuilds the same setup from tick 0; Edit pauses and returns to the Builder. A running world is never mutated in place — Start and Reset build a fresh world from the setup.
 
 **Camera:** the view is a map. Left-drag pans on Run once the press moves 4 px; on the Builder it pans over empty ground with Select, or while Space is held. Right- or middle-drag pans on every screen. A trackpad's two-finger scroll pans, and its pinch zooms at the cursor. A mouse notch zooms at the cursor over 120 ms. Touch pans with one finger and pinch-zooms with two; in the Builder one finger paints and two fingers move the camera. Arrow keys and W, S, D pan at 900 CSS px/s while held; A pans only in the Builder, because on Run it toggles the ants. + and − zoom 1.25× about the centre. Double-click zooms 2× at the point on Run. Home fits the whole world. The zoom floor is 0.6 × the fit scale, the ceiling is 16 px per unit, and the centre stays inside the world. A screen fits the camera on entry; `--zoom` and `--focus` apply the close-up on Run.
@@ -388,7 +393,7 @@ The UI is a DOM overlay (HTML/CSS) above the WebGL canvas, crisp at any display 
 | P | pause |
 | Space | step one tick (while paused) |
 | H | Zen mode |
-| M | cycle the marker overlay |
+| M | cycle the trail view: Colonies, Trail type, Off |
 | A | toggle ants |
 | G | toggle the grid |
 | Home | fit the whole world |
@@ -400,7 +405,7 @@ The UI is a DOM overlay (HTML/CSS) above the WebGL canvas, crisp at any display 
 
 **Mouse:** left uses the current builder tool (or pans, see Camera), right or middle drag pans, the wheel zooms at the cursor.
 
-This replaces the M1 control drawer; its sliders move into the settings drawer. The **Degrade after** slider returns with M2, when stuck detection exists. The inspector, telemetry and sparklines remain M5 work.
+This replaces the M1 control drawer; its sliders move into the settings drawer. The **Degrade after** slider returns with M2, when stuck detection exists. The inspector, telemetry and sparklines remain M5 work. M1.7 adds **Territory pressure** (`FOREIGN_ERASURE_FACTOR`, 0–1, default 0.5) and **Foreign scent aversion** (`FOREIGN_AVERSION`, 0–1, default 0.35) to the Trails group.
 
 ---
 
@@ -475,6 +480,8 @@ Rules:
 | `MARKER_HALF_LIFE` | 15 | s | slider |
 | `MARKER_EPS` / `MARKER_DETECT_MIN` | 1e-4 / 1e-3 | | |
 | `TERRITORY_RULE` / `FOREIGN_ERASURE_FACTOR` | on / 0.5 | | rival layers × `1 − e × factor` per foreign deposit (§4.2) |
+| `FLIP_MARGIN` | 1.25 | | an owner keeps a cell until a rival is this many times its strength (§4.2, M1.7) |
+| `FOREIGN_AVERSION` | 0.35 | | rival scent comes off an ant's own signal on each sampled cell (§4.2, §5.3, M1.7) |
 | `STUCK_TIMEOUT` / `DEGRADE_TIME` / `DEGRADE_FACTOR` | 2.5 / 3.0 / 0.5 | s / s / – | |
 | `CROWD_LIMIT` | 4 | ants | within 3 × `ANT_RADIUS` |
 | `STUCK_TURN_JITTER` / `CROWD_RADIUS_FACTOR` / `ZONE_MARGIN` | 0.6 / 3 / 16 | rad / × `ANT_RADIUS` / u | the ±0.6 turn, the "3 ×" crowd radius and the nest/food zone margin from §5.5 |
@@ -527,7 +534,7 @@ The full file-by-file structure, build targets and every module's interface are 
   - a colony id on every ant,
   - neighbour queries through the spatial hash,
   - reserved state values,
-  - the territory rule, which is v1's only cross-colony interaction.
+  - the territory rule and foreign-scent aversion (M1.7), which are v1's only cross-colony interactions.
 - Painting food with a brush (as in Pezzza's original) and loading maps from images.
 - Saving and loading.
 - Larger scales through GPU compute.
@@ -544,6 +551,7 @@ Each milestone ends with a running app and the checks listed.
 | M1 | **Core foraging, one colony.** SoA ants in typed arrays, nest, food, marker grid, wander, energy and states, spawning, ants and dual-channel heatmap drawn, phase pipeline, night view and the control drawer | In the sandbox, a trail forms between nest and food on its own; screenshot reviewed; tests cover deposit, decay and state changes. **Done 2026-10-25** |
 | M1.5 | **Presentation & world builder.** Home/Builder/Run screens; staged setup; palette, starting populations and several colonies; Rock/Water/Sand/Mud with terrain speed and collision; five presets; food clusters; procedural ants with tripod gait; anthill art; baked terrain; sprite and trail themes; HUD, pause, reset, edit and finish | Every preset validates; a built map runs with the chosen colonies and obstacles; all acceptance screenshots pass. **Done 2026-10-25** |
 | M1.6 | Camera and looks. Map-style pan and zoom (drag, pinch, two-finger scroll, touch, keys, bounds); visible glowing trails; procedural terrain shader; anthill mounds; ant and food shadows | The camera checklist passes on the laptop; acceptance screenshots at zoom 1, 4 and 6 look sharp; terrain costs under 3 ms per frame. **Built 2026-10-25; the laptop camera checklist is pending.** Evidence: 246 tests; bench 0.464 ms average, 0.607 ms p95 (meadow, 1200 ticks, plugged in; budget 0.481 ms). The terrain pass is 3.9 ms on a mixed map, so the 3 ms bar holds on idle frames (0.8 ms copy) but not on camera-move or shimmer frames. See the M1.6 report. Marek accepted the 3.9 ms pass on camera-move and shimmer frames for now (2026-10-25). |
+| M1.7 | Colony identity and scent competition. Trails, ants and nests take their colony's colour, and Colonies is the default view. Scents compete per cell: Territory pressure, a flip margin with hysteresis, and foreign-scent aversion. | Screenshots with four or five colonies at fit zoom, zoom 6 on ants, a nest close-up and a contested border look right; the reach guard holds (contest colony B at least 63 deliveries in minute 3); tests pass. **Built 2026-10-26 on `claude/m1-7-colony-identity`; not merged.** Evidence: 258 tests; reach contest colony B 1 / 58 / 122 per minute (M2: 1 / 58 / 84); single-colony reach rows unchanged. The bench runs were on battery and are not quoted. See the M1.7 report. |
 | M2 | Navigation and foraging. Wander fix; sliding along walls and edges; look-ahead steering and fallback rays; spatial hash; stuck detection with dead-end trail erasure; spawn safety; reach harness; retuned trail and energy defaults; homing memory; one trail layer per colony; maze preset with a breach control | On the boulder preset fewer than 5% of ants touch rocks (or 3x fewer than before); reach harness: at 1000 u the first delivery comes within 60 s, and at 1500 u ants deliver in minute 3; the far colony in the contest delivers; in the maze, deliveries per minute after the breach are at least 3x those before it. **Done 2026-10-25.** Evidence: boulder ants touching rock 0.0211 → 0.0007 (3.3% → 0.07%); reach first delivery 36.3 s at 1000 u, 84 deliveries in minute 3 at 1500 u; contest colony B 1 / 58 / 84 per minute (was 0); maze 4 deliveries in minutes 7–9 against 1016 in minutes 12–14 after the breach at 10:00 (ratio 254); 228 tests; bench 0.448–0.457 ms avg across runs, plugged in |
 | M3 | **Absorbed and closed.** Multi-colony setup, palette, territory and the colony heatmap shipped in M1.5. Only inter-colony hostilities (§14) remain, and they are not scheduled. | — |
 | M4 | **Crowds and scale.** PBD collisions, PBMAD avoidance, worker pool, stress scenario, bench mode | No overlapping ants; opposing streams form lanes; 20k-ant bench numbers recorded; determinism test passes with 1 and 8 workers |

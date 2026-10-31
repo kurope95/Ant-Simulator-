@@ -1,8 +1,14 @@
-import { colonyHex } from "../sim/palette.js";
 import type { MarkerGrid } from "../sim/marker_grid.js";
 import { kNoOwner } from "../sim/types.js";
-import type { Theme } from "./theme.js";
+import { trailHex, type Theme } from "./theme.js";
 import { HeatmapMode } from "./view_settings.js";
+
+// Rec. 709 luma, used to grey a contested trail.
+const kLumaRed = 0.2126;
+const kLumaGreen = 0.7152;
+const kLumaBlue = 0.0722;
+// A cell whose rival is as strong as its owner loses this share of the owner's colour.
+const kContestGrey = 0.55;
 
 function mix(a: number, b: number, t: number): number {
   return a + (b - a) * t;
@@ -10,12 +16,14 @@ function mix(a: number, b: number, t: number): number {
 
 /**
  * Turns the marker grid into one RGBA pixel per cell.
+ * `colorByColony[id]` is the palette index that colony picked; trails take their colour from it, never from the id.
  * Row 0 of the output is the world's top row; the texture path draws it upright.
  */
 export function fillHeatmapRgba(
   grid: MarkerGrid,
   mode: HeatmapMode,
   theme: Theme,
+  colorByColony: readonly number[],
   rgbaOut: Uint8Array,
 ): void {
   if (mode === HeatmapMode.Off) {
@@ -49,22 +57,56 @@ export function fillHeatmapRgba(
       rgbaOut[offset + 3] = Math.round(255 * theme.heatAlpha * Math.min(1, Math.sqrt(total)));
       continue;
     }
+
     const owner = grid.owner[cell];
     if (owner === kNoOwner || owner >= grid.colonies) {
-      rgbaOut[offset] = 0;
-      rgbaOut[offset + 1] = 0;
-      rgbaOut[offset + 2] = 0;
-      rgbaOut[offset + 3] = 0;
+      rgbaOut.fill(0, offset, offset + 4);
       continue;
     }
-    const index = owner * cells + cell;
-    const home = grid.toHome[index];
-    const food = grid.toFood[index];
-    const hex = colonyHex(owner);
-    const strength = Math.min(Math.max(home, food), 1);
-    rgbaOut[offset] = (hex >> 16) & 0xff;
-    rgbaOut[offset + 1] = (hex >> 8) & 0xff;
-    rgbaOut[offset + 2] = hex & 0xff;
-    rgbaOut[offset + 3] = Math.round(255 * Math.sqrt(strength) * theme.heatAlpha);
+    // Every colony's strength on this cell is the stronger of its two trails.
+    let total = 0;
+    let rival = 0;
+    let ownerHome = 0;
+    let ownerFood = 0;
+    for (let colony = 0; colony < grid.colonies; colony++) {
+      const index = colony * cells + cell;
+      const home = grid.toHome[index];
+      const food = grid.toFood[index];
+      const strength = Math.max(home, food);
+      total += strength;
+      if (colony === owner) {
+        ownerHome = home;
+        ownerFood = food;
+      } else if (strength > rival) {
+        rival = strength;
+      }
+    }
+    if (total === 0) {
+      rgbaOut.fill(0, offset, offset + 4);
+      continue;
+    }
+
+    // Food trails are bright and home trails dimmer, in the owner's own hue.
+    const ownerStrength = Math.max(ownerHome, ownerFood);
+    const trailSum = ownerHome + ownerFood;
+    const typeShare = trailSum > 0 ? ownerFood / trailSum : 0;
+    const base = trailHex(colorByColony[owner] ?? 0);
+    const brightness = 0.6 + 0.4 * typeShare;
+    let red = ((base >> 16) & 0xff) * brightness;
+    let green = ((base >> 8) & 0xff) * brightness;
+    let blue = (base & 0xff) * brightness;
+
+    // Contested ground loses saturation. Hues never mix, so a rival never reads as a third colony.
+    const contest = ownerStrength > 0 ? Math.min(1, rival / ownerStrength) : rival > 0 ? 1 : 0;
+    const luma = kLumaRed * red + kLumaGreen * green + kLumaBlue * blue;
+    const grey = kContestGrey * contest;
+    red = mix(red, luma, grey);
+    green = mix(green, luma, grey);
+    blue = mix(blue, luma, grey);
+
+    rgbaOut[offset] = Math.round(red);
+    rgbaOut[offset + 1] = Math.round(green);
+    rgbaOut[offset + 2] = Math.round(blue);
+    rgbaOut[offset + 3] = Math.round(255 * theme.heatAlpha * Math.min(1, Math.sqrt(total)));
   }
 }
