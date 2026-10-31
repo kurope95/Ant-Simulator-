@@ -241,11 +241,12 @@ decayMarkers(grid, factor, eps, flipMargin): void     // all layers, then recomp
 
 // sim/food.ts
 interface FoodAmount { pos: Vec2; amount: number; infinite: boolean }
-interface FoodSource extends FoodAmount { uid: number; kind: FoodKind }
+interface FoodSource extends FoodAmount { uid: number; kind: FoodKind; capacity?: number }   // capacity: regrows back to it
 foodRadius(source, params): number
 interface FoodSources { items: FoodSource[]; nextUid: number;
                         findTouching(pos, radius, params): number;
-                        takeOne(index): boolean; removeEmpty(): void }
+                        takeOne(index): boolean; removeEmpty(): void;
+                        regrow(dt, regrowTime): void }   // under one unit = bare ground; kept while it can regrow
 makeFoodSources(): FoodSources
 addFoodSource(sources, pos, amount, infinite?, kind?): number
 

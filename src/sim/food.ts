@@ -11,6 +11,8 @@ export interface FoodAmount {
 export interface FoodSource extends FoodAmount {
   uid: number;
   kind: FoodKind;
+  // The size the pile grows back to (its starting amount); 0 never regrows.
+  capacity?: number;
 }
 
 export function foodRadius(source: FoodAmount, params: SimParams): number {
@@ -24,6 +26,9 @@ export interface FoodSources {
   findTouching(pos: Vec2, radius: number, params: SimParams): number;
   takeOne(index: number): boolean;
   removeEmpty(): void;
+  // Grows every pile back toward its capacity, a full pile's worth every
+  // regrowTime seconds; 0 turns regrowth off (spec §4.4).
+  regrow(dt: number, regrowTime: number): void;
 }
 
 export function makeFoodSources(): FoodSources {
@@ -35,6 +40,8 @@ export function makeFoodSources(): FoodSources {
       let bestDistSq = Infinity;
       for (let i = 0; i < this.items.length; i++) {
         const item = this.items[i];
+        // A pile with less than one piece left is bare ground until it regrows.
+        if (!item.infinite && item.amount < 1) continue;
         const dx = item.pos.x - pos.x;
         const dy = item.pos.y - pos.y;
         const distSq = dx * dx + dy * dy;
@@ -50,12 +57,23 @@ export function makeFoodSources(): FoodSources {
       const item = this.items[index];
       if (item === undefined) return false;
       if (item.infinite) return true;
-      if (item.amount <= 0) return false;
+      if (item.amount < 1) return false;
       item.amount -= 1;
       return true;
     },
     removeEmpty(): void {
-      this.items = this.items.filter((source) => source.infinite || source.amount > 0);
+      // A pile that can regrow stays, empty, where it was.
+      this.items = this.items.filter(
+        (source) => source.infinite || source.amount >= 1 || (source.capacity ?? 0) > 0,
+      );
+    },
+    regrow(dt: number, regrowTime: number): void {
+      if (!(regrowTime > 0)) return;
+      for (const item of this.items) {
+        const capacity = item.capacity ?? 0;
+        if (item.infinite || capacity <= 0 || item.amount >= capacity) continue;
+        item.amount = Math.min(capacity, item.amount + (capacity * dt) / regrowTime);
+      }
     },
   };
   return sources;

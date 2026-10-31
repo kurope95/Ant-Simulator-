@@ -50,6 +50,8 @@ export interface SimParams {
   mass: number;
   massCarrying: number;
   spawnCost: number;
+  // Seconds for an emptied food pile to grow back to its starting size; 0 never (spec §4.4).
+  foodRegrowTime: number;
   // Life cycle (spec §5.6). Off: free meals at home, no old age, a birth the moment food allows.
   lifeCycle: boolean;
   // Average life of an ant in seconds, varied per ant by ±lifespanJitter.
@@ -181,6 +183,7 @@ export function defaultParams(): SimParams {
     mass: 1,
     massCarrying: 3,
     spawnCost: 5,
+    foodRegrowTime: 600,
     lifeCycle: true,
     antLifespan: 600,
     lifespanJitter: 0.25,

@@ -133,6 +133,8 @@ export class AppController {
   private stepRequests = 0;
   private zoomApplied = false;
   private needsFit = true;
+  // The camera right after the last fit, to tell whether the player has moved it since.
+  private fitView: { scale: number; center: Vec2 } | null = null;
   private breached = false;
   private breachRequested = false;
   private frameMs = 1000 / 60;
@@ -412,6 +414,14 @@ export class AppController {
       if (this.options.focus !== null) this.camera.centerOn(this.options.focus);
     }
     this.needsFit = false;
+    this.fitView = { scale: this.camera.scale(), center: this.camera.center() };
+  }
+
+  private cameraStillFitted(): boolean {
+    const fit = this.fitView;
+    if (fit === null) return false;
+    const center = this.camera.center();
+    return this.camera.scale() === fit.scale && center.x === fit.center.x && center.y === fit.center.y;
   }
 
   // On the run screen the map fits between the two collapsed side rails (they
@@ -830,6 +840,9 @@ export class AppController {
     const size = renderer.sizePx();
     if (size.x === 0 || size.y === 0) return;
     if (size.x !== this.viewportW || size.y !== this.viewportH) {
+      // A window resize keeps the map fitted, unless the player has zoomed or
+      // panned away from the fit: then their view is left as it is.
+      if (this.cameraStillFitted()) this.needsFit = true;
       this.viewportW = size.x;
       this.viewportH = size.y;
       this.camera.setViewport(size);

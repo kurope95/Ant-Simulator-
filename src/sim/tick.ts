@@ -446,6 +446,7 @@ export function applyEvents(world: World, events: readonly ChunkEvents[]): void 
     for (const hit of chunk.attacks) applyBite(world, hit.attacker, hit.victim, hit.damage);
   }
 
+  world.food.regrow(1 / params.simHz, params.foodRegrowTime);
   world.food.removeEmpty();
   for (const colony of world.colonies) {
     if (!params.lifeCycle) {

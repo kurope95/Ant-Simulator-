@@ -86,10 +86,12 @@ test("reach: 1000 u delivers", { timeout: 120_000 }, () => {
   const setup = makeSetup({ x: 2600, y: 1000 }, 7, "reach-test");
   addColony(setup, { x: 200, y: 500 }, 0, 150);
   addFood(setup, { x: 1200, y: 500 }, 20000, FoodKind.Seeds);
-  // Foraging reach only: warriors carry nothing, and over two minutes a colony
-  // with them delivers what one with 10% fewer workers does (seeds 1-4, 7).
+  // Foraging reach only: warriors carry nothing (over two minutes a colony with
+  // them delivers what one with 10% fewer workers does, seeds 1-4 and 7), the pile
+  // cannot run low in two minutes, and regrowth would only nudge its size.
   const params = defaultParams();
   params.warriorRatio = 0;
+  params.foodRegrowTime = 0;
   const world = worldFromSetup(setup, params);
   for (let tick = 1; tick <= 7200; tick++) stepWorld(world);
   const delivered = world.colonies[0].deliveredTotal;

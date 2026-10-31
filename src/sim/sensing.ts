@@ -323,6 +323,7 @@ export function directSightTarget(world: World, ant: number): Vec2 | null {
   if (ants.state[ant] === AntState.Foraging) {
     let bestDistSq = Infinity;
     for (const item of world.food.items) {
+      if (!item.infinite && item.amount < 1) continue;
       const dx = item.pos.x - posX;
       const dy = item.pos.y - posY;
       const distSq = dx * dx + dy * dy;

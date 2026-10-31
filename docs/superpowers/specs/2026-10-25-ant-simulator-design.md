@@ -162,7 +162,8 @@ All writes to the marker grid happen in the serial event phase (§5.2), in a fix
 ### 4.4 Food sources
 - Food sources are discrete circles with a position, an `amount` in units, a stable `uid` and a `kind` (Seeds, Berries or Leaves); they may be flagged `infinite` for stress tests.
 - Radius = `FOOD_BASE_R × sqrt(amount / FOOD_REF_AMOUNT)`, with a minimum.
-- They are placed with the Food tool, whose capacity and kind are chosen in the builder. An empty source disappears.
+- They are placed with the Food tool, whose capacity and kind are chosen in the builder.
+- **Regrowth** (added 2026-10-31 at Marek's request): every source grows back toward its starting amount (its `capacity`) at `capacity / FOOD_REGROW_TIME` units per second, in the Events phase. A source with less than one unit left is bare ground: it cannot be seen, touched or taken, and draws no pieces, but it stays in place and regrows. With `FOOD_REGROW_TIME` 0 there is no regrowth and an empty source disappears, as before.
 - All colonies share all food sources.
 - **Visible pieces:** one piece per 100 units, 1–48 pieces; an infinite source always shows 48. Pieces sit on a deterministic golden-angle spiral, inner-first, so each 100 units consumed removes only the outer pieces. This is rendering state; it uses a visual hash, never `randU32`.
 
@@ -520,6 +521,7 @@ Rules:
 | `BIRTH_RATE_BASE` / `BIRTH_RATE_PER_ANT` / `BIRTH_BURST` | 1 / 0.004 / 3 | eggs per s / per ant per s / eggs | §4.5 |
 | `NEST_BASE_R` / `NEST_GROWTH` | 20 / 0.4 | u | r = base + growth × √population |
 | `FOOD_BASE_R` / `FOOD_REF_AMOUNT` | 12 / 500 | u / units | |
+| `FOOD_REGROW_TIME` | 600 | s | an emptied source is full again after this long; 0 = no regrowth (§4.4). Settings slider "Food grows back in" (minutes) |
 | `FOOD_MIN_R` | 4 | u | smallest drawn and touchable food radius |
 | `MAX_COLONIES` / `NEW_COLONY_ANTS` | 8 / 200 | | |
 | `MAX_ANTS_TOTAL` | 50,000 | | |
