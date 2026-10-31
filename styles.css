@@ -553,6 +553,35 @@ textarea {
   text-align: left;
 }
 
+/* Ants per colony, under the counters: dot and count, the name when open. */
+.hud__counts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 2px;
+  border-top: 1px solid var(--stroke);
+  border-bottom: 1px solid var(--stroke);
+}
+
+.hud__count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.hud__count .legend__dot {
+  flex: none;
+}
+
+.hud__count-detail {
+  font-weight: 500;
+  color: var(--muted);
+}
+
 .hud__tools {
   display: flex;
   flex-direction: column;

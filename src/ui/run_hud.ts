@@ -8,6 +8,7 @@ import {
   formatInteger,
   speedLabel,
   type SpeedSetting,
+  colonyRows,
 } from "./view_models.js";
 
 export interface HudState {
@@ -105,6 +106,10 @@ export class RunHud {
   private readonly trailLegend: HTMLElement;
   private readonly colonyLegend: HTMLElement;
   private colonyLegendKey = "";
+  // One line per colony with its ant count, so the colonies' strength reads at a glance.
+  private readonly colonyCounts: HTMLElement;
+  private colonyCountKey = "";
+  private colonyCountRows: { count: HTMLSpanElement; detail: HTMLSpanElement }[] = [];
 
   constructor(root: HTMLElement, params: SimParams, hooks: RunHudHooks) {
     this.simHz = params.simHz;
@@ -227,7 +232,9 @@ export class RunHud {
     this.colonyLegend = el("span", "hud__legend-group");
     this.legend.append(this.trailLegend, this.colonyLegend);
 
-    bar.append(brand, chips, tools, this.legend);
+    this.colonyCounts = el("div", "hud__counts");
+    this.colonyCounts.setAttribute("aria-label", "Ants per colony");
+    bar.append(brand, chips, this.colonyCounts, tools, this.legend);
     const dock = el("nav", "hud__rail hud__rail--right glass");
     dock.setAttribute("aria-label", "Run controls");
     dock.append(this.pauseButton, speeds, makeDivider(), reset, edit, this.breachButton, finish, rightTools);
@@ -258,6 +265,7 @@ export class RunHud {
     setText(this.chipDelivered, formatInteger(delivered));
     setText(this.chipClock, formatClock(world.tick, this.simHz));
     setText(this.chipFps, formatInteger(fps));
+    this.setColonyCounts(world);
     const chosen = state.speed === "max" ? Infinity : state.speed;
     const slow = !state.paused && achievedSpeed > 0 && achievedSpeed < 0.9 * chosen && state.speed !== "max";
     this.speedChip.hidden = !slow;
@@ -280,6 +288,35 @@ export class RunHud {
     if (state.heatmap === HeatmapMode.ColonyColor) this.setColonyLegend(world);
 
     this.setZen(state.zen);
+  }
+
+  // Ant count per colony; the open rail adds the name and how many are home.
+  private setColonyCounts(world: World): void {
+    const rows = colonyRows(world);
+    const key = rows.map((row) => row.colorIndex).join(",");
+    if (key !== this.colonyCountKey) {
+      this.colonyCountKey = key;
+      this.colonyCountRows = [];
+      const lines = rows.map((row) => {
+        const line = el("div", "hud__count");
+        const css = `#${row.hex.toString(16).padStart(6, "0")}`;
+        const dot = el("span", "legend__dot");
+        dot.style.background = css;
+        dot.style.boxShadow = `0 0 10px ${css}8c`;
+        const count = el("span", "hud__count-value");
+        const detail = el("span", "hud__count-detail rail__wide");
+        line.title = row.name;
+        line.append(dot, count, detail);
+        this.colonyCountRows.push({ count, detail });
+        return line;
+      });
+      this.colonyCounts.replaceChildren(...lines);
+    }
+    rows.forEach((row, i) => {
+      const parts = this.colonyCountRows[i];
+      setText(parts.count, row.extinct ? "–" : formatInteger(row.population));
+      setText(parts.detail, `${row.name} · ${formatInteger(row.resting)} home`);
+    });
   }
 
   // Lists every colony, extinct ones too, so a faded trail still has a name.
