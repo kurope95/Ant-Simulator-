@@ -647,7 +647,7 @@ interface HudState { presetName: string; seed: number; paused: boolean; speed: S
 interface RunHudHooks { onPause(): void; onSpeed(speed): void; onReset(): void;
                         onEdit(): void; onFinish(): void; onColonies(): void;
                         onSettings(): void; onFit(): void }
-// Two slim side rails (.hud__rail--left: brand, counters, colonies button, legend;
+// Two slim side rails (.hud__rail--left: brand, counters, ants per colony (.hud__counts), colonies button, legend;
 // .hud__rail--right: pause, speeds, reset/edit/breach/finish, settings button) open
 // over the map on hover (the left one only; the right stays slim, icons with tooltips).
 // The controller fits the map between them (kRunRailInsetCss).
