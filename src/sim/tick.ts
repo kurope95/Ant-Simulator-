@@ -389,6 +389,7 @@ export function applyEvents(world: World, events: readonly ChunkEvents[]): void 
     }
   }
 
+  world.food.regrow(1 / params.simHz, params.foodRegrowTime);
   world.food.removeEmpty();
   for (const colony of world.colonies) {
     if (!params.lifeCycle) {

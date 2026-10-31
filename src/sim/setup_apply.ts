@@ -62,6 +62,7 @@ export function worldFromSetup(
       uid: source.uid,
       pos: { x: source.pos.x, y: source.pos.y },
       amount: source.amount,
+      capacity: source.amount,
       infinite: false,
       kind: source.kind,
     });

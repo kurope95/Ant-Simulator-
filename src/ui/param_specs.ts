@@ -12,6 +12,7 @@ export type ParamKey =
   | "degradeTime"
   | "energyBurn"
   | "spawnCost"
+  | "foodRegrowTime"
   | "foreignErasureFactor"
   | "foreignAversion"
   | "tHorizon";
@@ -47,6 +48,8 @@ const kSpecs: readonly ParamSpec[] = [
   { key: "degradeTime", label: "Degrade after", unit: "s", min: 0.5, max: 10, step: 0.5, scale: 1, group: "trails" },
   { key: "energyBurn", label: "Energy burn", unit: "/s", min: 0.1, max: 5, step: 0.1, scale: 1, group: "colony" },
   { key: "spawnCost", label: "Spawn cost", unit: "food", min: 1, max: 20, step: 1, scale: 1, group: "colony" },
+  // Minutes for an emptied pile to grow back; 0 turns regrowth off.
+  { key: "foodRegrowTime", label: "Food grows back in", unit: "min", min: 0, max: 60, step: 1, scale: 1 / 60, group: "colony" },
 ];
 
 export function paramSpecs(): readonly ParamSpec[] {

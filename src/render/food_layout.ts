@@ -17,7 +17,8 @@ export interface FoodPiece {
 
 export function foodPieceCount(amount: number, infinite: boolean): number {
   if (infinite) return kMaxFoodPieces;
-  if (!Number.isFinite(amount) || amount <= 0) return 0;
+  // Under one piece left is bare ground until the pile regrows.
+  if (!Number.isFinite(amount) || amount < 1) return 0;
   return Math.min(kMaxFoodPieces, Math.ceil(amount / kFoodPerPiece));
 }
 
