@@ -111,8 +111,11 @@ export class RunHud {
     hud.dataset.paused = "false";
     hud.append(el("div", "screen__vignette"));
 
-    const bar = el("header", "hud__bar glass");
-    const brand = el("div", "hud__brand");
+    // Two slim rails down the sides keep the full height for the map; each
+    // slides open over the map while the pointer is on it (rail--open in CSS).
+    const bar = el("nav", "hud__rail hud__rail--left glass");
+    bar.setAttribute("aria-label", "Run status");
+    const brand = el("div", "hud__brand rail__wide");
     this.presetName = el("span", "hud__preset");
     this.seedLabel = el("span", "hud__seed");
     const meta = el("div", "hud__meta");
@@ -147,11 +150,13 @@ export class RunHud {
       onClick: () => hooks.onSettings(),
     });
     this.settingsButton.setAttribute("aria-pressed", "false");
+    // Each panel's button sits on the side where the panel opens.
     const tools = el("div", "hud__tools");
-    tools.append(this.coloniesButton, this.settingsButton);
-    bar.append(brand, chips, tools);
+    tools.append(this.coloniesButton);
+    const rightTools = el("div", "hud__tools hud__tools--end");
+    rightTools.append(this.settingsButton);
 
-    this.pauseLabel = el("span", undefined, "Pause");
+    this.pauseLabel = el("span", "rail__wide", "Pause");
     this.pauseButton = button({
       label: "",
       icon: "pause",
@@ -214,18 +219,10 @@ export class RunHud {
     this.colonyLegend = el("span", "hud__legend-group");
     this.legend.append(this.trailLegend, this.colonyLegend);
 
-    const dock = el("div", "hud__dock glass");
-    dock.append(
-      this.legend,
-      makeDivider(),
-      this.pauseButton,
-      speeds,
-      makeDivider(),
-      reset,
-      edit,
-      this.breachButton,
-      finish,
-    );
+    bar.append(brand, chips, tools, this.legend);
+    const dock = el("nav", "hud__rail hud__rail--right glass");
+    dock.setAttribute("aria-label", "Run controls");
+    dock.append(this.pauseButton, speeds, makeDivider(), reset, edit, this.breachButton, finish, rightTools);
 
     this.colonyPanelHost = el("aside", "hud__panel hud__panel--left");
     this.colonyPanelHost.setAttribute("aria-label", "Colonies");

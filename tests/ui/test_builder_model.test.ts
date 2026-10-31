@@ -12,7 +12,9 @@ function model() {
 test("builder: the colony tool adds a colony and picks the next free colour", () => {
   const m = model();
   m.setTool(BuilderTool.Colony);
+  assert.equal(m.nextColonyColor, 0);
   assert.equal(m.applyAt({ x: 100, y: 100 }), true);
+  assert.equal(m.nextColonyColor, 1);
   m.applyAt({ x: 300, y: 200 });
   assert.deepEqual(
     m.setup.colonies.map((c) => [c.id, c.color]),
@@ -21,7 +23,19 @@ test("builder: the colony tool adds a colony and picks the next free colour", ()
       [1, 1],
     ],
   );
-  assert.deepEqual(m.selection, { kind: "colony", id: 1 });
+  // Placing does not select, so the panel stays on the next nest's settings.
+  assert.equal(m.selection, null);
+});
+
+test("builder: a colour picked after placing a nest is for the next nest, not the last", () => {
+  const m = model();
+  m.setTool(BuilderTool.Colony);
+  m.applyAt({ x: 100, y: 100 });
+  m.setStartingColor(2);
+  assert.equal(m.nextColonyColor, 2);
+  m.applyAt({ x: 300, y: 200 });
+  m.applyAt({ x: 200, y: 250 });
+  assert.deepEqual(m.setup.colonies.map((c) => c.color), [0, 2, 2]);
 });
 
 test("builder: deleting the selection clears it", () => {
@@ -43,7 +57,8 @@ test("builder: switching tools clears the selection", () => {
   m.setTool(BuilderTool.Food);
   assert.equal(m.selection === null, true);
   m.applyAt({ x: 200, y: 150 });
-  assert.equal(m.selection?.kind, "food");
+  assert.equal(m.setup.food.length, 1);
+  assert.equal(m.selection, null);
   m.setTool(BuilderTool.Rock);
   assert.equal(m.selection === null, true);
 });

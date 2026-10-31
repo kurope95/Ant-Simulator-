@@ -532,7 +532,7 @@ export class BuilderScreen {
 
     let color: number | null = null;
     if (colony !== null) color = colony.color;
-    else if (selection === null && this.model.tool === BuilderTool.Colony) color = this.model.startingColor;
+    else if (selection === null && this.model.tool === BuilderTool.Colony) color = this.model.nextColonyColor;
     for (let i = 0; i < this.swatches.length; i++) {
       this.swatches[i].setAttribute("aria-pressed", String(color === i));
     }
@@ -543,10 +543,7 @@ export class BuilderScreen {
       } else if (food !== null) {
         setText(this.inspectorName, kFoodKindNames[food.kind]);
       } else if (selection === null && this.model.tool === BuilderTool.Colony) {
-        setText(
-          this.inspectorName,
-          this.model.startingColor === null ? "First free colour" : colonyName(this.model.startingColor),
-        );
+        setText(this.inspectorName, `Next nest: ${colonyName(this.model.nextColonyColor)}`);
       }
     }
 

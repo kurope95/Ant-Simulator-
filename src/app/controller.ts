@@ -1,6 +1,6 @@
 import { FixedStepClock } from "../core/fixed_step.js";
 import type { Vec2 } from "../core/vec2.js";
-import { Camera } from "../render/camera.js";
+import { Camera, kNoInsets, type Insets } from "../render/camera.js";
 import { GlRenderer } from "../render/gl_renderer.js";
 import { themeForPreset, type Theme } from "../render/theme.js";
 import { cycleHeatmap, defaultViewSettings, type ViewSettings } from "../render/view_settings.js";
@@ -51,6 +51,10 @@ import {
   type SessionState,
 } from "./session.js";
 
+// Room the run-screen map leaves for the side rails (12 px margin + 64 px rail +
+// 12 px gap, matching --rail-w in styles.css) and a small edge margin.
+const kRunRailInsetCss = 88;
+const kRunEdgeInsetCss = 12;
 const kMaxFrameSeconds = 0.25;
 const kSelectionRadiusPx = 24;
 // How close a click must land to pick an ant, in CSS pixels; the drag slop is the same 4 px the camera uses.
@@ -391,7 +395,7 @@ export class AppController {
   private applyFit(): void {
     const world = this.activeWorld;
     if (world === null) return;
-    this.camera.fit(world.size);
+    this.camera.fit(world.size, this.runInsets());
     if (this.session.screen === Screen.Run && !this.zoomApplied) {
       this.zoomApplied = true;
       if (this.options.zoom !== 1) {
@@ -403,6 +407,16 @@ export class AppController {
       if (this.options.focus !== null) this.camera.centerOn(this.options.focus);
     }
     this.needsFit = false;
+  }
+
+  // On the run screen the map fits between the two collapsed side rails (they
+  // open over the map on hover); everywhere else, and in zen mode, it uses the
+  // whole canvas.
+  private runInsets(): Insets {
+    if (this.session.screen !== Screen.Run || this.session.zen) return kNoInsets;
+    const side = kRunRailInsetCss * this.camera.pixelRatio();
+    const edge = kRunEdgeInsetCss * this.camera.pixelRatio();
+    return { left: side, right: side, top: edge, bottom: edge };
   }
 
   private presetName(): string {

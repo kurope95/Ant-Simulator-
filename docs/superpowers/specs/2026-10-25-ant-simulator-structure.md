@@ -400,12 +400,13 @@ a colony's `id` is its index in `WorldSetup.colonies`. The maze is the only pres
 
 ```ts
 // render/camera.ts
+interface Insets { left: number; right: number; top: number; bottom: number }   // kNoInsets = all 0
 class Camera {
   static readonly kMinScale = 0.05, kMaxScale = 16     // physical pixels per world unit
   static readonly kMinScaleOfFit = 0.6                 // the zoom floor after fit() is this share of the fit scale
   setViewport(sizePx: Vec2): void; viewport(): Vec2
   setPixelRatio(ratio: number): void; pixelRatio(): number   // device pixels per CSS pixel (M1.7); minimum sprite sizes are in CSS px
-  fit(worldSize: Vec2): void
+  fit(worldSize: Vec2, inset?: Insets): void         // fits into the viewport less inset (viewport px), centred in that space
   setScaleLimits(min: number, max: number): void
   clampCenter(worldSize: Vec2): void                   // keeps the centre inside the world
   worldToScreen(p: Vec2): Vec2; screenToWorld(p: Vec2): Vec2
@@ -609,8 +610,11 @@ class BuilderModel {
   get setup(): WorldSetup; get tool(): BuilderTool; get brushRadius(): number
   get selection(): BuilderSelection | null; get dirty(): boolean
   get startingColor(): number | null; get startingAnts(): number
+  get nextColonyColor(): number   // the colour the next placed nest gets: the picked one, else the first free one
   get foodKind(): FoodKind; get foodAmount(): number
   setTool(tool): void; clearSelection(): void; setBrushRadius(radius): void
+  // applyAt with the Colony or Food tool places without selecting, so the panel keeps
+  // showing the next nest's or pile's settings; existing items change via the Select tool.
   setFoodKind(kind): void; setFoodAmount(amount): void
   setStartingAnts(count): void; setStartingColor(color): void
   setSeed(seed): boolean
@@ -637,6 +641,9 @@ interface HudState { presetName: string; seed: number; paused: boolean; speed: S
 interface RunHudHooks { onPause(): void; onSpeed(speed): void; onReset(): void;
                         onEdit(): void; onFinish(): void; onColonies(): void;
                         onSettings(): void; onFit(): void }
+// Two slim side rails (.hud__rail--left: brand, counters, colonies button, legend;
+// .hud__rail--right: pause, speeds, reset/edit/breach/finish, settings button) open
+// over the map on hover. The controller fits the map between them (kRunRailInsetCss).
 class RunHud { readonly root: HTMLElement; readonly colonyPanelHost: HTMLElement
                constructor(root, params: SimParams, hooks: RunHudHooks)
                update(world: World, fps: number, state: HudState): void
