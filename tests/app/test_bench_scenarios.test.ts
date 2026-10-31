@@ -82,3 +82,15 @@ test("crowd metrics: a fresh crowd reports finite lane and overlap values", () =
   assert.ok(metrics.overlap >= 0 && metrics.overlap <= 1);
   assert.ok(metrics.inCorridor > 0);
 });
+
+test("lanes: lane keeping sorts a 600-ant crowd better than none", { timeout: 120_000 }, () => {
+  const lanesAfter = (laneKeep: number): number => {
+    const world = crowdWorld(7, 600);
+    world.params.laneKeep = laneKeep;
+    for (let tick = 0; tick < 1800; tick++) stepWorld(world);
+    return crowdMetrics(world).lanes;
+  };
+  const without = lanesAfter(0);
+  const withKeep = lanesAfter(1);
+  assert.ok(withKeep > without + 0.05, `lanes ${without.toFixed(3)} -> ${withKeep.toFixed(3)}`);
+});

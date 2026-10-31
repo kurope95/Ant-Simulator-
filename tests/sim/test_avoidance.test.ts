@@ -162,3 +162,89 @@ test("avoidance: the result does not depend on ant order", () => {
     assert.equal(forward.ants.posY[f as number], reverse.ants.posY[r as number], `uid ${uid} y`);
   }
 });
+
+test("avoidance: with a right bias an off-axis head-on pair passes on the right, mirror images", () => {
+  // B sits a little to A's right, so the plain away rule sends both left.
+  const plain = emptyWorld();
+  const a0 = addAnt(plain, 100, 150, 0, 50);
+  addAnt(plain, 112, 151, Math.PI, 50);
+  avoidOnBothParities(plain);
+  assert.ok(plain.ants.avoidY[a0] < 0, `away rule: A avoidY ${plain.ants.avoidY[a0]}`);
+
+  const biased = emptyWorld((p) => {
+    p.sidestepRightBias = 1;
+  });
+  const a = addAnt(biased, 100, 150, 0, 50);
+  const b = addAnt(biased, 112, 151, Math.PI, 50);
+  avoidOnBothParities(biased);
+  const ants = biased.ants;
+  assert.ok(ants.avoidY[a] > 0, `A avoidY ${ants.avoidY[a]}`);
+  assert.ok(ants.avoidY[b] < 0, `B avoidY ${ants.avoidY[b]}`);
+  // Both agree on who goes where: the pushes are mirror images.
+  assert.ok(Math.abs(ants.avoidX[a] + ants.avoidX[b]) < 1e-3, `x ${ants.avoidX[a]} ${ants.avoidX[b]}`);
+  assert.ok(Math.abs(ants.avoidY[a] + ants.avoidY[b]) < 1e-3, `y ${ants.avoidY[a]} ${ants.avoidY[b]}`);
+});
+
+test("avoidance: ants walking the same way don't both dodge, whatever the bias", () => {
+  const world = emptyWorld((p) => {
+    p.sidestepRightBias = 1;
+    p.laneKeep = 1;
+  });
+  const a = addAnt(world, 100, 150, 0, 50);
+  const b = addAnt(world, 108, 150, 0, 50);
+  avoidOnBothParities(world);
+  for (const i of [a, b]) {
+    assert.equal(world.ants.avoidX[i], 0);
+    assert.equal(world.ants.avoidY[i], 0);
+  }
+});
+
+test("avoidance: lane keeping drifts right while an oncoming ant is ahead", () => {
+  // The oncoming ant is well off to the left, so there is no collision course
+  // and only lane keeping can push.
+  const build = (laneKeep: number): { world: World; a: number } => {
+    const world = emptyWorld((p) => {
+      p.laneKeep = laneKeep;
+    });
+    const a = addAnt(world, 100, 150, 0, 50);
+    addAnt(world, 115, 140, Math.PI, 50);
+    avoidOnBothParities(world);
+    return { world, a };
+  };
+  const off = build(0);
+  assert.equal(off.world.ants.avoidY[off.a], 0);
+  const on = build(0.5);
+  const cap = on.world.params.avoidMaxSpeedFactor * 50;
+  assert.ok(Math.abs(on.world.ants.avoidY[on.a] - 0.5 * cap) < 1e-4, `avoidY ${on.world.ants.avoidY[on.a]}`);
+  assert.ok(Math.abs(on.world.ants.avoidX[on.a]) < 1e-4);
+});
+
+test("avoidance: with bias and lane keeping the result still does not depend on ant order", () => {
+  const count = 60;
+  const spots: { x: number; y: number; heading: number }[] = [];
+  for (let i = 0; i < count; i++) {
+    const a = i * 2.39996;
+    spots.push({
+      x: 150 + Math.cos(a) * 30 * Math.sqrt(((i * 0.618034) % 1)),
+      y: 150 + Math.sin(a) * 30 * Math.sqrt(((i * 0.618034) % 1)),
+      heading: (i * 1.3) % (2 * Math.PI),
+    });
+  }
+  const build = (order: number[]): World => {
+    const world = emptyWorld((p) => {
+      p.sidestepRightBias = 0.5;
+      p.laneKeep = 1;
+    });
+    for (const i of order) addAnt(world, spots[i].x, spots[i].y, spots[i].heading, 50, i);
+    return world;
+  };
+  const forward = build(Array.from({ length: count }, (_, i) => i));
+  const reverse = build(Array.from({ length: count }, (_, i) => count - 1 - i));
+  for (const world of [forward, reverse]) avoidOnBothParities(world);
+  for (let uid = 0; uid < count; uid++) {
+    const f = forward.ants.indexOf(uid) as number;
+    const r = reverse.ants.indexOf(uid) as number;
+    assert.equal(forward.ants.avoidX[f], reverse.ants.avoidX[r], `uid ${uid} x`);
+    assert.equal(forward.ants.avoidY[f], reverse.ants.avoidY[r], `uid ${uid} y`);
+  }
+});

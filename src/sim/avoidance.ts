@@ -64,11 +64,14 @@ export function computeAvoidance(world: World, scratch: AvoidScratch): void {
         scratch.idx,
         scratch.d2,
       );
+      const rightBias = params.sidestepRightBias;
+      let oncoming = 0;
       for (let m = 0; m < k; m++) {
         const j = scratch.idx[m];
         const dpx = posX[j] - posX[i];
         const dpy = posY[j] - posY[i];
         if (dpx * fx + dpy * fy <= 0) continue; // only ants in front
+        if (velX[j] * fx + velY[j] * fy < 0) oncoming += 1; // for lane keeping
         const dvx = velX[j] - velX[i];
         const dvy = velY[j] - velY[i];
         const t = timeToCollision(dpx, dpy, dvx, dvy, 2 * params.antRadius);
@@ -90,12 +93,32 @@ export function computeAvoidance(world: World, scratch: AvoidScratch): void {
           ly = fx;
           ll = 1;
         }
+        // Lean the sidestep toward the own right. For two ants walking at each
+        // other the away directions are opposite and so are their rights, so
+        // the pushes stay mirror images: both agree on who passes where, and
+        // near head-on that is always right-hand traffic.
+        let sx = lx / ll - fy * rightBias;
+        let sy = ly / ll + fx * rightBias;
+        const sl = Math.hypot(sx, sy);
+        if (sl < 1e-3) {
+          sx = -fy;
+          sy = fx;
+        } else {
+          sx /= sl;
+          sy /= sl;
+        }
         const urgency = 1 - t / params.tHorizon;
         const weight = mass[j] / (mass[i] + mass[j]); // unloaded ants give way to carriers
-        ax += (lx / ll) * sp * urgency * weight;
-        ay += (ly / ll) * sp * urgency * weight;
+        ax += sx * sp * urgency * weight;
+        ay += sy * sp * urgency * weight;
       }
       const cap = params.avoidMaxSpeedFactor * sp;
+      if (oncoming > 0 && params.laneKeep > 0) {
+        // Lane keeping: with oncoming traffic ahead, a steady drift to the own
+        // right sorts the streams into lanes (and presses them closer together).
+        ax += -fy * params.laneKeep * cap;
+        ay += fx * params.laneKeep * cap;
+      }
       const len = Math.hypot(ax, ay);
       if (len > cap) {
         ax *= cap / len;

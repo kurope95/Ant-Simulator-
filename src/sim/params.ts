@@ -61,6 +61,10 @@ export interface SimParams {
   rAvoidMax: number;
   maxNeighbours: number;
   avoidMaxSpeedFactor: number;
+  // Weight of the own right in each sidestep direction (0: straight away from the other ant).
+  sidestepRightBias: number;
+  // Drift to the own right while oncoming ants are ahead, as a share of the avoidance cap (0: off).
+  laneKeep: number;
   pbdIterations: number;
   antCollisions: boolean;
   nestExemptFactor: number;
@@ -134,6 +138,8 @@ export function defaultParams(): SimParams {
     rAvoidMax: 24,
     maxNeighbours: 16,
     avoidMaxSpeedFactor: 0.5,
+    sidestepRightBias: 0,
+    laneKeep: 0,
     pbdIterations: 2,
     antCollisions: true,
     nestExemptFactor: 1.0,
