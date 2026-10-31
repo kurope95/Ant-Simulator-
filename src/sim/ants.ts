@@ -1,3 +1,4 @@
+import { f32, i32, sameKind, u32, u8 } from "../core/shared.js";
 import type { Vec2 } from "../core/vec2.js";
 import type { SimParams } from "./params.js";
 import { AntRole, AntState, Combat, kNoFoe } from "./types.js";
@@ -62,44 +63,44 @@ export class Ants {
 
   constructor(capacity = 64) {
     this.capacity = capacity;
-    this.uid = new Uint32Array(capacity);
-    this.colony = new Uint8Array(capacity);
-    this.role = new Uint8Array(capacity);
-    this.state = new Uint8Array(capacity);
-    this.posX = new Float32Array(capacity);
-    this.posY = new Float32Array(capacity);
-    this.prevX = new Float32Array(capacity);
-    this.prevY = new Float32Array(capacity);
-    this.velX = new Float32Array(capacity);
-    this.velY = new Float32Array(capacity);
-    this.heading = new Float32Array(capacity);
-    this.speed = new Float32Array(capacity);
-    this.mass = new Float32Array(capacity);
-    this.energy = new Float32Array(capacity);
-    this.timeSinceAnchor = new Float32Array(capacity);
-    this.dropX = new Float32Array(capacity);
-    this.dropY = new Float32Array(capacity);
-    this.timeSinceLastMarker = new Float32Array(capacity);
-    this.degradeTimer = new Float32Array(capacity);
-    this.lastMarkerCell = new Int32Array(capacity);
-    this.wanderOffset = new Float32Array(capacity);
-    this.wanderHeading = new Float32Array(capacity);
-    this.wanderTimer = new Float32Array(capacity);
-    this.homeErrX = new Float32Array(capacity);
-    this.homeErrY = new Float32Array(capacity);
-    this.avoidX = new Float32Array(capacity);
-    this.avoidY = new Float32Array(capacity);
-    this.lifeLeft = new Float32Array(capacity);
-    this.wounds = new Float32Array(capacity);
-    this.stress = new Float32Array(capacity);
-    this.fear = new Float32Array(capacity);
-    this.sinceHit = new Float32Array(capacity);
-    this.combat = new Uint8Array(capacity);
-    this.combatTimer = new Float32Array(capacity);
-    this.foe = new Uint32Array(capacity);
-    this.load = new Float32Array(capacity);
-    this.richFind = new Uint8Array(capacity);
-    this.foodWait = new Float32Array(capacity);
+    this.uid = u32(capacity);
+    this.colony = u8(capacity);
+    this.role = u8(capacity);
+    this.state = u8(capacity);
+    this.posX = f32(capacity);
+    this.posY = f32(capacity);
+    this.prevX = f32(capacity);
+    this.prevY = f32(capacity);
+    this.velX = f32(capacity);
+    this.velY = f32(capacity);
+    this.heading = f32(capacity);
+    this.speed = f32(capacity);
+    this.mass = f32(capacity);
+    this.energy = f32(capacity);
+    this.timeSinceAnchor = f32(capacity);
+    this.dropX = f32(capacity);
+    this.dropY = f32(capacity);
+    this.timeSinceLastMarker = f32(capacity);
+    this.degradeTimer = f32(capacity);
+    this.lastMarkerCell = i32(capacity);
+    this.wanderOffset = f32(capacity);
+    this.wanderHeading = f32(capacity);
+    this.wanderTimer = f32(capacity);
+    this.homeErrX = f32(capacity);
+    this.homeErrY = f32(capacity);
+    this.avoidX = f32(capacity);
+    this.avoidY = f32(capacity);
+    this.lifeLeft = f32(capacity);
+    this.wounds = f32(capacity);
+    this.stress = f32(capacity);
+    this.fear = f32(capacity);
+    this.sinceHit = f32(capacity);
+    this.combat = u8(capacity);
+    this.combatTimer = f32(capacity);
+    this.foe = u32(capacity);
+    this.load = f32(capacity);
+    this.richFind = u8(capacity);
+    this.foodWait = f32(capacity);
   }
 
   size(): number {
@@ -260,7 +261,7 @@ type GrowableArray =
   | Float32Array;
 
 function grow<T extends GrowableArray>(array: T, capacity: number): T {
-  const next = new (array.constructor as { new (length: number): T })(capacity);
+  const next = sameKind(array, capacity);
   next.set(array);
   return next;
 }
