@@ -64,6 +64,44 @@ export interface SimParams {
   birthRatePerAnt: number;
   // Births that can bank up while the stores are low.
   birthBurst: number;
+  // Colony conflict (docs/superpowers/specs/2026-10-31-colony-conflict-design.md).
+  conflict: boolean;
+  warriorRatio: number;
+  warriorDamage: number;
+  warriorArmor: number;
+  biteDps: number;
+  biteReach: number;
+  engageRadius: number;
+  oddsRadius: number;
+  loseRadius: number;
+  nestGuardFactor: number;
+  standoffTime: number;
+  chaseTime: number;
+  retreatTime: number;
+  retreatOdds: number;
+  workerOdds: number;
+  retreatHealth: number;
+  warriorCall: number;
+  workerCall: number;
+  workerEngage: number;
+  battleHalfLife: number;
+  battleAversion: number;
+  battleDetectMin: number;
+  woundHeal: number;
+  nestHeal: number;
+  corpseFood: number;
+  corpseLifetime: number;
+  mealStress: number;
+  deliverCalm: number;
+  hungerStress: number;
+  nestMix: number;
+  nestAbsorb: number;
+  fearPerDamage: number;
+  sisterDeathFear: number;
+  fearRadius: number;
+  fearDecay: number;
+  boldStress: number;
+  fearDamp: number;
   nestBaseR: number;
   nestGrowth: number;
   foodBaseR: number;
@@ -149,6 +187,43 @@ export function defaultParams(): SimParams {
     birthRateBase: 1,
     birthRatePerAnt: 0.004,
     birthBurst: 3,
+    conflict: true,
+    warriorRatio: 0.1,
+    warriorDamage: 3,
+    warriorArmor: 2,
+    biteDps: 8,
+    biteReach: 3,
+    engageRadius: 24,
+    oddsRadius: 32,
+    loseRadius: 48,
+    nestGuardFactor: 4,
+    standoffTime: 3,
+    chaseTime: 3,
+    retreatTime: 6,
+    retreatOdds: 1.5,
+    workerOdds: 2,
+    retreatHealth: 0.35,
+    warriorCall: 0.6,
+    workerCall: 0.1,
+    workerEngage: 0.5,
+    battleHalfLife: 8,
+    battleAversion: 0.5,
+    battleDetectMin: 0.05,
+    woundHeal: 0.3,
+    nestHeal: 3,
+    corpseFood: 2,
+    corpseLifetime: 120,
+    mealStress: 0.5,
+    deliverCalm: 0.05,
+    hungerStress: 0.02,
+    nestMix: 0.2,
+    nestAbsorb: 0.02,
+    fearPerDamage: 0.01,
+    sisterDeathFear: 0.15,
+    fearRadius: 48,
+    fearDecay: 0.01,
+    boldStress: 0.8,
+    fearDamp: 1.5,
     nestBaseR: 20,
     nestGrowth: 0.4,
     foodBaseR: 12,

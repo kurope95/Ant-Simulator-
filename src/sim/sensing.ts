@@ -3,7 +3,7 @@ import { angleOf, fromAngle, type Vec2 } from "../core/vec2.js";
 import { MarkerChannel, type MarkerGrid } from "./marker_grid.js";
 import { isSolidAt, freeDistance, freeDistanceDir, lineOfSight } from "./obstacles.js";
 import type { SimParams } from "./params.js";
-import { AntState } from "./types.js";
+import { AntRole, AntState, Combat } from "./types.js";
 import type { World } from "./world.js";
 
 export interface SensorSample {
@@ -111,7 +111,14 @@ export function senseMarkers(
   let bestBias = Infinity;
   // Foreign scent repels: a rival's strength on a sampled cell comes off the ant's own signal there.
   const aversion = world.params.foreignAversion;
-  const contested = aversion > 0 && grid.colonies > 1;
+  const battleChannel = channel === MarkerChannel.Battle;
+  const contested = !battleChannel && aversion > 0 && grid.colonies > 1;
+  // Battle smell is danger to a worker: it lowers trail cells, less so when the
+  // ant is stressed (conflict design §4). Warriors are drawn to it instead.
+  const danger =
+    !battleChannel && world.params.conflict && grid.colonies > 1 && ants.role[ant] !== AntRole.Warrior
+      ? world.params.battleAversion * (1 - ants.stress[ant])
+      : 0;
   let bestX = 0;
   let bestY = 0;
 
@@ -128,9 +135,10 @@ export function senseMarkers(
     const home = grid.toHome[index];
     const food = grid.toFood[index];
     if (food > bestFoodSignal) bestFoodSignal = food;
-    const own = channel === MarkerChannel.ToHome ? home : food;
+    const own = battleChannel ? grid.battle[index] : channel === MarkerChannel.ToHome ? home : food;
     // The signal is the score: a cell only counts as found while the own scent beats the rival's.
-    const signal = contested ? own - aversion * rivalStrength(grid, colony, cell) : own;
+    let signal = contested ? own - aversion * rivalStrength(grid, colony, cell) : own;
+    if (danger > 0) signal -= danger * grid.battle[index];
     const bias = Math.abs(sample.angleOffset);
     if (signal > 0 && (signal > bestSignal || (signal === bestSignal && bias < bestBias))) {
       bestSignal = signal;
@@ -140,7 +148,7 @@ export function senseMarkers(
     }
   }
 
-  const found = bestSignal >= world.params.markerDetectMin;
+  const found = bestSignal >= (battleChannel ? world.params.battleDetectMin : world.params.markerDetectMin);
   return {
     found,
     targetHeading: found ? angleOf({ x: bestX - posX, y: bestY - posY }) : 0,
@@ -250,6 +258,22 @@ export function directSightTarget(world: World, ant: number): Vec2 | null {
         targetX = item.pos.x;
         targetY = item.pos.y;
         hasTarget = true;
+      }
+    }
+    // Workers also see bodies lying in range (conflict design §2).
+    if (params.conflict && ants.role[ant] !== AntRole.Warrior && ants.combat[ant] === Combat.None) {
+      const corpse = world.corpses.nearest(posX, posY, params.sensorRadius);
+      if (corpse >= 0) {
+        const body = world.corpses.items[corpse];
+        const dx = body.x - posX;
+        const dy = body.y - posY;
+        const distSq = dx * dx + dy * dy;
+        if (distSq < bestDistSq && lineOfSight(world.obstacles, { x: posX, y: posY }, { x: body.x, y: body.y })) {
+          bestDistSq = distSq;
+          targetX = body.x;
+          targetY = body.y;
+          hasTarget = true;
+        }
       }
     }
   } else {

@@ -86,7 +86,11 @@ test("reach: 1000 u delivers", { timeout: 120_000 }, () => {
   const setup = makeSetup({ x: 2600, y: 1000 }, 7, "reach-test");
   addColony(setup, { x: 200, y: 500 }, 0, 150);
   addFood(setup, { x: 1200, y: 500 }, 20000, FoodKind.Seeds);
-  const world = worldFromSetup(setup, defaultParams());
+  // Foraging reach only: warriors carry nothing, and over two minutes a colony
+  // with them delivers what one with 10% fewer workers does (seeds 1-4, 7).
+  const params = defaultParams();
+  params.warriorRatio = 0;
+  const world = worldFromSetup(setup, params);
   for (let tick = 1; tick <= 7200; tick++) stepWorld(world);
   const delivered = world.colonies[0].deliveredTotal;
   assert.ok(delivered >= 81, `delivered ${delivered}, expected at least 81`);

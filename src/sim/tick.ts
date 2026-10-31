@@ -3,6 +3,7 @@ import { randRange, randUnit } from "../core/rng.js";
 import { fromAngle } from "../core/vec2.js";
 import { slideHeadingAlongNormal } from "./collide.js";
 import { colonyReserve, nestRadius, type Colony } from "./colony.js";
+import { answersCall, combatStep, kFightDeathWindow, type CombatSteer } from "./conflict.js";
 import { ContactKind, makeChunkEvents, type ChunkEvents } from "./events.js";
 import { degrade, deposit, emissionStrength, foodAt, homeAt, MarkerChannel } from "./marker_grid.js";
 import { isSolidAt, speedFactorAt, freeDistance } from "./obstacles.js";
@@ -15,14 +16,16 @@ import {
 } from "./sensing.js";
 import { turnToward, updateWander } from "./steering.js";
 import { evaluateStuck, inRestZone } from "./stuck.js";
-import { AntRole, AntState, RandStream } from "./types.js";
+import { AntRole, AntState, Combat, RandStream } from "./types.js";
 import type { World } from "./world.js";
 
 export function senseChannel(state: number): MarkerChannel {
   return state === AntState.Foraging ? MarkerChannel.ToFood : MarkerChannel.ToHome;
 }
 
-function depositChannel(state: number): MarkerChannel | null {
+function depositChannel(state: number, role: number): MarkerChannel | null {
+  // Warriors guard trails but never lay them (conflict design §3).
+  if (role === AntRole.Warrior) return null;
   if (state === AntState.Foraging) return MarkerChannel.ToHome;
   if (state === AntState.ReturningFood) return MarkerChannel.ToFood;
   return null;
@@ -107,6 +110,14 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
   for (let ant = begin; ant < end; ant++) {
     ants.energy[ant] -= params.energyBurn * dt;
     ants.lifeLeft[ant] -= dt;
+    if (params.conflict) {
+      ants.sinceHit[ant] += dt;
+      if (ants.wounds[ant] > 0) ants.wounds[ant] = Math.max(0, ants.wounds[ant] - params.woundHeal * dt);
+      if (ants.fear[ant] > 0) ants.fear[ant] = Math.max(0, ants.fear[ant] - params.fearDecay * dt);
+      if (ants.energy[ant] < params.exhaustedAt) {
+        ants.stress[ant] = Math.min(1, ants.stress[ant] + params.hungerStress * dt);
+      }
+    }
     ants.timeSinceAnchor[ant] += dt;
     ants.timeSinceLastMarker[ant] += dt;
     ants.degradeTimer[ant] = Math.max(0, ants.degradeTimer[ant] - dt);
@@ -145,7 +156,8 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
         ants.timeSinceLastMarker[ant] = 0;
         ants.dropX[ant] = ants.posX[ant];
         ants.dropY[ant] = ants.posY[ant];
-        if (stuck.degrade) ants.degradeTimer[ant] = params.degradeTime;
+        // Warriors never lay trail, so they never erase it either.
+        if (stuck.degrade && ants.role[ant] !== AntRole.Warrior) ants.degradeTimer[ant] = params.degradeTime;
       }
     }
 
@@ -162,9 +174,26 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
       desired = chosen.heading;
     }
 
+    // Colony conflict (design §4): a fight steers the ant directly; otherwise
+    // warriors, and a few bold workers, follow their colony's battle smell.
+    let fight: CombatSteer | null = null;
+    if (params.conflict) {
+      fight = combatStep(world, ant, world.look, dt, out);
+      if (fight.heading !== null) {
+        desired = fight.heading;
+      } else if (world.look.active && answersCall(world, ant)) {
+        const call = senseMarkers(world, ant, MarkerChannel.Battle, followerPattern(params));
+        if (call.found) {
+          desired = call.targetHeading;
+          chosen = { ...chosen, heading: desired, fromSight: false, fromMarkers: true, fromHoming: false };
+        }
+      }
+    }
+    const fightSteers = fight !== null && fight.heading !== null;
+
     const pickedWander = updateWander(world, ant, dt);
     let clearAhead = false;
-    if (!chosen.fromSight && !chosen.fromHoming) {
+    if (!fightSteers && !chosen.fromSight && !chosen.fromHoming) {
       if (chosen.fromMarkers) {
         // A redraw nudges a marker-following ant; between redraws the marker wins.
         if (pickedWander) desired += ants.wanderOffset[ant];
@@ -191,8 +220,10 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
 
     ants.heading[ant] = turnToward(ants.heading[ant], desired, params.turnRate * dt);
     const direction = fromAngle(ants.heading[ant]);
-    ants.velX[ant] = ants.speed[ant] * direction.x;
-    ants.velY[ant] = ants.speed[ant] * direction.y;
+    // An ant facing off or biting stands its ground.
+    const moveSpeed = fight !== null && fight.hold ? 0 : ants.speed[ant];
+    ants.velX[ant] = moveSpeed * direction.x;
+    ants.velY[ant] = moveSpeed * direction.y;
     ants.prevX[ant] = ants.posX[ant];
     ants.prevY[ant] = ants.posY[ant];
     // A centre inside a solid cell must still be able to move, or the ant
@@ -206,7 +237,7 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
     const dropDy = ants.posY[ant] - ants.dropY[ant];
     if (dropDx * dropDx + dropDy * dropDy >= params.markerDropDist * params.markerDropDist) {
       const cell = world.markers.cellIndex({ x: ants.posX[ant], y: ants.posY[ant] });
-      const channel = depositChannel(ants.state[ant]);
+      const channel = depositChannel(ants.state[ant], ants.role[ant]);
       const strength = emissionStrength(ants.timeSinceAnchor[ant], params);
       if (channel !== null && cell >= 0 && strength >= params.markerEps) {
         out.deposits.push({ cell, colony: ants.colony[ant], channel, strength });
@@ -242,6 +273,15 @@ export function thinkChunk(world: World, begin: number, end: number, out: ChunkE
     if (foodIndex >= 0) {
       out.contacts.push({ antIndex: ant, kind: ContactKind.Food, target: foodIndex });
     }
+    if (
+      params.conflict &&
+      ants.state[ant] === AntState.Foraging &&
+      ants.role[ant] !== AntRole.Warrior &&
+      ants.combat[ant] === Combat.None
+    ) {
+      const corpse = world.corpses.nearest(ants.posX[ant], ants.posY[ant], 2 * params.antRadius);
+      if (corpse >= 0) out.contacts.push({ antIndex: ant, kind: ContactKind.Corpse, target: corpse });
+    }
 
     const colony = world.colonies[ants.colony[ant]];
     if (colony !== undefined) {
@@ -273,8 +313,13 @@ export function spawnAtNest(world: World, colony: Colony, lifeShare = 1): number
       )
     : Infinity;
   const angle = randRange(world.seed, uid, world.tick, RandStream.SpawnHeading, -Math.PI, Math.PI);
-  const role =
-    randUnit(world.seed, uid, world.tick, RandStream.SpawnRole) < params.explorerRatio
+  const warrior =
+    params.conflict &&
+    params.warriorRatio > 0 &&
+    randUnit(world.seed, uid, world.tick, RandStream.Warrior) < params.warriorRatio;
+  const role = warrior
+    ? AntRole.Warrior
+    : randUnit(world.seed, uid, world.tick, RandStream.SpawnRole) < params.explorerRatio
       ? AntRole.Explorer
       : AntRole.Follower;
   const speed =
@@ -329,6 +374,7 @@ export function resetChunkEvents(world: World): void {
       events.deposits.length = 0;
       events.degrades.length = 0;
       events.contacts.length = 0;
+      events.attacks.length = 0;
     }
   }
   lists.length = needed;
@@ -348,35 +394,45 @@ export function applyEvents(world: World, events: readonly ChunkEvents[]): void 
     for (const contact of chunk.contacts) {
       const ant = contact.antIndex;
       if (contact.kind === ContactKind.Food) {
-        if (ants.state[ant] === AntState.ReturningFood) {
+        if (ants.role[ant] === AntRole.Warrior) {
+          // A guard eats at the pile and turns back along the trail (conflict design §3).
+          ants.energy[ant] = params.energyMax;
+          if (ants.state[ant] === AntState.Foraging) {
+            ants.state[ant] = AntState.ReturningExhausted;
+            turnAround(world, ant);
+          }
+        } else if (ants.state[ant] === AntState.ReturningFood) {
           ants.energy[ant] = params.energyMax;
         } else if (world.food.takeOne(contact.target)) {
-          ants.state[ant] = AntState.ReturningFood;
-          ants.mass[ant] = params.massCarrying;
-          ants.energy[ant] = params.energyMax;
-          ants.heading[ant] = wrapAngle(ants.heading[ant] + Math.PI);
-          ants.wanderHeading[ant] = ants.heading[ant];
-          ants.timeSinceAnchor[ant] = 0;
-          ants.dropX[ant] = ants.posX[ant];
-          ants.dropY[ant] = ants.posY[ant];
-          ants.timeSinceLastMarker[ant] = 0;
+          pickUp(world, ant, 1);
         }
+      } else if (contact.kind === ContactKind.Corpse) {
+        const corpse = world.corpses.items[contact.target];
+        if (corpse === undefined || corpse.taken || ants.state[ant] !== AntState.Foraging) continue;
+        corpse.taken = true;
+        pickUp(world, ant, corpse.value);
       } else {
         const colony = world.colonies[contact.target];
         if (colony === undefined) continue;
         ants.homeErrX[ant] = 0;
         ants.homeErrY[ant] = 0;
         const state = ants.state[ant];
+        const arriving = state === AntState.ReturningFood || state === AntState.ReturningExhausted;
         if (state === AntState.ReturningFood) {
-          colony.foodPool += 1;
+          // A body is worth more than one food; plain food carries 1.
+          colony.foodPool += Math.max(1, ants.load[ant]);
           colony.deliveredTotal += 1;
           colony.deliveredLastSample += 1;
           ants.mass[ant] = params.mass;
+          ants.load[ant] = 0;
           ants.state[ant] = AntState.Foraging;
+          if (params.conflict) ants.stress[ant] = Math.max(0, ants.stress[ant] - params.deliverCalm);
         } else if (state === AntState.ReturningExhausted) {
           ants.state[ant] = AntState.Foraging;
         }
-        eatAtNest(colony, ant, world);
+        const hunger = params.energyMax - ants.energy[ant];
+        const ate = eatAtNest(colony, ant, world);
+        if (params.conflict) settleAtNest(world, colony, ant, arriving, hunger, ate);
         ants.timeSinceAnchor[ant] = 0;
         if (state === AntState.ReturningFood || state === AntState.ReturningExhausted) {
           ants.heading[ant] = wrapAngle(ants.heading[ant] + Math.PI);
@@ -387,6 +443,7 @@ export function applyEvents(world: World, events: readonly ChunkEvents[]): void 
         }
       }
     }
+    for (const hit of chunk.attacks) applyBite(world, hit.attacker, hit.victim, hit.damage);
   }
 
   world.food.removeEmpty();
@@ -402,26 +459,93 @@ export function applyEvents(world: World, events: readonly ChunkEvents[]): void 
   }
 }
 
+function turnAround(world: World, ant: number): void {
+  const ants = world.ants;
+  ants.heading[ant] = wrapAngle(ants.heading[ant] + Math.PI);
+  ants.wanderHeading[ant] = ants.heading[ant];
+  ants.timeSinceAnchor[ant] = 0;
+  ants.dropX[ant] = ants.posX[ant];
+  ants.dropY[ant] = ants.posY[ant];
+  ants.timeSinceLastMarker[ant] = 0;
+}
+
+// Picks up food, or a body worth `load` food, and turns for home.
+function pickUp(world: World, ant: number, load: number): void {
+  const ants = world.ants;
+  ants.state[ant] = AntState.ReturningFood;
+  ants.mass[ant] = world.params.massCarrying;
+  ants.energy[ant] = world.params.energyMax;
+  ants.load[ant] = load;
+  turnAround(world, ant);
+}
+
+// Colony conflict at the nest (design §1, §6): wounds heal fast, a short meal
+// stresses the ant and a full one calms it, and an arriving ant blends its
+// feelings with the nest's, which drift a little toward the ant's.
+function settleAtNest(
+  world: World,
+  colony: Colony,
+  ant: number,
+  arriving: boolean,
+  hunger: number,
+  ate: number,
+): void {
+  const ants = world.ants;
+  const params = world.params;
+  const dt = 1 / params.simHz;
+  if (ants.wounds[ant] > 0) ants.wounds[ant] = Math.max(0, ants.wounds[ant] - params.nestHeal * dt);
+  if (!arriving) return;
+  if (hunger >= 5) {
+    const short = 1 - ate / hunger;
+    ants.stress[ant] += (short - ants.stress[ant]) * params.mealStress;
+  }
+  ants.stress[ant] += (colony.nestStress - ants.stress[ant]) * params.nestMix;
+  ants.fear[ant] += (colony.nestFear - ants.fear[ant]) * params.nestMix;
+  colony.nestStress += (ants.stress[ant] - colony.nestStress) * params.nestAbsorb;
+  colony.nestFear += (ants.fear[ant] - colony.nestFear) * params.nestAbsorb;
+}
+
+// A bite lands (design §4): armour softens it, it frightens the victim, and a
+// victim that was not fighting turns on its attacker.
+function applyBite(world: World, attacker: number, victim: number, damage: number): void {
+  const ants = world.ants;
+  const params = world.params;
+  if (victim >= ants.size() || ants.energy[victim] - ants.wounds[victim] <= 0) return;
+  const armor = ants.role[victim] === AntRole.Warrior ? params.warriorArmor : 1;
+  const taken = damage / armor;
+  ants.wounds[victim] += taken;
+  ants.sinceHit[victim] = 0;
+  ants.fear[victim] = Math.min(1, ants.fear[victim] + taken * params.fearPerDamage);
+  if (ants.combat[victim] === Combat.None) {
+    ants.combat[victim] = Combat.Fight;
+    ants.combatTimer[victim] = params.chaseTime;
+    ants.foe[victim] = ants.uid[attacker];
+  }
+}
+
 // An ant at its own nest eats from the stores up to a full stomach. With the life
 // cycle on the meal costs foodPerEnergy per unit of energy; when the stores run
 // short it eats what is left, and an ant that cannot eat at all starves.
-function eatAtNest(colony: Colony, ant: number, world: World): void {
+// Returns the energy eaten.
+function eatAtNest(colony: Colony, ant: number, world: World): number {
   const ants = world.ants;
   const params = world.params;
   const hunger = params.energyMax - ants.energy[ant];
   if (!params.lifeCycle || params.foodPerEnergy <= 0) {
     ants.energy[ant] = params.energyMax;
-    return;
+    return Math.max(0, hunger);
   }
-  if (hunger <= 0) return;
+  if (hunger <= 0) return 0;
   const cost = hunger * params.foodPerEnergy;
   if (colony.foodPool >= cost) {
     colony.foodPool -= cost;
     ants.energy[ant] = params.energyMax;
-  } else {
-    ants.energy[ant] += colony.foodPool / params.foodPerEnergy;
-    colony.foodPool = 0;
+    return hunger;
   }
+  const eaten = colony.foodPool / params.foodPerEnergy;
+  ants.energy[ant] += eaten;
+  colony.foodPool = 0;
+  return eaten;
 }
 
 // The queen lays at a steady rate that grows with the colony (more nurses), and
@@ -468,18 +592,48 @@ export function clampToWorld(world: World): void {
 
 export function removeDead(world: World): void {
   const ants = world.ants;
+  const params = world.params;
+  const fightDeaths: number[] = [];
   for (let index = ants.size() - 1; index >= 0; index--) {
-    const starved = ants.energy[index] <= 0;
-    const old = world.params.lifeCycle && ants.lifeLeft[index] <= 0;
+    // Health is energy less wounds; without conflict there are no wounds.
+    const starved = ants.energy[index] - ants.wounds[index] <= 0;
+    const old = params.lifeCycle && ants.lifeLeft[index] <= 0;
     if (!starved && !old) continue;
+    const killed = starved && params.conflict && ants.sinceHit[index] < kFightDeathWindow;
     const colony = world.colonies[ants.colony[index]];
     if (colony !== undefined) {
       colony.population -= 1;
-      if (starved) colony.diedOfHunger += 1;
+      if (killed) colony.diedInFight += 1;
+      else if (starved) colony.diedOfHunger += 1;
       else colony.diedOfAge += 1;
+    }
+    if (params.conflict) {
+      // Every death leaves a body worth food, plus anything it was carrying (design §2).
+      const carried = ants.state[index] === AntState.ReturningFood ? Math.max(1, ants.load[index]) : 0;
+      world.corpses.add(
+        ants.posX[index],
+        ants.posY[index],
+        ants.colony[index],
+        ants.heading[index],
+        params.corpseFood + carried,
+        world.tick + Math.round(params.corpseLifetime * params.simHz),
+      );
+      if (killed) fightDeaths.push(ants.posX[index], ants.posY[index], ants.colony[index]);
     }
     ants.removeSwap(index);
   }
+  if (!params.conflict) return;
+  // Sisters who saw a nestmate killed nearby are frightened (design §6).
+  const r2 = params.fearRadius * params.fearRadius;
+  for (let d = 0; d < fightDeaths.length; d += 3) {
+    for (let i = 0; i < ants.size(); i++) {
+      if (ants.colony[i] !== fightDeaths[d + 2]) continue;
+      const dx = ants.posX[i] - fightDeaths[d];
+      const dy = ants.posY[i] - fightDeaths[d + 1];
+      if (dx * dx + dy * dy <= r2) ants.fear[i] = Math.min(1, ants.fear[i] + params.sisterDeathFear);
+    }
+  }
+  world.corpses.rebuild(world.size, world.tick);
 }
 
 export function updateStats(world: World): void {

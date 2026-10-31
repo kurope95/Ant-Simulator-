@@ -5,6 +5,8 @@ import { kNoOwner } from "./types.js";
 export enum MarkerChannel {
   ToHome,
   ToFood,
+  // Left by fighting ants; fades fast, never owns ground (conflict design §4).
+  Battle,
 }
 
 // One layer per colony: layer `c` starts at c * (width * height), so every
@@ -17,6 +19,7 @@ export interface MarkerGrid {
   owner: Int8Array; // derived by decayMarkers: the dominant colony, for drawing only
   toHome: Float32Array;
   toFood: Float32Array;
+  battle: Float32Array;
   resize(worldSize: Vec2, cellSize: number, colonies?: number): void;
   cellIndex(pos: Vec2): number;
 }
@@ -30,6 +33,7 @@ export function makeMarkerGrid(worldSize: Vec2, cellSize: number, colonies = 1):
     owner: new Int8Array(0),
     toHome: new Float32Array(0),
     toFood: new Float32Array(0),
+    battle: new Float32Array(0),
     resize(size: Vec2, cell: number, layers = 1): void {
       this.cell = cell;
       this.width = Math.ceil(size.x / cell);
@@ -40,6 +44,7 @@ export function makeMarkerGrid(worldSize: Vec2, cellSize: number, colonies = 1):
       this.owner.fill(kNoOwner);
       this.toHome = new Float32Array(cells * this.colonies);
       this.toFood = new Float32Array(cells * this.colonies);
+      this.battle = new Float32Array(cells * this.colonies);
     },
     cellIndex(pos: Vec2): number {
       if (pos.x < 0 || pos.y < 0 || pos.x >= this.width * this.cell || pos.y >= this.height * this.cell) {
@@ -64,6 +69,11 @@ export function foodAt(grid: MarkerGrid, colony: number, cell: number): number {
   return grid.toFood[colony * grid.width * grid.height + cell];
 }
 
+export function battleAt(grid: MarkerGrid, colony: number, cell: number): number {
+  if (cell < 0 || colony < 0 || colony >= grid.colonies) return 0;
+  return grid.battle[colony * grid.width * grid.height + cell];
+}
+
 export function emissionStrength(timeSinceAnchor: number, params: SimParams): number {
   return Math.exp(-timeSinceAnchor * params.emissionDecay);
 }
@@ -78,6 +88,11 @@ export function deposit(
 ): void {
   if (colony < 0 || colony >= grid.colonies) return;
   const cells = grid.width * grid.height;
+  if (channel === MarkerChannel.Battle) {
+    const index = colony * cells + cell;
+    grid.battle[index] = Math.max(grid.battle[index], strength);
+    return;
+  }
   if (params.territoryRule) {
     // Territory wears rival layers down at the deposit cell, but a rival's
     // trail never stops the depositor from laying its own.
@@ -102,9 +117,21 @@ export function degrade(
   factor: number,
 ): void {
   if (colony < 0 || colony >= grid.colonies) return;
+  if (channel === MarkerChannel.Battle) return;
   const values = channel === MarkerChannel.ToHome ? grid.toHome : grid.toFood;
   const index = colony * grid.width * grid.height + cell;
   values[index] *= factor;
+}
+
+// Battle smell fades on its own, faster clock. Skipped while it is all zero.
+export function decayBattle(grid: MarkerGrid, factor: number, eps: number): void {
+  const battle = grid.battle;
+  for (let i = 0; i < battle.length; i++) {
+    const value = battle[i];
+    if (value === 0) continue;
+    const next = value * factor;
+    battle[i] = next < eps ? 0 : next;
+  }
 }
 
 // Each colony's strength on the cell being recomputed by decayMarkers: the larger of its two channels.

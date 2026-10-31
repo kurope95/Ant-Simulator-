@@ -8,10 +8,12 @@ import {
   resolveObstacles,
   type CollisionScratch,
 } from "./collide.js";
-import type { Colony } from "./colony.js";
+import { nestRadius, type Colony } from "./colony.js";
+import { computeLookAround, makeLookAround, type LookAround } from "./conflict.js";
+import { Corpses } from "./corpses.js";
 import type { ChunkEvents } from "./events.js";
 import { makeFoodSources, type FoodSources } from "./food.js";
-import { makeMarkerGrid, decayMarkers, type MarkerGrid } from "./marker_grid.js";
+import { makeMarkerGrid, decayBattle, decayMarkers, type MarkerGrid } from "./marker_grid.js";
 import { makeObstacleGrid, rebuildBorder, type ObstacleGrid } from "./obstacles.js";
 import { emptyPhaseTimings, Phase, SubPhase, type PhaseTimings } from "./phases.js";
 import { markerDecayFactor, type SimParams } from "./params.js";
@@ -42,6 +44,9 @@ export interface World {
   avoidScratch: AvoidScratch;
   chunkEvents: ChunkEvents[];
   nextUid: number;
+  // Colony conflict: bodies lying on the map, and each ant's start-of-tick look around.
+  corpses: Corpses;
+  look: LookAround;
 }
 
 // Opens the breach segments in a running world: the cells become empty ground
@@ -83,6 +88,8 @@ export function makeWorld(params: SimParams, seed: number, size?: Vec2): World {
     avoidScratch: makeAvoidScratch(),
     chunkEvents: [],
     nextUid: 0,
+    corpses: new Corpses(),
+    look: makeLookAround(),
   };
 }
 
@@ -90,6 +97,29 @@ export function makeWorld(params: SimParams, seed: number, size?: Vec2): World {
 // clamp, one wall resolve, one clamp. With it on, the hash is rebuilt from the
 // positions Think just wrote, and each PBD iteration resolves ants against
 // each other and then against walls, so walls always win.
+// A rival cannot enter another colony's nest: it is pushed back to the nest
+// edge like a wall (conflict design §5). Own ants pass as before.
+export function keepOutOfRivalNests(world: World): void {
+  if (!world.params.conflict || world.colonies.length < 2) return;
+  const ants = world.ants;
+  for (const colony of world.colonies) {
+    const r = nestRadius(colony, world.params) + world.params.antRadius;
+    const r2 = r * r;
+    for (let i = 0; i < ants.size(); i++) {
+      if (ants.colony[i] === colony.id) continue;
+      const dx = ants.posX[i] - colony.nest.x;
+      const dy = ants.posY[i] - colony.nest.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 >= r2) continue;
+      const d = Math.sqrt(d2);
+      const nx = d > 1e-6 ? dx / d : 1;
+      const ny = d > 1e-6 ? dy / d : 0;
+      ants.posX[i] = colony.nest.x + nx * r;
+      ants.posY[i] = colony.nest.y + ny * r;
+    }
+  }
+}
+
 function collisionPhase(world: World): void {
   const ants = world.ants;
   const params = world.params;
@@ -102,6 +132,7 @@ function collisionPhase(world: World): void {
     mark = now;
   };
   if (!params.antCollisions) {
+    keepOutOfRivalNests(world);
     clampToWorld(world);
     resolveObstacles(world);
     clampToWorld(world);
@@ -112,6 +143,7 @@ function collisionPhase(world: World): void {
   lap(SubPhase.CollideHash);
   for (let it = 0; it < params.pbdIterations; it++) {
     resolveAntOverlaps(world, world.collisionScratch);
+    keepOutOfRivalNests(world);
     lap(SubPhase.CollideAnts);
     clampToWorld(world);
     resolveObstacles(world);
@@ -152,6 +184,8 @@ export function stepWorld(world: World): void {
     // loop below sees the same avoidance whatever order its chunks run in.
     const avoidStart = performance.now();
     if (world.params.antCollisions) computeAvoidance(world, world.avoidScratch);
+    // Fight decisions read this pass, not live neighbours, so chunk order cannot matter.
+    computeLookAround(world, world.look);
     const thinkStart = performance.now();
     world.timings.sub[SubPhase.Avoidance] = thinkStart - avoidStart;
     resetChunkEvents(world);
@@ -168,14 +202,21 @@ export function stepWorld(world: World): void {
   timed(Phase.Events, () => applyEvents(world, world.chunkEvents));
   timed(Phase.Collisions, () => collisionPhase(world));
   timed(Phase.Removals, () => removeDead(world));
-  timed(Phase.Decay, () =>
+  timed(Phase.Decay, () => {
     decayMarkers(
       world.markers,
       markerDecayFactor(world.params, 1 / world.params.simHz),
       world.params.markerEps,
       world.params.flipMargin,
-    ),
-  );
+    );
+    if (world.params.conflict) {
+      decayBattle(
+        world.markers,
+        Math.pow(2, -1 / (world.params.simHz * world.params.battleHalfLife)),
+        world.params.battleDetectMin, // smell too faint to follow is gone: about 35 s after the last bite
+      );
+    }
+  });
   timed(Phase.Stats, () => updateStats(world));
 
   world.timings.totalMs = total.elapsedMs();

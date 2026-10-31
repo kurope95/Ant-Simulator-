@@ -17,6 +17,8 @@ export interface DegradeEvent {
 export enum ContactKind {
   Food,
   Nest,
+  // target is the index in world.corpses.items.
+  Corpse,
 }
 
 export interface ContactEvent {
@@ -25,12 +27,20 @@ export interface ContactEvent {
   target: number;
 }
 
+// A bite: indices are valid for the tick that wrote them (conflict design §4).
+export interface AttackEvent {
+  attacker: number;
+  victim: number;
+  damage: number;
+}
+
 export interface ChunkEvents {
   deposits: DepositEvent[];
   degrades: DegradeEvent[];
   contacts: ContactEvent[];
+  attacks: AttackEvent[];
 }
 
 export function makeChunkEvents(): ChunkEvents {
-  return { deposits: [], degrades: [], contacts: [] };
+  return { deposits: [], degrades: [], contacts: [], attacks: [] };
 }

@@ -21,6 +21,10 @@ export interface Colony {
   born: number;
   diedOfAge: number;
   diedOfHunger: number;
+  // Colony conflict: deaths in fights, and the feelings shared at the nest (design §1, §6).
+  diedInFight: number;
+  nestStress: number;
+  nestFear: number;
 }
 
 export function makeColony(id: ColonyId, nest: Vec2, color = 0, historyCapacity = 120): Colony {
@@ -40,12 +44,20 @@ export function makeColony(id: ColonyId, nest: Vec2, color = 0, historyCapacity 
     born: 0,
     diedOfAge: 0,
     diedOfHunger: 0,
+    diedInFight: 0,
+    nestStress: 0,
+    nestFear: 0,
   };
 }
 
 // Stored food the queen keeps back: reserveSeconds of the colony's eating at home.
 export function colonyReserve(colony: Colony, params: SimParams): number {
   return params.reserveSeconds * params.energyBurn * params.foodPerEnergy * colony.population;
+}
+
+// The ring around a nest inside which every rival is a raider (conflict design §4).
+export function guardRadius(colony: Colony, params: SimParams): number {
+  return nestRadius(colony, params) * params.nestGuardFactor;
 }
 
 export function nestRadius(colony: Colony, params: SimParams): number {

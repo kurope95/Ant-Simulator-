@@ -1,6 +1,6 @@
 import type { Vec2 } from "../core/vec2.js";
 import type { SimParams } from "./params.js";
-import { AntRole, AntState } from "./types.js";
+import { AntRole, AntState, Combat, kNoFoe } from "./types.js";
 
 export interface AntSpawn {
   pos: Vec2;
@@ -41,6 +41,16 @@ export class Ants {
   avoidX: Float32Array;
   avoidY: Float32Array;
   lifeLeft: Float32Array;
+  // Colony conflict (design §1, §4, §6): battle damage, feelings, fight state, and the
+  // food value of what the ant carries (1 for food, more for a body).
+  wounds: Float32Array;
+  stress: Float32Array;
+  fear: Float32Array;
+  sinceHit: Float32Array;
+  combat: Uint8Array;
+  combatTimer: Float32Array;
+  foe: Uint32Array;
+  load: Float32Array;
 
   private count = 0;
   private capacity: number;
@@ -76,6 +86,14 @@ export class Ants {
     this.avoidX = new Float32Array(capacity);
     this.avoidY = new Float32Array(capacity);
     this.lifeLeft = new Float32Array(capacity);
+    this.wounds = new Float32Array(capacity);
+    this.stress = new Float32Array(capacity);
+    this.fear = new Float32Array(capacity);
+    this.sinceHit = new Float32Array(capacity);
+    this.combat = new Uint8Array(capacity);
+    this.combatTimer = new Float32Array(capacity);
+    this.foe = new Uint32Array(capacity);
+    this.load = new Float32Array(capacity);
   }
 
   size(): number {
@@ -113,6 +131,14 @@ export class Ants {
     this.avoidX[i] = 0;
     this.avoidY[i] = 0;
     this.lifeLeft[i] = a.lifeLeft ?? Infinity;
+    this.wounds[i] = 0;
+    this.stress[i] = 0;
+    this.fear[i] = 0;
+    this.sinceHit[i] = 1e9;
+    this.combat[i] = Combat.None;
+    this.combatTimer[i] = 0;
+    this.foe[i] = kNoFoe;
+    this.load[i] = 0;
     this.indexByUid.set(uid, i);
     this.count += 1;
     return i;
@@ -153,6 +179,14 @@ export class Ants {
       this.avoidX[index] = this.avoidX[last];
       this.avoidY[index] = this.avoidY[last];
       this.lifeLeft[index] = this.lifeLeft[last];
+      this.wounds[index] = this.wounds[last];
+      this.stress[index] = this.stress[last];
+      this.fear[index] = this.fear[last];
+      this.sinceHit[index] = this.sinceHit[last];
+      this.combat[index] = this.combat[last];
+      this.combatTimer[index] = this.combatTimer[last];
+      this.foe[index] = this.foe[last];
+      this.load[index] = this.load[last];
       this.indexByUid.set(this.uid[index], index);
     }
     this.indexByUid.delete(removedUid);
@@ -195,6 +229,14 @@ export class Ants {
     this.avoidX = grow(this.avoidX, next);
     this.avoidY = grow(this.avoidY, next);
     this.lifeLeft = grow(this.lifeLeft, next);
+    this.wounds = grow(this.wounds, next);
+    this.stress = grow(this.stress, next);
+    this.fear = grow(this.fear, next);
+    this.sinceHit = grow(this.sinceHit, next);
+    this.combat = grow(this.combat, next);
+    this.combatTimer = grow(this.combatTimer, next);
+    this.foe = grow(this.foe, next);
+    this.load = grow(this.load, next);
     this.capacity = next;
   }
 }

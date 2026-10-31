@@ -153,9 +153,12 @@ const kMaxColonies = 8
 type ColonyId = number            // 0..7
 const kNoOwner = -1
 enum AntState { Foraging = 0, ReturningFood = 1, ReturningExhausted = 2 }
-enum AntRole { Follower = 0, Explorer = 1 }
+enum AntRole { Follower = 0, Explorer = 1, Warrior = 2 }   // Warrior: fight branch
+enum Combat { None = 0, Standoff = 1, Fight = 2, Retreat = 3 }   // fight branch
+const kNoFoe = 0xffffffff         // Ants.foe with no foe
 enum RandStream { WanderOffset = 1, WanderInterval, StuckTurn, SpawnHeading,
-                  SpawnRole, SpeedJitter, ContactTurn, HomingDrift, Lifespan, StartingAge }
+                  SpawnRole, SpeedJitter, ContactTurn, HomingDrift, Lifespan, StartingAge,
+                  Warrior, Boldness }
 
 // sim/params.ts
 interface SimParams { /* every tunable from spec §12; see defaultParams */ }
@@ -319,6 +322,24 @@ lineOfSight(grid, a, b): boolean           // Amanatides-Woo DDA through solid c
 freeDistance(grid, origin, angle, maxDist): number // DDA: distance to the first solid cell
 freeDistanceDir(grid, origin, unitX, unitY, maxDist): number // the same walk for a unit direction already in hand
 nearestFreePoint(grid, pos, maxCells): Vec2 | null // BFS from the cell holding pos to the closest open cell centre; null once maxCells solid cells are expanded
+
+// sim/conflict.ts (fight branch; specs/2026-10-31-colony-conflict-design.md)
+interface LookAround { active; sisters, rivals: Uint16Array; rival, foe: Int32Array;
+                       rivalX, rivalY, foeX, foeY: Float32Array; idx; d2 }   // per-ant start-of-tick scratch
+makeLookAround(): LookAround
+computeLookAround(world, look): void   // pre-pass in Think after avoidance; skipped with < 2 colonies
+courage(world, ant): number            // 1 + boldStress × stress − fearDamp × fear, in 0..2
+boldness(world, ant): number           // fixed per-ant draw, stream Boldness
+health(world, ant): number             // energy − wounds
+answersCall(world, ant): boolean       // follows its colony's battle smell this tick
+interface CombatSteer { heading: number | null; hold: boolean }
+combatStep(world, ant, look, dt, out): CombatSteer   // standoff, bite, retreat, triggers; own slots + own events only
+const kFightDeathWindow = 5            // s after a bite in which a death counts as a fight death
+
+// sim/corpses.ts (fight branch)
+interface Corpse { uid; x; y; colony; heading; value; expires; taken }
+class Corpses { items: Corpse[]; nextUid; add(x, y, colony, heading, value, expires); rebuild(worldSize, tick);
+                nearest(x, y, radius, accept?): number }   // bucket index rebuilt in removeDead
 
 // sim/avoidance.ts (M4)
 timeToCollision(dpx, dpy, dvx, dvy, radiusSum): number | null  // earliest t > 0 at which two circles touch
