@@ -1888,3 +1888,11 @@ body.headless #log {
   background: rgba(231, 179, 106, 0.18);
   color: var(--accent-strong);
 }
+
+/* One plain sentence under each settings slider. */
+.drawer__hint {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted);
+}

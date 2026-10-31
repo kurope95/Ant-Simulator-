@@ -249,6 +249,10 @@ export class SettingsDrawer {
     value.textContent = formatSpecValue(spec, specValue(spec, this.params));
     input.style.setProperty("--fill", this.fillPercent({ spec, input, value }));
     field.append(head, input);
+    if (spec.hint !== undefined) {
+      field.append(el("p", "drawer__hint", spec.hint));
+      field.title = spec.hint;
+    }
     this.controls.push({ spec, input, value });
     return field;
   }
